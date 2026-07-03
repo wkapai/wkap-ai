@@ -70,7 +70,7 @@ class WKAPV0Tests(TestCase):
             "",
             "---",
             "",
-            "## 2. Agent Suggested 3 WoWs",
+            "## 2. Agent Suggested WoW Signals",
             "",
             "### Suggested WoW 1",
             "wow_id: WOW-2026-06-29-001",
@@ -164,7 +164,7 @@ class WKAPV0Tests(TestCase):
                     "",
                 ]
             )
-        body = body.replace("## 2. Agent Suggested 3 WoWs", "\n".join(extra_items) + "\n## 2. Agent Suggested 3 WoWs")
+        body = body.replace("## 2. Agent Suggested WoW Signals", "\n".join(extra_items) + "\n## 2. Agent Suggested WoW Signals")
         raw = self.raw_email(
             sender="investor@example.com",
             subject="Daily WoW Packet - 2026-06-29 - Test Agent",
@@ -281,7 +281,7 @@ class WKAPV0Tests(TestCase):
         self.assertIn(WOW_DISCLAIMER, html)
         self.assertNotIn("private@example.com", html)
         self.assertIn("Reading Log", html)
-        self.assertIn("Agent Suggested WoWs", html)
+        self.assertIn("Agent Suggested WoW Signals", html)
 
     def test_long_radar_body_preserves_formatting_and_field_like_lines(self):
         run_id = "00000000-0000-0000-0000-000000000020"
@@ -365,7 +365,7 @@ class WKAPV0Tests(TestCase):
 
     def test_wow_packet_parser_tolerates_common_agent_format_drift(self):
         body = self.wow_packet_body().replace("## 1. Reading Log", "1. Reading Log")
-        body = body.replace("## 2. Agent Suggested 3 WoWs", "Agent Suggested 3 WoWs")
+        body = body.replace("## 2. Agent Suggested WoW Signals", "Agent Suggested 3 WoWs")
         body = body.replace("## 3. User Selection / Pass", "User Selection")
         body = body.replace("### Reading Item 1", "Reading Item 1")
         body = body.replace("### Suggested WoW 1", "Suggested WoW 1")
@@ -391,7 +391,7 @@ class WKAPV0Tests(TestCase):
     def test_repaired_wow_publishes_and_receipt_reminds_setup_format(self):
         run_id = "00000000-0000-0000-0000-000000000028"
         body = self.wow_packet_body().replace("## 1. Reading Log", "1. Reading Log")
-        body = body.replace("## 2. Agent Suggested 3 WoWs", "Agent Suggested 3 WoWs")
+        body = body.replace("## 2. Agent Suggested WoW Signals", "Agent Suggested 3 WoWs")
         body = body.replace("## 3. User Selection / Pass", "User Selection")
         body = body.replace("### Reading Item 1", "Reading Item 1")
         body = body.replace("### Suggested WoW 1", "Suggested WoW 1")

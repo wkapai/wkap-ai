@@ -48,7 +48,7 @@
         {% endfor %}
       </div>
 
-      <h2>Agent Suggested WoWs</h2>
+      <h2>Agent Suggested WoW Signals</h2>
       <div class="packet-grid packet-wow-grid">
         {% for wow in submission.suggested_wows.all %}
           <article class="packet-item" data-suggested-wow="{{ wow.wow_id }}" data-wow-id="{{ wow.wow_id }}" data-selected="{{ wow.selected|yesno:'true,false' }}" data-theme="{{ wow.ticker_or_theme }}">

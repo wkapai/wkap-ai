@@ -126,7 +126,7 @@ def _wow_packet_body() -> str:
             "",
             "---",
             "",
-            "## 2. Agent Suggested 3 WoWs",
+            "## 2. Agent Suggested WoW Signals",
             "",
             "### Suggested WoW 1",
             "wow_id: WOW-2026-07-03-001",

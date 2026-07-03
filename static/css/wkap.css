@@ -585,6 +585,22 @@ p {
   overflow: hidden;
 }
 
+.metadata dd,
+.metadata dd a,
+.metadata dd code {
+  color: #30394b;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.metadata dd a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
 .summary-strip {
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid rgba(20, 35, 66, 0.11);
@@ -620,14 +636,9 @@ p {
 }
 
 .summary-strip dd {
-  display: -webkit-box;
   font-size: 12px;
-  font-weight: 800;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  font-weight: 500;
   line-height: 1.15;
-  max-height: 2.3em;
-  overflow: hidden;
   overflow-wrap: anywhere;
 }
 
@@ -731,6 +742,24 @@ p {
 .ots-proof-links a:hover {
   background: rgba(255, 107, 26, 0.16);
   border-color: rgba(255, 107, 26, 0.38);
+}
+
+.proof-panel dl a,
+.proof-panel dl code,
+.proof-panel dl dd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.proof-panel dl a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.proof-panel dl dd {
+  color: #30394b;
 }
 
 dt,
@@ -881,6 +910,55 @@ code {
 
 .setup-note {
   margin-bottom: 0;
+}
+
+.setup-note {
+  color: #30394b;
+  font-size: 13px;
+  line-height: 1.3;
+  margin-top: 10px;
+}
+
+.setup-note strong {
+  color: #111111;
+  font-weight: 700;
+}
+
+.setup-page p {
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0 0 8px;
+}
+
+.setup-page p:last-child {
+  margin-bottom: 0;
+}
+
+.setup-page ul,
+.setup-page ol {
+  color: #30394b;
+  font-size: 13px;
+  line-height: 1.32;
+  margin: 6px 0 0;
+  padding-left: 19px;
+}
+
+.setup-page li {
+  margin: 3px 0;
+}
+
+body:not([data-page-type="home"]) .setup-page {
+  gap: 10px;
+  max-width: 980px;
+}
+
+body:not([data-page-type="home"]) .setup-page .panel {
+  padding: 14px 16px;
+}
+
+body:not([data-page-type="home"]) .setup-page h2 {
+  font-size: 15px;
+  margin-bottom: 8px;
 }
 
 .prompt-header {
@@ -1049,6 +1127,17 @@ body:not([data-page-type="home"]) .proof-panel dl {
   margin-top: 12px;
 }
 
+body:not([data-page-type="home"]) .metadata dd,
+body:not([data-page-type="home"]) .metadata dd a,
+body:not([data-page-type="home"]) .metadata dd code {
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+body:not([data-page-type="home"]) .proof-panel dl {
+  grid-template-columns: 116px minmax(0, 1fr);
+}
+
 body:not([data-page-type="home"]) .summary-strip {
   grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   margin-top: 8px;
@@ -1063,7 +1152,7 @@ body:not([data-page-type="home"]) .summary-strip dt {
 }
 
 body:not([data-page-type="home"]) .summary-strip dd {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 body:not([data-page-type="home"]) dt,
@@ -1074,6 +1163,23 @@ body:not([data-page-type="home"]) dd {
 body:not([data-page-type="home"]) dt,
 body:not([data-page-type="home"]) code {
   font-size: 10px;
+}
+
+body:not([data-page-type="home"]) .proof-panel dl dt {
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+body:not([data-page-type="home"]) .proof-panel dl dd,
+body:not([data-page-type="home"]) .proof-panel dl a,
+body:not([data-page-type="home"]) .proof-panel dl code {
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+body:not([data-page-type="home"]) .proof-panel dl dt,
+body:not([data-page-type="home"]) .proof-panel dl dd {
+  padding: 6px 8px;
 }
 
 body:not([data-page-type="home"]) .body-copy {
@@ -1144,7 +1250,8 @@ body:not([data-page-type="home"]) .ots-logo-link img {
 }
 
 body:not([data-page-type="home"]) .ots-proof-status {
-  font-size: 14px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
 }
 
 body:not([data-page-type="home"]) .ots-proof-copy,

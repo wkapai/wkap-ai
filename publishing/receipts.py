@@ -65,7 +65,7 @@ def wow_format_fix_body(raw_email: RawEmail) -> str:
             "",
             "Minimum required sections:",
             "1. Reading Log",
-            "2. Agent Suggested 3 WoWs",
+            "2. Agent Suggested WoW Signals",
             "3. User Selection / Pass",
             "",
             "Minimum required selection field:",

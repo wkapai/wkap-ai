@@ -147,7 +147,7 @@ def create_wow_submission(raw_email: RawEmail, *, run_id: uuid.UUID) -> DailyWoW
 def _uses_current_wow_setup_format(body: str) -> bool:
     required = (
         "## 1. Reading Log",
-        "## 2. Agent Suggested 3 WoWs",
+        "## 2. Agent Suggested WoW Signals",
         "## 3. User Selection / Pass",
         "selected_wow_id:",
     )

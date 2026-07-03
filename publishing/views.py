@@ -223,7 +223,7 @@ def radar_archive(request):
                 {"name": "artifact_family", "value": "WKAP Radar Feed"},
                 {"name": "archive_url", "value": radar_archive_url()},
                 {"name": "public_format", "value": "text/html"},
-                {"name": "issue_count", "value": str(issues.count())},
+                {"name": "feed_count", "value": str(issues.count())},
             ],
             json_ld={
                 "@context": "https://schema.org",

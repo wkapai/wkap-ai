@@ -79,11 +79,19 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
     reading_section = _section_by_patterns(
         text,
         [r"^\s*#{0,6}\s*(?:\d+\.\s*)?Reading Log\s*$"],
-        [r"^\s*#{0,6}\s*(?:\d+\.\s*)?Agent Suggested 3 WoWs\s*$", r"^\s*#{0,6}\s*Suggested WoWs\s*$"],
+        [
+            r"^\s*#{0,6}\s*(?:\d+\.\s*)?Agent Suggested WoW Signals\s*$",
+            r"^\s*#{0,6}\s*(?:\d+\.\s*)?Agent Suggested 3 WoWs\s*$",
+            r"^\s*#{0,6}\s*Suggested WoWs\s*$",
+        ],
     )
     suggested_section = _section_by_patterns(
         text,
-        [r"^\s*#{0,6}\s*(?:\d+\.\s*)?Agent Suggested 3 WoWs\s*$", r"^\s*#{0,6}\s*Suggested WoWs\s*$"],
+        [
+            r"^\s*#{0,6}\s*(?:\d+\.\s*)?Agent Suggested WoW Signals\s*$",
+            r"^\s*#{0,6}\s*(?:\d+\.\s*)?Agent Suggested 3 WoWs\s*$",
+            r"^\s*#{0,6}\s*Suggested WoWs\s*$",
+        ],
         [r"^\s*#{0,6}\s*(?:\d+\.\s*)?User Selection / Pass\s*$", r"^\s*#{0,6}\s*User Selection\s*$"],
     )
     selection_section = _section_by_patterns(
@@ -92,7 +100,7 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
         [],
     )
     if not suggested_section:
-        raise ParseError("Daily WoW Packet missing section: 2. Agent Suggested 3 WoWs")
+        raise ParseError("Daily WoW Packet missing section: 2. Agent Suggested WoW Signals")
 
     reading_items = _parse_reading_items(reading_section)
     max_reading_items = int(spec["schema_data"].get("reading_log_rules", {}).get("max_items", 10))
