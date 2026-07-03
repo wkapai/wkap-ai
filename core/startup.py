@@ -8,6 +8,9 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management import call_command
 
+from core.environment import environment_errors
+from publishing.services import validate_all
+
 
 def run_production_startup_tasks() -> None:
     if settings.WKAP_ENVIRONMENT != "production":
@@ -18,8 +21,9 @@ def run_production_startup_tasks() -> None:
     _configure_ledger_ssh()
     _bootstrap_ledger_repo()
     call_command("migrate", interactive=False, verbosity=1)
-    call_command("wkap", "--json", "environment-check")
-    call_command("wkap", "--json", "validate-all")
+    errors = environment_errors() + validate_all()
+    if errors:
+        raise RuntimeError("WKAP production startup checks failed: " + "; ".join(errors))
 
 
 def _configure_ledger_ssh() -> None:
