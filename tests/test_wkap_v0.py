@@ -651,6 +651,28 @@ class WKAPV0Tests(TestCase):
         self.assertIn(issue.manifest_url, body)
         self.assertIn("Proof status:", body)
 
+    def test_receipts_use_public_urls_when_db_has_stale_local_values(self):
+        run_id = "00000000-0000-0000-0000-000000000029"
+        radar_raw = self.raw_email(sender="playinc@gmail.com", body="Market_date: 2026-07-03\nTitle: Morning Radar\nBody: Context")
+        radar = create_radar_issue(radar_raw, run_id=run_id)
+        radar.canonical_url = "http://127.0.0.1:8000/radar/wkap-radar-feed-2026-07-03.html"
+        radar.manifest_url = r"C:\Users\ASUS\Documents\wkap\ledger_artifacts\manifests\radar-2.json"
+        radar.save(update_fields=["canonical_url", "manifest_url"])
+        wow_raw = self.raw_email(sender="receipt-url@example.com", subject="Daily WoW Packet - 2026-06-29 - Receipt Agent", body=self.wow_packet_body())
+        packet = create_wow_submission(wow_raw, run_id=run_id)
+        packet.canonical_url = "http://127.0.0.1:8000/investors/w0202/wows/wow-w0202-2026-06-29.html"
+        packet.save(update_fields=["canonical_url"])
+
+        with override_settings(WKAP_BASE_URL="https://wkap.ai", WKAP_LEDGER_GITHUB_BASE_URL="https://github.com/wkapai/wkap-ledger/blob/main"):
+            radar_body = radar_receipt_body(radar)
+            wow_body = wow_receipt_body(packet)
+
+        self.assertIn("https://wkap.ai/radar/wkap-radar-feed-2026-07-03.html", radar_body)
+        self.assertIn(f"https://github.com/wkapai/wkap-ledger/blob/main/manifests/radar-{radar.id}.json", radar_body)
+        self.assertIn("https://wkap.ai/investors/w0202/wows/wow-w0202-2026-06-29.html", wow_body)
+        self.assertNotIn("127.0.0.1", radar_body + wow_body)
+        self.assertNotIn(r"C:\Users", radar_body)
+
     def test_radar_receipt_skips_when_disabled(self):
         run_id = "00000000-0000-0000-0000-000000000023"
         raw = self.raw_email(sender="playinc@gmail.com", body="Market_date: 2026-06-30\nTitle: Morning Radar\nBody: Context")

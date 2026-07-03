@@ -9,6 +9,7 @@ from core.events import log_event
 from ingestion.gmail import send_gmail_message
 from ingestion.models import RawEmail
 from ledger.models import DailyWoWPacket, LedgerEvent, RadarIssue
+from publishing.urls import manifest_path, radar_issue_url, wow_url
 
 
 def radar_receipt_subject(issue: RadarIssue) -> str:
@@ -16,6 +17,7 @@ def radar_receipt_subject(issue: RadarIssue) -> str:
 
 
 def radar_receipt_body(issue: RadarIssue) -> str:
+    public_radar_url = _receipt_public_url(issue.canonical_url, radar_issue_url(issue.market_date))
     return "\n".join(
         [
             "Your WKAP Radar Feed has been logged on WKAP.",
@@ -24,13 +26,13 @@ def radar_receipt_body(issue: RadarIssue) -> str:
             f"Title: {issue.title}",
             "",
             "Radar URL:",
-            issue.canonical_url,
+            public_radar_url,
             "",
             "Content SHA256:",
             issue.content_sha256 or "pending",
             "",
             "Manifest URL:",
-            issue.manifest_url or "pending",
+            _receipt_manifest_url("radar", issue.id, issue.manifest_url),
             "",
             "Proof status:",
             issue.ots_status or "pending",
@@ -85,6 +87,7 @@ def wow_receipt_body(packet: DailyWoWPacket) -> str:
     selected = packet.suggested_wows.filter(wow_id=packet.selected_wow_id).first()
     selection_status = "pass" if packet.selected_wow_id.lower() == "none" else "selected"
     selected_theme = selected.ticker_or_theme if selected else packet.closest_rejected_idea or "Daily WoW Packet"
+    public_wow_url = _receipt_public_url(packet.canonical_url, wow_url(packet.investor.investor_id, packet.market_date))
     lines = [
         f"Your Daily WoW Packet has been logged on WKAP.",
         "",
@@ -95,7 +98,7 @@ def wow_receipt_body(packet: DailyWoWPacket) -> str:
         f"Theme: {selected_theme}",
         "",
         f"WoW URL:",
-        packet.canonical_url,
+        public_wow_url,
         "",
         f"Content SHA256:",
         packet.content_sha256 or "pending",
@@ -126,6 +129,21 @@ def wow_receipt_body(packet: DailyWoWPacket) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _receipt_manifest_url(entity_type: str, entity_id: int, stored_url: str = "") -> str:
+    if stored_url.startswith("https://github.com/"):
+        return stored_url
+    base = settings.WKAP_LEDGER_GITHUB_BASE_URL.rstrip("/")
+    if base:
+        return f"{base}/{manifest_path(entity_type, entity_id)}"
+    return stored_url or "pending"
+
+
+def _receipt_public_url(stored_url: str, fallback_url: str) -> str:
+    if stored_url.startswith("https://") and "127.0.0.1" not in stored_url and "localhost" not in stored_url:
+        return stored_url
+    return fallback_url
 
 
 def send_wow_receipt(packet: DailyWoWPacket, *, run_id: uuid.UUID, force: bool = False) -> DailyWoWPacket:
