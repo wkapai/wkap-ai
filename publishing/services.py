@@ -7,6 +7,7 @@ import subprocess
 import uuid
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db.models import Max
@@ -31,6 +32,7 @@ WOW_DISCLAIMER = (
     "This is a ledgered Daily WoW Packet: reading log, agent-suggested WoWs, and investor selection/pass details. "
     "It is not WKAP editorial endorsement or investment advice."
 )
+ET_ZONE = ZoneInfo("America/New_York")
 
 
 def generate_radar_html(issue: RadarIssue, *, run_id: uuid.UUID) -> RadarIssue:
@@ -505,12 +507,16 @@ def _render_radar(issue: RadarIssue) -> str:
 def _render_wow(submission: DailyWoWPacket) -> str:
     selected_wow = submission.suggested_wows.filter(wow_id=submission.selected_wow_id).first() or submission.suggested_wows.first()
     selection_status = _wow_selection_status(submission)
+    subject_display_name = submission.investor.display_name or "unknown subject name"
+    received_at_et = submission.source_email.received_at.astimezone(ET_ZONE)
     return render_to_string(
         "publishing/investors/wow.html",
         {
             "submission": submission,
             "selected_wow": selected_wow,
             "selection_status": selection_status,
+            "subject_display_name": subject_display_name,
+            "received_at_et": received_at_et,
             "disclaimer": WOW_DISCLAIMER,
             "page_type": "wow_submission",
             "agent_spec_version": submission.format_version,
@@ -611,6 +617,8 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         if selected_wow and selection_status == "selected"
         else submission.missing_evidence
     )
+    subject_display_name = submission.investor.display_name or "unknown subject name"
+    received_at_et = submission.source_email.received_at.astimezone(ET_ZONE)
     return [
         {"name": "artifact_type", "value": "wow"},
         {"name": "market_date", "value": str(submission.market_date)},
@@ -622,6 +630,9 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         {"name": "opentimestamp_status", "value": submission.ots_status or ""},
         {"name": "investor_id", "value": submission.investor.investor_id},
         {"name": "investor_label", "value": submission.investor.public_label},
+        {"name": "subject_line_display_name", "value": subject_display_name},
+        {"name": "submission_channel", "value": "email"},
+        {"name": "received_at_et", "value": received_at_et.strftime("%Y-%m-%d %H:%M ET")},
         {"name": "format_version", "value": submission.format_version},
         {"name": "selection_status", "value": selection_status},
         {"name": "selected_wow_id", "value": submission.selected_wow_id},

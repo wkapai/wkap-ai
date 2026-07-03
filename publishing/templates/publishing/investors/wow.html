@@ -10,7 +10,11 @@
       <dt>Market date</dt>
       <dd data-field="market_date">{{ submission.market_date|date:"Y-m-d" }}</dd>
       <dt>Submitted by</dt>
-      <dd data-field="investor_label">{{ submission.investor.public_label }}</dd>
+      <dd data-field="submitted_by">{{ submission.investor.investor_id }} / {{ subject_display_name }}</dd>
+      <dt>Submission channel</dt>
+      <dd data-field="submission_channel">email</dd>
+      <dt>Received</dt>
+      <dd data-field="received_at_et">{{ received_at_et|date:"Y-m-d H:i" }} ET</dd>
       <dt>Format</dt>
       <dd data-field="format_version">{{ submission.format_version }}</dd>
       <dt>Selection status</dt>

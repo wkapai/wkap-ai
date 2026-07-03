@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import base64
 from contextlib import redirect_stdout
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as datetime_timezone
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -832,6 +832,8 @@ class WKAPV0Tests(TestCase):
     def test_wow_agent_metadata_does_not_publish_private_email(self):
         run_id = "00000000-0000-0000-0000-000000000010"
         raw = self.raw_email(sender="private-wow@example.com", subject="Daily WoW Packet - 2026-06-29 - Test Agent", body=self.wow_packet_body())
+        raw.received_at = datetime(2026, 7, 3, 13, 14, tzinfo=datetime_timezone.utc)
+        raw.save(update_fields=["received_at"])
         submission = create_wow_submission(raw, run_id=run_id)
         submission.canonical_url = "https://wkap.ai/investors/w0202/wows/wow-w0202-2026-06-29.html"
         submission.content_sha256 = "c" * 64
@@ -843,6 +845,13 @@ class WKAPV0Tests(TestCase):
         self.assertContains(response, "Agent-readable facts")
         self.assertContains(response, "private_email_published", count=0)
         self.assertContains(response, "investor_id")
+        self.assertContains(response, 'data-field="submitted_by"')
+        self.assertContains(response, "w0202 / Test Agent")
+        self.assertContains(response, 'data-field="submission_channel"')
+        self.assertContains(response, "email")
+        self.assertContains(response, 'data-field="received_at_et"')
+        self.assertContains(response, "2026-07-03 09:14 ET")
+        self.assertContains(response, "subject_line_display_name")
         self.assertContains(response, 'data-selection-status="selected"')
         self.assertContains(response, 'data-field="selection_status"')
         self.assertContains(response, 'data-field="source_url"')

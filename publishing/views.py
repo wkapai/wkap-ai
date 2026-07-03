@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db.models import Max
@@ -12,6 +13,9 @@ from ledger.models import Investor, RadarIssue, DailyWoWPacket
 from ledger.wow_packet_spec import current_prompt, current_spec
 from publishing.services import WOW_DISCLAIMER
 from publishing.urls import investor_home_url, investor_wows_url, radar_archive_url, radar_issue_url, wow_url
+
+
+ET_ZONE = ZoneInfo("America/New_York")
 
 
 def _json_ld(payload: dict) -> str:
@@ -347,11 +351,17 @@ def investor_wows(request, investor_id):
 
 
 def wow_submission(request, investor_id, market_date):
-    submission = get_object_or_404(DailyWoWPacket, investor__investor_id=investor_id, market_date=market_date)
+    submission = get_object_or_404(
+        DailyWoWPacket.objects.select_related("investor", "source_email"),
+        investor__investor_id=investor_id,
+        market_date=market_date,
+    )
     selected_wow = submission.suggested_wows.filter(wow_id=submission.selected_wow_id).first() or submission.suggested_wows.first()
     agent_summary = _wow_agent_summary(submission, selected_wow)
     title_context = selected_wow.ticker_or_theme if selected_wow else "Daily WoW Packet"
     description_context = selected_wow.whats_worth_watching if selected_wow else "Daily WoW Packet"
+    subject_display_name = submission.investor.display_name or "unknown subject name"
+    received_at_et = submission.source_email.received_at.astimezone(ET_ZONE)
     return render(
         request,
         "publishing/investors/wow.html",
@@ -370,6 +380,9 @@ def wow_submission(request, investor_id, market_date):
                 {"name": "investor_id", "value": submission.investor.investor_id},
                 {"name": "investor_label", "value": submission.investor.public_label},
                 {"name": "investor_display_name", "value": submission.investor.display_name},
+                {"name": "subject_line_display_name", "value": subject_display_name},
+                {"name": "submission_channel", "value": "email"},
+                {"name": "received_at_et", "value": received_at_et.strftime("%Y-%m-%d %H:%M ET")},
                 {"name": "format_version", "value": submission.format_version},
                 {"name": "selection_status", "value": agent_summary["selection_status"]},
                 {"name": "selected_wow_id", "value": submission.selected_wow_id},
@@ -405,6 +418,8 @@ def wow_submission(request, investor_id, market_date):
             submission=submission,
             selected_wow=selected_wow,
             selection_status=agent_summary["selection_status"],
+            subject_display_name=subject_display_name,
+            received_at_et=received_at_et,
             disclaimer=WOW_DISCLAIMER,
         ),
     )
