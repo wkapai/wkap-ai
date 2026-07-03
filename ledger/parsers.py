@@ -53,7 +53,7 @@ class ParsedWoWPacket:
     reading_items: list[ParsedReadingLogItem] = field(default_factory=list)
     suggested_wows: list[ParsedAgentSuggestedWoW] = field(default_factory=list)
     selected_wow_id: str = ""
-    user_note: str = ""
+    reason_for_selection: str = ""
     closest_rejected_idea: str = ""
     why_pass: str = ""
     missing_evidence: str = ""
@@ -135,7 +135,7 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
         reading_items=reading_items,
         suggested_wows=suggested_wows,
         selected_wow_id=selected_wow_id,
-        user_note=_first_field(selection_fields, "user_note", "note").strip(),
+        reason_for_selection=_first_field(selection_fields, "reason_for_selection", "user_note", "note").strip(),
         closest_rejected_idea=pass_fields["closest_rejected_idea"],
         why_pass=pass_fields["why_pass"],
         missing_evidence=pass_fields["missing_evidence"],

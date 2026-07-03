@@ -42,7 +42,7 @@
   ],
   "selection_fields": [
     "selected_wow_id",
-    "user_note",
+    "reason_for_selection",
     "closest_rejected_idea",
     "why_pass",
     "missing_evidence"

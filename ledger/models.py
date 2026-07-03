@@ -71,7 +71,7 @@ class DailyWoWPacket(ArtifactProofFields):
     market_date = models.DateField()
     format_version = models.CharField(max_length=64, default="wow_packet_v1")
     selected_wow_id = models.CharField(max_length=80, blank=True)
-    user_note = models.TextField(blank=True)
+    reason_for_selection = models.TextField(blank=True)
     closest_rejected_idea = models.TextField(blank=True)
     why_pass = models.TextField(blank=True)
     missing_evidence = models.TextField(blank=True)

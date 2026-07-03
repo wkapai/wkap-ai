@@ -64,7 +64,7 @@ def create_wow_submission(raw_email: RawEmail, *, run_id: uuid.UUID) -> DailyWoW
             defaults={
                 "format_version": parsed.format_version,
                 "selected_wow_id": parsed.selected_wow_id,
-                "user_note": parsed.user_note,
+                "reason_for_selection": parsed.reason_for_selection,
                 "closest_rejected_idea": parsed.closest_rejected_idea,
                 "why_pass": parsed.why_pass,
                 "missing_evidence": parsed.missing_evidence,

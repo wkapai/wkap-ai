@@ -72,8 +72,8 @@
       <dl class="packet-decision" data-selection-status="{{ selection_status }}">
         <dt>Selected WoW ID</dt>
         <dd data-field="selected_wow_id">{{ submission.selected_wow_id|default:"none" }}</dd>
-        <dt>User note</dt>
-        <dd data-field="user_note">{{ submission.user_note|default:"none" }}</dd>
+        <dt>Reason for selection</dt>
+        <dd data-field="reason_for_selection">{{ submission.reason_for_selection|default:"none" }}</dd>
         {% if submission.selected_wow_id == "none" or submission.closest_rejected_idea or submission.why_pass or submission.missing_evidence %}
           <dt>Closest rejected idea</dt>
           <dd data-field="closest_rejected_idea">{{ submission.closest_rejected_idea|default:"none" }}</dd>

@@ -99,7 +99,7 @@ class WKAPV0Tests(TestCase):
             "## 3. User Selection / Pass",
             "",
             f"selected_wow_id: {selected}",
-            "user_note: Focus on the supplier evidence.",
+            "reason_for_selection: Focus on the supplier evidence.",
         ]
         if selected.lower() == "none":
             lines.extend(
@@ -360,6 +360,7 @@ class WKAPV0Tests(TestCase):
         self.assertEqual(len(parsed.reading_items), 1)
         self.assertEqual(len(parsed.suggested_wows), 3)
         self.assertEqual(parsed.selected_wow_id, "WOW-2026-06-29-001")
+        self.assertEqual(parsed.reason_for_selection, "Focus on the supplier evidence.")
         self.assertEqual(parsed.suggested_wows[0].ticker_or_theme, "Physical AI")
 
     def test_wow_packet_parser_tolerates_common_agent_format_drift(self):
@@ -378,6 +379,14 @@ class WKAPV0Tests(TestCase):
         self.assertEqual(parsed.selected_wow_id, "WOW-2026-06-29-001")
         self.assertEqual(parsed.suggested_wows[0].ticker_or_theme, "Physical AI")
         self.assertEqual(parsed.suggested_wows[0].evidence_to_watch_for, "Check next quarterly disclosures.")
+
+    def test_wow_packet_parser_accepts_legacy_user_note_field(self):
+        body = self.wow_packet_body().replace("reason_for_selection:", "user_note:")
+        raw = self.raw_email(subject="Daily WoW Packet - 2026-06-29 - Legacy Agent", body=body)
+
+        parsed = parse_wow(raw)
+
+        self.assertEqual(parsed.reason_for_selection, "Focus on the supplier evidence.")
 
     def test_repaired_wow_publishes_and_receipt_reminds_setup_format(self):
         run_id = "00000000-0000-0000-0000-000000000028"

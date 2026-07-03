@@ -155,6 +155,6 @@ def _wow_packet_body() -> str:
             "## 3. User Selection / Pass",
             "",
             "selected_wow_id: WOW-2026-07-03-001",
-            "user_note: Select the power bottleneck angle because it is concrete, monitorable, and cross-checkable across utilities and data center operators.",
+            "reason_for_selection: Select the power bottleneck angle because it is concrete, monitorable, and cross-checkable across utilities and data center operators.",
         ]
     )

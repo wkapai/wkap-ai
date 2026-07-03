@@ -680,7 +680,7 @@ def _wow_content_hash(submission: DailyWoWPacket) -> str:
                 str(submission.market_date),
                 submission.investor.investor_id,
                 submission.selected_wow_id,
-                submission.user_note,
+                submission.reason_for_selection,
                 submission.closest_rejected_idea,
                 submission.why_pass,
                 submission.missing_evidence,
