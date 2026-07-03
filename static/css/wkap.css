@@ -642,6 +642,16 @@ p {
   overflow-wrap: anywhere;
 }
 
+.summary-strip dd a {
+  color: var(--text);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.summary-strip dd a:hover {
+  color: var(--accent);
+}
+
 .ots-proof-card {
   background: linear-gradient(135deg, rgba(255, 107, 26, 0.18), rgba(255, 255, 255, 0.84));
   border: 1px solid rgba(255, 107, 26, 0.38);

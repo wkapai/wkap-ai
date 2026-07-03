@@ -860,6 +860,7 @@ class WKAPV0Tests(TestCase):
         self.assertContains(response, "Test Agent")
         self.assertContains(response, "Investor ID")
         self.assertContains(response, 'data-field="investor_id"')
+        self.assertContains(response, 'href="/investors/w0202/"')
         self.assertContains(response, "w0202")
         self.assertContains(response, 'data-field="submission_channel"')
         self.assertContains(response, "email")
