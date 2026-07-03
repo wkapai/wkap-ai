@@ -71,6 +71,16 @@ def _artifact_facts(artifact, artifact_type: str) -> list[dict[str, str]]:
     ]
 
 
+def _optional_facts(items: list[tuple[str, str]]) -> list[dict[str, str]]:
+    return [{"name": name, "value": value} for name, value in items if value]
+
+
+def _wow_pass_fact_value(submission: DailyWoWPacket, value: str) -> str:
+    if _wow_selection_status(submission) == "selected":
+        return "N/A - Not Applicable"
+    return value
+
+
 def _artifact_json_ld(artifact, artifact_type: str, title: str, body: str, extra: dict | None = None) -> dict:
     payload = {
         "@context": "https://schema.org",
@@ -394,8 +404,14 @@ def wow_submission(request, investor_id, market_date):
                 {"name": "reading_origins", "value": agent_summary["reading_origins"]},
                 {"name": "evidence_to_watch", "value": agent_summary["evidence_to_watch"]},
                 {"name": "all_evidence_to_watch", "value": agent_summary["all_evidence_to_watch"]},
-                {"name": "closest_rejected_idea", "value": submission.closest_rejected_idea},
-                {"name": "missing_evidence", "value": submission.missing_evidence},
+            ]
+            + _optional_facts(
+                [
+                    ("closest_rejected_idea", _wow_pass_fact_value(submission, submission.closest_rejected_idea)),
+                    ("missing_evidence", _wow_pass_fact_value(submission, submission.missing_evidence)),
+                ]
+            )
+            + [
                 {"name": "raw_email_sha256", "value": submission.raw_email_sha256},
                 {"name": "raw_email_github_url", "value": submission.raw_email_github_url},
                 {"name": "disclaimer", "value": WOW_DISCLAIMER},

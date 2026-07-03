@@ -3,8 +3,10 @@
   <h2>Agent-readable facts</h2>
   <dl>
     {% for fact in agent_facts %}
-      <dt data-field="{{ fact.name }}">{{ fact.name }}</dt>
-      <dd data-field="{{ fact.name }}">{{ fact.value|default:"pending" }}</dd>
+      {% if fact.value %}
+        <dt data-field="{{ fact.name }}">{{ fact.name }}</dt>
+        <dd data-field="{{ fact.name }}">{{ fact.value }}</dd>
+      {% endif %}
     {% endfor %}
   </dl>
 </section>

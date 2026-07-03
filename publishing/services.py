@@ -593,6 +593,12 @@ def _wow_selection_status(submission: DailyWoWPacket) -> str:
     return "pass" if submission.selected_wow_id.lower() == "none" else "selected"
 
 
+def _wow_pass_fact_value(submission: DailyWoWPacket, selection_status: str, value: str) -> str:
+    if selection_status == "selected":
+        return "N/A - Not Applicable"
+    return value
+
+
 def _timestamp_upgrade_candidates(entity_type: str | None, entity_id: int | None) -> list[tuple[str, Any]]:
     if entity_type and entity_id:
         return [(entity_type, _artifact(entity_type, entity_id))]
@@ -620,7 +626,7 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
     )
     subject_display_name = submission.investor.display_name or "unknown subject name"
     received_at_et = submission.source_email.received_at.astimezone(ET_ZONE)
-    return [
+    facts = [
         {"name": "artifact_type", "value": "wow"},
         {"name": "market_date", "value": str(submission.market_date)},
         {"name": "canonical_url", "value": submission.canonical_url or ""},
@@ -644,12 +650,13 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         {"name": "reading_origins", "value": reading_origins},
         {"name": "evidence_to_watch", "value": evidence_to_watch},
         {"name": "all_evidence_to_watch", "value": _join_unique(wow.evidence_to_watch_for for wow in suggested_wows)},
-        {"name": "closest_rejected_idea", "value": submission.closest_rejected_idea},
-        {"name": "missing_evidence", "value": submission.missing_evidence},
         {"name": "raw_email_sha256", "value": submission.raw_email_sha256},
         {"name": "raw_email_github_url", "value": submission.raw_email_github_url},
         {"name": "disclaimer", "value": WOW_DISCLAIMER},
     ]
+    facts.append({"name": "closest_rejected_idea", "value": _wow_pass_fact_value(submission, selection_status, submission.closest_rejected_idea)})
+    facts.append({"name": "missing_evidence", "value": _wow_pass_fact_value(submission, selection_status, submission.missing_evidence)})
+    return facts
 
 
 def _radar_content_hash(issue: RadarIssue) -> str:
