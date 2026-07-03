@@ -692,6 +692,28 @@ class WKAPV0Tests(TestCase):
             ).exists()
         )
 
+    def test_reledgered_radar_resets_receipt_state_for_fresh_receipt(self):
+        run_id = "00000000-0000-0000-0000-000000000030"
+        first_raw = self.raw_email(sender="playinc@gmail.com", body="Market_date: 2026-07-02\nTitle: First Radar\nBody: Context")
+        issue = create_radar_issue(first_raw, run_id=run_id)
+        issue.receipt_email_sent_at = timezone.now()
+        issue.receipt_email_message_id = "old-message-id"
+        issue.receipt_email_error = "old error"
+        issue.save(update_fields=["receipt_email_sent_at", "receipt_email_message_id", "receipt_email_error"])
+        second_raw = self.raw_email(
+            sender="playinc@gmail.com",
+            subject="WKAP Radar Feed - 2026 - 07 - 02",
+            body="Market_date: 2026-07-02\nTitle: Updated Radar\nBody: Fresh context",
+        )
+
+        updated_issue = create_radar_issue(second_raw, run_id=run_id)
+
+        self.assertEqual(updated_issue.id, issue.id)
+        self.assertEqual(updated_issue.source_email, second_raw)
+        self.assertIsNone(updated_issue.receipt_email_sent_at)
+        self.assertEqual(updated_issue.receipt_email_message_id, "")
+        self.assertEqual(updated_issue.receipt_email_error, "")
+
     def test_publish_radar_attempts_receipt_after_proof_fields(self):
         run_id = "00000000-0000-0000-0000-000000000024"
         raw = self.raw_email(sender="playinc@gmail.com", body="Market_date: 2026-06-30\nTitle: Morning Radar\nBody: Context")

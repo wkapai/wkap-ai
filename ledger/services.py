@@ -30,6 +30,9 @@ def create_radar_issue(raw_email: RawEmail, *, run_id: uuid.UUID) -> RadarIssue:
                 "body_text": parsed.body_text,
                 "body_html": "",
                 "source_email": raw_email,
+                "receipt_email_sent_at": None,
+                "receipt_email_message_id": "",
+                "receipt_email_error": "",
             },
         )
         raw_email.processing_status = RawEmail.ProcessingStatus.PARSED
