@@ -296,7 +296,8 @@ def _sync_artifact_to_ledger_repo(entity_type: str, artifact) -> None:
         raw_source = _write_raw_email_artifact(artifact)
         raw_destination = repo / raw_relative_path
         raw_destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(raw_source, raw_destination)
+        if raw_source.resolve() != raw_destination.resolve():
+            shutil.copyfile(raw_source, raw_destination)
 
 
 def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
