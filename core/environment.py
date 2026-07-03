@@ -29,10 +29,8 @@ def environment_errors() -> list[str]:
             errors.append("WKAP_LEDGER_DEPLOY_KEY_BASE64 must be set for SSH ledger repo URLs in production.")
         if not settings.WKAP_LEDGER_GITHUB_BASE_URL:
             errors.append("WKAP_LEDGER_GITHUB_BASE_URL must be set in production.")
-        if not settings.WKAP_GMAIL_CREDENTIALS_FILE:
-            errors.append("WKAP_GMAIL_CREDENTIALS_FILE must be set in production.")
-        if not settings.WKAP_GMAIL_TOKEN_FILE:
-            errors.append("WKAP_GMAIL_TOKEN_FILE must be set in production.")
+        if settings.WKAP_SEND_RECEIPTS and not (settings.WKAP_GMAIL_TOKEN_FILE or settings.WKAP_GMAIL_TOKEN_JSON_BASE64):
+            errors.append("WKAP_GMAIL_TOKEN_FILE or WKAP_GMAIL_TOKEN_JSON_BASE64 must be set when receipts are enabled in production.")
         if not settings.WKAP_CLOUDFLARE_INGEST_SECRET:
             errors.append("WKAP_CLOUDFLARE_INGEST_SECRET must be set in production.")
 

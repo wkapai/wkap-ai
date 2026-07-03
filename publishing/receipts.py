@@ -61,7 +61,7 @@ def wow_format_fix_body(raw_email: RawEmail) -> str:
             "Your raw email was saved, so the submission was not lost.",
             "",
             "Please resend using the current setup prompt format:",
-            "http://127.0.0.1:8000/submit-to-wkap-ledger.html",
+            f"{settings.WKAP_BASE_URL}/submit-to-wkap-ledger.html",
             "",
             "Minimum required sections:",
             "1. Reading Log",

@@ -43,6 +43,7 @@ WKAP_INBOUND_EMAIL=ledger@wkap.ai
 WKAP_GMAIL_ACCOUNT=playinc@gmail.com
 WKAP_RECEIPT_FROM_EMAIL=playinc@gmail.com
 WKAP_SEND_RECEIPTS=true
+WKAP_GMAIL_TOKEN_JSON_BASE64=<base64 authorized_user token json>
 WKAP_PUBLIC_SITE_ROOT=/var/data/wkap/public_site
 WKAP_LEDGER_REPO_PATH=/var/data/wkap/ledger
 WKAP_LEDGER_REPO_URL=git@github.com:ORG/REPO.git
@@ -207,7 +208,7 @@ Do not add Signal Board, `/latest`, public JSON, public API endpoints, ranking, 
 Gmail:
 
 - Gmail remains the canonical mailbox source of truth.
-- Credentials are read from `WKAP_GMAIL_CREDENTIALS_FILE` and `WKAP_GMAIL_TOKEN_FILE`.
+- Gmail OAuth is read from `WKAP_GMAIL_TOKEN_FILE` or `WKAP_GMAIL_TOKEN_JSON_BASE64`.
 - Local regression does not require Gmail credentials.
 
 Cloudflare:

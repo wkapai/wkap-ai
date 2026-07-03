@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import email.utils
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.message import EmailMessage
@@ -57,15 +58,19 @@ def send_gmail_message(*, to_email: str, subject: str, body_text: str) -> str:
 
 
 def _gmail_service():
-    if not settings.WKAP_GMAIL_CREDENTIALS_FILE or not settings.WKAP_GMAIL_TOKEN_FILE:
+    if not settings.WKAP_GMAIL_TOKEN_FILE and not settings.WKAP_GMAIL_TOKEN_JSON_BASE64:
         raise GmailNotConfigured(
-            "Gmail API credentials are not configured. Set WKAP_GMAIL_CREDENTIALS_FILE and WKAP_GMAIL_TOKEN_FILE."
+            "Gmail API credentials are not configured. Set WKAP_GMAIL_TOKEN_FILE or WKAP_GMAIL_TOKEN_JSON_BASE64."
         )
 
     from google.oauth2.credentials import Credentials
     from googleapiclient.discovery import build
 
-    credentials = Credentials.from_authorized_user_file(settings.WKAP_GMAIL_TOKEN_FILE)
+    if settings.WKAP_GMAIL_TOKEN_JSON_BASE64:
+        token_json = base64.b64decode(settings.WKAP_GMAIL_TOKEN_JSON_BASE64).decode("utf-8")
+        credentials = Credentials.from_authorized_user_info(json.loads(token_json))
+    else:
+        credentials = Credentials.from_authorized_user_file(settings.WKAP_GMAIL_TOKEN_FILE)
     return build("gmail", "v1", credentials=credentials)
 
 

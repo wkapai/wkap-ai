@@ -44,6 +44,8 @@ services:
         sync: false
       - key: WKAP_GMAIL_TOKEN_FILE
         sync: false
+      - key: WKAP_GMAIL_TOKEN_JSON_BASE64
+        sync: false
       - key: WKAP_RADAR_AUTHORIZED_SENDERS
         value: playinc@gmail.com,minxixi0103@gmail.com
       - key: WKAP_CLOUDFLARE_INGEST_SECRET
