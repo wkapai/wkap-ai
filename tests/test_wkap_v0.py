@@ -851,6 +851,7 @@ class WKAPV0Tests(TestCase):
         response = self.client.get("/investors/w0202/wows/wow-w0202-2026-06-29.html")
 
         self.assertContains(response, 'data-artifact-type="wow"')
+        self.assertContains(response, 'class="summary-strip"')
         self.assertContains(response, "Agent-readable facts")
         self.assertContains(response, "private_email_published", count=0)
         self.assertContains(response, "investor_id")
@@ -865,6 +866,11 @@ class WKAPV0Tests(TestCase):
         self.assertContains(response, 'data-field="received_at_et"')
         self.assertContains(response, "2026-07-03 09:14 ET")
         self.assertNotContains(response, "2026-07-03 13:14 ET")
+        summary_start = response.content.decode().index('class="summary-strip"')
+        summary_end = response.content.decode().index("</dl>", summary_start)
+        summary_html = response.content.decode()[summary_start:summary_end]
+        self.assertNotIn("Raw email SHA256", summary_html)
+        self.assertNotIn("Canonical URL", summary_html)
         self.assertContains(response, "subject_line_display_name")
         self.assertContains(response, 'data-field="closest_rejected_idea"')
         self.assertContains(response, 'data-field="missing_evidence"')

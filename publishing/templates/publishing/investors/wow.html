@@ -6,35 +6,31 @@
     <p class="eyebrow">Type: Daily WoW Packet</p>
     <h1>{{ selected_wow.ticker_or_theme|default:"Daily WoW Packet" }}</h1>
     <p class="disclaimer">{{ disclaimer }}</p>
-    <dl class="metadata">
-      <dt>Market date</dt>
-      <dd data-field="market_date">{{ submission.market_date|date:"Y-m-d" }}</dd>
-      <dt>Ledgered by</dt>
-      <dd data-field="ledgered_by">{{ subject_display_name }}</dd>
-      <dt>Investor ID</dt>
-      <dd data-field="investor_id">{{ submission.investor.investor_id }}</dd>
-      <dt>Submission channel</dt>
-      <dd data-field="submission_channel">email</dd>
-      <dt>Received</dt>
-      <dd data-field="received_at_et">{{ received_at_et_display }}</dd>
-      <dt>Format</dt>
-      <dd data-field="format_version">{{ submission.format_version }}</dd>
-      <dt>Selection status</dt>
-      <dd data-field="selection_status">{{ selection_status }}</dd>
-      <dt>Selected WoW</dt>
-      <dd data-field="selected_wow_id">{{ submission.selected_wow_id|default:"none" }}</dd>
-      <dt>Canonical URL</dt>
-      <dd data-field="canonical_url">{{ submission.canonical_url|default:"pending" }}</dd>
-      <dt>Raw email SHA256</dt>
-      <dd data-field="raw_email_sha256"><code>{{ submission.raw_email_sha256|default:"pending" }}</code></dd>
-      <dt>Raw email ledger</dt>
-      <dd data-field="raw_email_ledger_url">
-        {% if submission.raw_email_github_url %}
-          <a href="{{ submission.raw_email_github_url }}">{{ submission.raw_email_github_url }}</a>
-        {% else %}
-          pending
-        {% endif %}
-      </dd>
+    <dl class="summary-strip" aria-label="WoW submission metadata">
+      <div>
+        <dt>Market date</dt>
+        <dd data-field="market_date">{{ submission.market_date|date:"Y-m-d" }}</dd>
+      </div>
+      <div>
+        <dt>Ledgered by</dt>
+        <dd data-field="ledgered_by">{{ subject_display_name }}</dd>
+      </div>
+      <div>
+        <dt>Investor ID</dt>
+        <dd data-field="investor_id">{{ submission.investor.investor_id }}</dd>
+      </div>
+      <div>
+        <dt>Received</dt>
+        <dd data-field="received_at_et">{{ received_at_et_display }}</dd>
+      </div>
+      <div>
+        <dt>Status</dt>
+        <dd data-field="selection_status">{{ selection_status }}</dd>
+      </div>
+      <div>
+        <dt>Selected WoW</dt>
+        <dd data-field="selected_wow_id">{{ submission.selected_wow_id|default:"none" }}</dd>
+      </div>
     </dl>
     <section class="body-copy" data-agent-body="wow-packet">
       <h2>Reading Log <span class="section-count">top {{ submission.reading_items.count }}</span></h2>

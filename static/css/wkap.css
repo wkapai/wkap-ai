@@ -585,6 +585,47 @@ p {
   overflow: hidden;
 }
 
+.summary-strip {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(20, 35, 66, 0.11);
+  border-radius: 8px;
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  margin: 14px 0 0;
+  overflow: hidden;
+}
+
+.summary-strip div {
+  border-right: 1px solid rgba(20, 35, 66, 0.08);
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.summary-strip div:last-child {
+  border-right: 0;
+}
+
+.summary-strip dt,
+.summary-strip dd {
+  border: 0;
+  padding: 0;
+}
+
+.summary-strip dt {
+  font-size: 9px;
+  line-height: 1;
+}
+
+.summary-strip dd {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
 .ots-proof-card {
   background: linear-gradient(135deg, rgba(255, 107, 26, 0.18), rgba(255, 255, 255, 0.84));
   border: 1px solid rgba(255, 107, 26, 0.38);
@@ -1001,6 +1042,23 @@ body:not([data-page-type="home"]) .metadata,
 body:not([data-page-type="home"]) .proof-panel dl {
   grid-template-columns: 128px minmax(0, 1fr);
   margin-top: 12px;
+}
+
+body:not([data-page-type="home"]) .summary-strip {
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  margin-top: 8px;
+}
+
+body:not([data-page-type="home"]) .summary-strip div {
+  padding: 6px 8px;
+}
+
+body:not([data-page-type="home"]) .summary-strip dt {
+  font-size: 8px;
+}
+
+body:not([data-page-type="home"]) .summary-strip dd {
+  font-size: 10px;
 }
 
 body:not([data-page-type="home"]) dt,
