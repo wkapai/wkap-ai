@@ -23,6 +23,8 @@ services:
       - key: WKAP_LEDGER_REPO_PATH
         value: /var/data/wkap/ledger
       - key: WKAP_LEDGER_REPO_URL
+        value: git@github.com:wkapai/wkap-ledger.git
+      - key: WKAP_LEDGER_DEPLOY_KEY_BASE64
         sync: false
       - key: WKAP_LEDGER_GITHUB_BASE_URL
         value: https://github.com/wkapai/wkap-ledger/blob/main

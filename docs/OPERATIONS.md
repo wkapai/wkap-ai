@@ -85,7 +85,8 @@ Production ledger config requires both a writable checkout path and clone URL:
 
 ```env
 WKAP_LEDGER_REPO_PATH=/var/data/wkap/ledger
-WKAP_LEDGER_REPO_URL=https://github.com/ORG/REPO.git
+WKAP_LEDGER_REPO_URL=git@github.com:ORG/REPO.git
+WKAP_LEDGER_DEPLOY_KEY_BASE64=<base64 private deploy key>
 WKAP_LEDGER_GITHUB_BASE_URL=https://github.com/ORG/REPO/blob/main
 ```
 

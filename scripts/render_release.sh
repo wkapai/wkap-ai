@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -n "${WKAP_LEDGER_DEPLOY_KEY_BASE64:-}" ]]; then
+  mkdir -p "$HOME/.ssh"
+  printf '%s' "$WKAP_LEDGER_DEPLOY_KEY_BASE64" | base64 -d > "$HOME/.ssh/wkap_ledger_deploy_key"
+  chmod 600 "$HOME/.ssh/wkap_ledger_deploy_key"
+  ssh-keyscan github.com >> "$HOME/.ssh/known_hosts"
+  export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/wkap_ledger_deploy_key -o IdentitiesOnly=yes"
+fi
+
 if [[ -n "${WKAP_LEDGER_REPO_PATH:-}" && -n "${WKAP_LEDGER_REPO_URL:-}" ]]; then
   mkdir -p "$(dirname "$WKAP_LEDGER_REPO_PATH")"
   if [[ -d "$WKAP_LEDGER_REPO_PATH/.git" ]]; then

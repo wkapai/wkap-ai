@@ -25,6 +25,8 @@ def environment_errors() -> list[str]:
             errors.append("WKAP_LEDGER_REPO_PATH must be set in production.")
         if not settings.WKAP_LEDGER_REPO_URL:
             errors.append("WKAP_LEDGER_REPO_URL must be set in production.")
+        if settings.WKAP_LEDGER_REPO_URL.startswith("git@") and not os.getenv("WKAP_LEDGER_DEPLOY_KEY_BASE64"):
+            errors.append("WKAP_LEDGER_DEPLOY_KEY_BASE64 must be set for SSH ledger repo URLs in production.")
         if not settings.WKAP_LEDGER_GITHUB_BASE_URL:
             errors.append("WKAP_LEDGER_GITHUB_BASE_URL must be set in production.")
         if not settings.WKAP_GMAIL_CREDENTIALS_FILE:
