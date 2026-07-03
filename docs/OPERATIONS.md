@@ -35,7 +35,8 @@ Core event families:
 - Cloudflare Email Worker ingestion: `cloudflare_email_received`, `cloudflare_email_auth_failed`, `cloudflare_email_ingest_failed`, `cloudflare_email_not_published`.
 - Radar authorization: `radar_authorized`, `radar_rejected`.
 - Parsing: `radar_parsed`, `wow_parsed`, `wow_format_repaired`, `wow_format_fix_needed`.
-- Publishing: `publish_started`, `html_generated`, `index_rebuilt`, `manifest_created`, `github_commit_started`, `github_commit_succeeded`, `github_commit_failed`, `opentimestamp_started`, `opentimestamp_succeeded`, `page_published`, `publish_succeeded`.
+- Publishing: `publish_started`, `html_generated`, `index_rebuilt`, `manifest_created`, `github_commit_started`, `github_commit_succeeded`, `github_commit_failed`, `opentimestamp_started`, `opentimestamp_succeeded`, `opentimestamp_failed`, `page_published`, `publish_succeeded`.
+- OpenTimestamp upgrades: `opentimestamp_upgrade_started`, `opentimestamp_upgrade_succeeded`, `opentimestamp_upgrade_failed`, `opentimestamp_upgrade_skipped`.
 - Receipts: `receipt_email_started`, `receipt_email_sent`, `receipt_email_skipped`, `receipt_email_failed`, `format_fix_receipt_started`, `format_fix_receipt_sent`, `format_fix_receipt_skipped`, `format_fix_receipt_failed`.
 - Recovery: `retry_started`, `retry_succeeded`, `retry_failed`.
 
@@ -92,6 +93,29 @@ WKAP_LEDGER_GITHUB_BASE_URL=https://github.com/ORG/REPO/blob/main
 
 Render runs `scripts/render_release.sh`, which clones or fast-forwards the ledger repo before deploy checks. Live `commit-ledger` writes, commits, and pushes generated HTML, manifests, and WoW raw email artifacts.
 
+## OpenTimestamp
+
+V0 can run without a local proof runtime by keeping `WKAP_OPENTIMESTAMP_ENABLED=false`; artifacts will show `queued`.
+
+To enable real proofs, install the Python package from `requirements.txt`, make sure the `ots` command is on PATH, and set:
+
+```env
+WKAP_OPENTIMESTAMP_ENABLED=true
+WKAP_OPENTIMESTAMP_COMMAND=ots
+```
+
+Publishing then creates `timestamps/<entity>-<id>.json` as the immutable proof target and `timestamps/<entity>-<id>.json.ots` as the OpenTimestamp proof. Run upgrades later with:
+
+```powershell
+python manage.py wkap --json upgrade-opentimestamps
+```
+
+For a single artifact:
+
+```powershell
+python manage.py wkap --json upgrade-opentimestamps --entity-type wow --entity-id <id>
+```
+
 ## Testing Standard
 
 Before deployment or any ingestion/publishing refactor, run:
@@ -113,7 +137,7 @@ Regression coverage should protect:
 - HTML generation and index rebuilds
 - manifest and hash generation
 - raw WoW email ledger artifact generation
-- OpenTimestamp queued/status fields
+- OpenTimestamp queued/status fields and target/proof files under `timestamps/`
 - receipt preview/send/skip behavior
 - `LedgerEvent` evidence fields
 - CLI JSON shape and exit codes

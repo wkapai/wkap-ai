@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 from pathlib import Path
 
 from django.conf import settings
@@ -33,6 +35,20 @@ def environment_errors() -> list[str]:
             errors.append("WKAP_GMAIL_TOKEN_FILE or WKAP_GMAIL_TOKEN_JSON_BASE64 must be set when receipts are enabled in production.")
         if not settings.WKAP_CLOUDFLARE_INGEST_SECRET:
             errors.append("WKAP_CLOUDFLARE_INGEST_SECRET must be set in production.")
+
+    if settings.WKAP_OPENTIMESTAMP_ENABLED and not shutil.which(settings.WKAP_OPENTIMESTAMP_COMMAND):
+        errors.append(f"WKAP_OPENTIMESTAMP_COMMAND is not executable or not on PATH: {settings.WKAP_OPENTIMESTAMP_COMMAND}")
+    elif settings.WKAP_OPENTIMESTAMP_ENABLED:
+        try:
+            subprocess.run(
+                [settings.WKAP_OPENTIMESTAMP_COMMAND, "--help"],
+                text=True,
+                capture_output=True,
+                check=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            errors.append(f"WKAP_OPENTIMESTAMP_COMMAND failed health check: {exc}")
 
     for path_setting in ("WKAP_PUBLIC_SITE_ROOT",):
         path = Path(getattr(settings, path_setting))

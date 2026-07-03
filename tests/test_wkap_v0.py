@@ -7,6 +7,7 @@ from datetime import timedelta
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from django.conf import settings
 from django.core.management import call_command
@@ -36,6 +37,8 @@ from publishing.services import (
     generate_radar_html,
     generate_wow_html,
     publish_artifact,
+    timestamp_artifact,
+    upgrade_opentimestamps,
     validate_ledger,
 )
 
@@ -490,6 +493,85 @@ class WKAPV0Tests(TestCase):
                 self.assertTrue(raw_artifact.exists())
                 self.assertEqual(raw_artifact.read_text(encoding="utf-8"), raw.raw_body)
                 self.assertEqual(committed.raw_email_commit_sha, "not_configured")
+
+    def test_opentimestamp_enabled_stamps_stable_target(self):
+        run_id = "00000000-0000-0000-0000-000000000031"
+        raw = self.raw_email(sender="ots@example.com", subject="Daily WoW Packet - 2026-06-29 - OTS Agent", body=self.wow_packet_body())
+        packet = create_wow_submission(raw, run_id=run_id)
+
+        def fake_ots(*args):
+            self.assertEqual(args[0], "stamp")
+            target = Path(args[1])
+            Path(f"{target}.ots").write_text("fake ots proof", encoding="utf-8")
+            return "submitted"
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with override_settings(
+                WKAP_PUBLIC_SITE_ROOT=root / "public",
+                WKAP_LEDGER_REPO_PATH="",
+                WKAP_OPENTIMESTAMP_ENABLED=True,
+                WKAP_LEDGER_GITHUB_BASE_URL="https://github.com/wkapai/wkap-ledger/blob/main",
+            ):
+                generate_wow_html(packet, run_id=run_id)
+                generate_manifest("wow", packet.id, run_id=run_id)
+                committed = commit_ledger("wow", packet.id, run_id=run_id)
+                target = Path(settings.BASE_DIR) / "ledger_artifacts" / "timestamps" / f"wow-{packet.id}.json"
+                proof = Path(f"{target}.ots")
+                if proof.exists():
+                    proof.unlink()
+                with patch("publishing.services._run_ots", side_effect=fake_ots):
+                    stamped = timestamp_artifact("wow", committed.id, run_id=run_id)
+
+                manifest = Path(settings.BASE_DIR) / "ledger_artifacts" / "manifests" / f"wow-{packet.id}.json"
+                manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+                target_payload = json.loads(target.read_text(encoding="utf-8"))
+
+                self.assertTrue(target.exists())
+                self.assertTrue(proof.exists())
+                self.assertEqual(stamped.ots_status, "stamped")
+                self.assertTrue(stamped.ots_proof_url.endswith(f"timestamps/wow-{packet.id}.json.ots"))
+                self.assertEqual(manifest_payload["ots_status"], "stamped")
+                self.assertEqual(target_payload["content_sha256"], stamped.content_sha256)
+                self.assertNotIn("ots_status", target_payload)
+                self.assertTrue(LedgerEvent.objects.filter(event_name="opentimestamp_succeeded", entity_type="wow").exists())
+
+    def test_upgrade_opentimestamps_updates_status_without_mutating_target(self):
+        run_id = "00000000-0000-0000-0000-000000000032"
+        raw = self.raw_email(sender="ots-upgrade@example.com", subject="Daily WoW Packet - 2026-06-29 - OTS Agent", body=self.wow_packet_body())
+        packet = create_wow_submission(raw, run_id=run_id)
+
+        def fake_stamp(*args):
+            target = Path(args[1])
+            Path(f"{target}.ots").write_text("fake ots proof", encoding="utf-8")
+            return "submitted"
+
+        def fake_upgrade(*args):
+            self.assertEqual(args[0], "upgrade")
+            Path(args[1]).write_text("upgraded ots proof", encoding="utf-8")
+            return "upgraded"
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with override_settings(WKAP_PUBLIC_SITE_ROOT=root / "public", WKAP_LEDGER_REPO_PATH="", WKAP_OPENTIMESTAMP_ENABLED=True):
+                generate_wow_html(packet, run_id=run_id)
+                generate_manifest("wow", packet.id, run_id=run_id)
+                commit_ledger("wow", packet.id, run_id=run_id)
+                target = Path(settings.BASE_DIR) / "ledger_artifacts" / "timestamps" / f"wow-{packet.id}.json"
+                proof = Path(f"{target}.ots")
+                if proof.exists():
+                    proof.unlink()
+                with patch("publishing.services._run_ots", side_effect=fake_stamp):
+                    timestamp_artifact("wow", packet.id, run_id=run_id)
+                before = target.read_text(encoding="utf-8")
+                with patch("publishing.services._run_ots", side_effect=fake_upgrade):
+                    upgraded = upgrade_opentimestamps(run_id=run_id, entity_type="wow", entity_id=packet.id)
+
+                packet.refresh_from_db()
+                self.assertEqual(len(upgraded), 1)
+                self.assertEqual(packet.ots_status, "upgraded")
+                self.assertEqual(target.read_text(encoding="utf-8"), before)
+                self.assertTrue(LedgerEvent.objects.filter(event_name="opentimestamp_upgrade_succeeded", entity_type="wow").exists())
 
     def test_wow_receipt_includes_url_hash_and_privacy_note(self):
         run_id = "00000000-0000-0000-0000-000000000016"

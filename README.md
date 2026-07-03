@@ -181,6 +181,7 @@ Implemented commands:
 - `generate-manifest --entity-type <radar|wow> --entity-id <id>`
 - `commit-ledger --entity-type <radar|wow> --entity-id <id>`
 - `timestamp-artifact --entity-type <radar|wow> --entity-id <id>`
+- `upgrade-opentimestamps [--entity-type <radar|wow> --entity-id <id>]`
 - `rebuild-indexes`
 - `validate-ledger --entity-type <radar|wow> --entity-id <id>`
 - `validate-all`
@@ -231,7 +232,10 @@ GitHub ledger:
 OpenTimestamp:
 
 - `WKAP_OPENTIMESTAMP_ENABLED=false` records queued proof status without requiring a local OTS runtime.
-- The integration point is `publishing.services.timestamp_artifact`.
+- `WKAP_OPENTIMESTAMP_ENABLED=true` runs the `ots` CLI from `WKAP_OPENTIMESTAMP_COMMAND`.
+- `timestamp-artifact` writes a stable timestamp target under `timestamps/<entity>-<id>.json`, stamps it, stores `timestamps/<entity>-<id>.json.ots`, updates public proof fields, and commits the proof/update files to the GitHub ledger when `WKAP_LEDGER_REPO_PATH` is configured.
+- `upgrade-opentimestamps` runs `ots upgrade` against existing `.ots` proof files after calendar attestations mature. It does not mutate the timestamp target, so proofs remain verifiable over time.
+- The integration points are `publishing.services.timestamp_artifact` and `publishing.services.upgrade_opentimestamps`.
 
 ## Production Deployment Checklist
 

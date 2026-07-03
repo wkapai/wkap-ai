@@ -22,6 +22,7 @@ from publishing.services import (
     publish_artifact,
     rebuild_indexes,
     timestamp_artifact,
+    upgrade_opentimestamps,
     validate_all,
     validate_ledger,
 )
@@ -89,6 +90,10 @@ class Command(BaseCommand):
 
         timestamp = subparsers.add_parser("timestamp-artifact")
         self._add_entity_args(timestamp)
+
+        upgrade_ots = subparsers.add_parser("upgrade-opentimestamps")
+        upgrade_ots.add_argument("--entity-type", choices=["radar", "wow"])
+        upgrade_ots.add_argument("--entity-id", type=int)
 
         subparsers.add_parser("rebuild-indexes")
 
@@ -321,6 +326,21 @@ class Command(BaseCommand):
                 entity=artifact,
                 next_action=f"wkap validate-ledger --entity-type {options['entity_type']} --entity-id {artifact.id}",
             )
+
+        if command == "upgrade-opentimestamps":
+            if options.get("entity_id") and not options.get("entity_type"):
+                raise CommandError("--entity-id requires --entity-type")
+            upgraded = upgrade_opentimestamps(run_id=run_id, entity_type=options.get("entity_type"), entity_id=options.get("entity_id"))
+            result = CommandResult(
+                command=command,
+                run_id=str(run_id),
+                status="succeeded",
+                entity_type=options.get("entity_type") or "opentimestamp",
+                entity_id=str(options.get("entity_id") or ""),
+                next_action="done",
+            )
+            result.details = {"upgraded_count": len(upgraded), "ids": [artifact.id for artifact in upgraded]}
+            return result
 
         if command == "rebuild-indexes":
             rebuild_indexes(run_id=run_id)

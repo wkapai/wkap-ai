@@ -199,11 +199,103 @@ def timestamp_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
         )
         return artifact
 
-    artifact.ots_status = "queued"
-    artifact.save(update_fields=["ots_status", "updated_at"])
-    _refresh_artifact_files(entity_type, artifact)
-    log_event("opentimestamp_succeeded", run_id=run_id, entity_type=entity_type, entity_id=artifact.id, artifact=artifact)
+    try:
+        target_path = _write_timestamp_target(entity_type, artifact)
+        proof_path = _ots_proof_storage_path(entity_type, artifact.id)
+        if not proof_path.exists():
+            _run_ots("stamp", str(target_path))
+        artifact.ots_status = "stamped"
+        artifact.ots_proof_url = _github_url(proof_path) or str(proof_path)
+        artifact.save(update_fields=["ots_status", "ots_proof_url", "updated_at"])
+        _refresh_artifact_files(entity_type, artifact)
+        if settings.WKAP_LEDGER_REPO_PATH:
+            commit_sha = _commit_ledger_changes(settings.WKAP_LEDGER_REPO_PATH, f"OpenTimestamp {entity_type} {entity_id}")
+        else:
+            commit_sha = ""
+    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        artifact.ots_status = "failed"
+        artifact.save(update_fields=["ots_status", "updated_at"])
+        _refresh_artifact_files(entity_type, artifact)
+        log_event(
+            "opentimestamp_failed",
+            run_id=run_id,
+            status=LedgerEvent.Status.FAILED,
+            entity_type=entity_type,
+            entity_id=artifact.id,
+            artifact=artifact,
+            error_code=exc.__class__.__name__,
+            error_message=_subprocess_error_message(exc),
+        )
+        raise
+
+    log_event(
+        "opentimestamp_succeeded",
+        run_id=run_id,
+        entity_type=entity_type,
+        entity_id=artifact.id,
+        artifact=artifact,
+        details={"target_path": str(target_path), "proof_path": str(proof_path), "commit_sha": commit_sha},
+    )
     return artifact
+
+
+def upgrade_opentimestamps(*, run_id: uuid.UUID, entity_type: str | None = None, entity_id: int | None = None) -> list[Any]:
+    artifacts = _timestamp_upgrade_candidates(entity_type, entity_id)
+    upgraded = []
+    for current_entity_type, artifact in artifacts:
+        proof_path = _ots_proof_storage_path(current_entity_type, artifact.id)
+        if not proof_path.exists():
+            log_event(
+                "opentimestamp_upgrade_skipped",
+                run_id=run_id,
+                status=LedgerEvent.Status.SKIPPED,
+                entity_type=current_entity_type,
+                entity_id=artifact.id,
+                artifact=artifact,
+                error_code="proof_missing",
+                error_message=f"OpenTimestamp proof file is missing: {proof_path}",
+            )
+            continue
+        log_event(
+            "opentimestamp_upgrade_started",
+            run_id=run_id,
+            status=LedgerEvent.Status.STARTED,
+            entity_type=current_entity_type,
+            entity_id=artifact.id,
+            artifact=artifact,
+        )
+        try:
+            _run_ots("upgrade", str(proof_path))
+        except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+            log_event(
+                "opentimestamp_upgrade_failed",
+                run_id=run_id,
+                status=LedgerEvent.Status.FAILED,
+                entity_type=current_entity_type,
+                entity_id=artifact.id,
+                artifact=artifact,
+                error_code=exc.__class__.__name__,
+                error_message=_subprocess_error_message(exc),
+            )
+            continue
+        artifact.ots_status = "upgraded"
+        artifact.save(update_fields=["ots_status", "updated_at"])
+        _refresh_artifact_files(current_entity_type, artifact)
+        commit_sha = (
+            _commit_ledger_changes(settings.WKAP_LEDGER_REPO_PATH, f"Upgrade OpenTimestamp {current_entity_type} {artifact.id}")
+            if settings.WKAP_LEDGER_REPO_PATH
+            else ""
+        )
+        log_event(
+            "opentimestamp_upgrade_succeeded",
+            run_id=run_id,
+            entity_type=current_entity_type,
+            entity_id=artifact.id,
+            artifact=artifact,
+            details={"proof_path": str(proof_path), "commit_sha": commit_sha},
+        )
+        upgraded.append(artifact)
+    return upgraded
 
 
 def publish_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
@@ -311,6 +403,8 @@ def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
         "manifest_url": artifact.manifest_url,
         "ots_status": artifact.ots_status,
         "ots_proof_url": artifact.ots_proof_url,
+        "opentimestamp_target_url": _github_url(_timestamp_target_storage_path(entity_type, artifact.id))
+        or str(_timestamp_target_storage_path(entity_type, artifact.id)),
         "market_date": str(artifact.market_date),
     }
     if entity_type == "wow":
@@ -348,6 +442,46 @@ def _write_manifest(entity_type: str, entity_id: int, payload: dict[str, Any]) -
 
 def _manifest_storage_path(entity_type: str, entity_id: int) -> Path:
     return _ledger_artifact_root() / manifest_path(entity_type, entity_id)
+
+
+def _timestamp_target_storage_path(entity_type: str, entity_id: int) -> Path:
+    return _ledger_artifact_root() / "timestamps" / f"{entity_type}-{entity_id}.json"
+
+
+def _ots_proof_storage_path(entity_type: str, entity_id: int) -> Path:
+    return Path(f"{_timestamp_target_storage_path(entity_type, entity_id)}.ots")
+
+
+def _write_timestamp_target(entity_type: str, artifact) -> Path:
+    path = _timestamp_target_storage_path(entity_type, artifact.id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(_timestamp_target_payload(entity_type, artifact), indent=2, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def _timestamp_target_payload(entity_type: str, artifact) -> dict[str, Any]:
+    payload = {
+        "timestamp_target_version": "wkap-opentimestamp-target-v1",
+        "entity_type": entity_type,
+        "entity_id": artifact.id,
+        "canonical_url": artifact.canonical_url,
+        "content_sha256": artifact.content_sha256,
+        "github_file_url": artifact.github_file_url,
+        "github_commit_sha": artifact.github_commit_sha,
+        "manifest_url": artifact.manifest_url,
+        "market_date": str(artifact.market_date),
+    }
+    if entity_type == "wow":
+        payload.update(
+            {
+                "format_version": artifact.format_version,
+                "investor_id": artifact.investor.investor_id,
+                "raw_email_sha256": artifact.raw_email_sha256,
+                "raw_email_github_url": artifact.raw_email_github_url,
+                "raw_email_commit_sha": artifact.raw_email_commit_sha,
+            }
+        )
+    return payload
 
 
 def _refresh_artifact_files(entity_type: str, artifact) -> None:
@@ -452,6 +586,19 @@ def _wow_selection_status(submission: DailyWoWPacket) -> str:
     return "pass" if submission.selected_wow_id.lower() == "none" else "selected"
 
 
+def _timestamp_upgrade_candidates(entity_type: str | None, entity_id: int | None) -> list[tuple[str, Any]]:
+    if entity_type and entity_id:
+        return [(entity_type, _artifact(entity_type, entity_id))]
+    if entity_type == "radar":
+        return [("radar", issue) for issue in RadarIssue.objects.exclude(ots_proof_url="").order_by("id")]
+    if entity_type == "wow":
+        return [("wow", packet) for packet in DailyWoWPacket.objects.select_related("investor").exclude(ots_proof_url="").order_by("id")]
+    return [
+        *[("radar", issue) for issue in RadarIssue.objects.exclude(ots_proof_url="").order_by("id")],
+        *[("wow", packet) for packet in DailyWoWPacket.objects.select_related("investor").exclude(ots_proof_url="").order_by("id")],
+    ]
+
+
 def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status: str) -> list[dict[str, str]]:
     reading_items = list(submission.reading_items.all())
     suggested_wows = list(submission.suggested_wows.all())
@@ -536,3 +683,30 @@ def _git_remote_exists(repo: str | Path, remote: str) -> bool:
     except subprocess.CalledProcessError:
         return False
     return True
+
+
+def _commit_ledger_changes(repo: str | Path, message: str) -> str:
+    _git(repo, "add", ".")
+    if not _git(repo, "status", "--porcelain").strip():
+        return ""
+    _git(repo, "commit", "-m", message)
+    commit_sha = _git(repo, "rev-parse", "HEAD").strip()
+    if _git_remote_exists(repo, "origin"):
+        _git(repo, "push", "origin", settings.WKAP_LEDGER_BRANCH)
+    return commit_sha
+
+
+def _run_ots(*args: str) -> str:
+    result = subprocess.run(
+        [settings.WKAP_OPENTIMESTAMP_COMMAND, *args],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return result.stdout
+
+
+def _subprocess_error_message(exc: FileNotFoundError | subprocess.CalledProcessError) -> str:
+    if isinstance(exc, FileNotFoundError):
+        return str(exc)
+    return "\n".join(part for part in [exc.stdout, exc.stderr, str(exc)] if part)
