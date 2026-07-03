@@ -805,16 +805,24 @@ class WKAPV0Tests(TestCase):
         issue.github_file_url = "https://github.com/wkap/ledger/radar/wkap-radar-feed-2026-06-29.html"
         issue.github_commit_sha = "b" * 40
         issue.manifest_url = "https://github.com/wkap/ledger/manifests/radar-1.json"
-        issue.ots_status = "queued"
+        issue.ots_status = "stamped"
+        issue.ots_proof_url = "https://github.com/wkap/ledger/timestamps/radar-1.json.ots"
         issue.save()
 
-        response = self.client.get("/radar/wkap-radar-feed-2026-06-29.html")
+        with override_settings(WKAP_LEDGER_GITHUB_BASE_URL="https://github.com/wkap/ledger"):
+            response = self.client.get("/radar/wkap-radar-feed-2026-06-29.html")
 
         self.assertContains(response, '<meta name="agent-readable" content="true">')
         self.assertContains(response, '<link rel="canonical" href="https://wkap.ai/radar/wkap-radar-feed-2026-06-29.html">')
         self.assertContains(response, 'type="application/ld+json"')
         self.assertContains(response, 'data-agent-readable="true"')
         self.assertContains(response, 'data-agent-proof="true"')
+        self.assertContains(response, 'data-opentimestamp-status="stamped"')
+        self.assertContains(response, "This artifact has an OpenTimestamp proof file.")
+        self.assertContains(response, "Proof file")
+        self.assertContains(response, "Timestamp target")
+        self.assertContains(response, "https://github.com/wkap/ledger/timestamps/radar-1.json.ots")
+        self.assertContains(response, "https://github.com/wkap/ledger/timestamps/radar-1.json")
         self.assertContains(response, "Agent-readable facts")
         self.assertContains(response, "content_sha256")
 

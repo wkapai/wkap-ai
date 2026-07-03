@@ -1,5 +1,25 @@
 <aside class="proof-panel" aria-label="Ledger proof" data-agent-proof="true">
   <h2>Proof</h2>
+  <section class="ots-proof-card" aria-label="OpenTimestamp proof" data-opentimestamp-status="{{ artifact.ots_status|default:'pending' }}">
+    <div>
+      <p class="proof-kicker">OpenTimestamp</p>
+      <p class="ots-proof-status">
+        <span class="ots-status-dot" aria-hidden="true"></span>
+        {{ artifact.ots_status|default:"pending" }}
+      </p>
+    </div>
+    <p class="ots-proof-copy">
+      {% if artifact.ots_proof_url %}
+        This artifact has an OpenTimestamp proof file.
+      {% else %}
+        Timestamp proof is pending.
+      {% endif %}
+    </p>
+    <div class="ots-proof-links">
+      {% if artifact.ots_proof_url %}<a href="{{ artifact.ots_proof_url }}">Proof file</a>{% endif %}
+      {% if artifact.opentimestamp_target_url %}<a href="{{ artifact.opentimestamp_target_url }}">Timestamp target</a>{% endif %}
+    </div>
+  </section>
   <dl>
     <dt>Canonical URL</dt>
     <dd><a href="{{ artifact.canonical_url }}">{{ artifact.canonical_url|default:"pending" }}</a></dd>

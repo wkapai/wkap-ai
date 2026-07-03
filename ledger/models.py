@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -36,6 +37,14 @@ class ArtifactProofFields(models.Model):
 
     class Meta:
         abstract = True
+
+    @property
+    def opentimestamp_target_url(self) -> str:
+        base = settings.WKAP_LEDGER_GITHUB_BASE_URL.rstrip("/")
+        if not base or not self.id:
+            return ""
+        entity_type = "radar" if isinstance(self, RadarIssue) else "wow"
+        return f"{base}/timestamps/{entity_type}-{self.id}.json"
 
 
 class RadarIssue(ArtifactProofFields):
