@@ -1,12 +1,17 @@
 <aside class="proof-panel" aria-label="Ledger proof" data-agent-proof="true">
   <h2>Proof</h2>
   <section class="ots-proof-card" aria-label="OpenTimestamp proof" data-opentimestamp-status="{{ artifact.ots_status|default:'pending' }}">
-    <div>
-      <p class="proof-kicker">OpenTimestamp</p>
-      <p class="ots-proof-status">
-        <span class="ots-status-dot" aria-hidden="true"></span>
-        {{ artifact.ots_status|default:"pending" }}
-      </p>
+    <div class="ots-proof-head">
+      <a class="ots-logo-link" href="https://opentimestamps.org/" aria-label="OpenTimestamps website">
+        <img src="/static/img/opentimestamps-logo.png?v=ots-logo-v1" alt="OpenTimestamps">
+      </a>
+      <div>
+        <a class="proof-kicker" href="https://opentimestamps.org/">OpenTimestamps</a>
+        <p class="ots-proof-status">
+          <span class="ots-status-dot" aria-hidden="true"></span>
+          {{ artifact.ots_status|default:"pending" }}
+        </p>
+      </div>
     </div>
     <p class="ots-proof-copy">
       {% if artifact.ots_proof_url %}

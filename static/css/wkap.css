@@ -586,8 +586,8 @@ p {
 }
 
 .ots-proof-card {
-  background: linear-gradient(135deg, rgba(255, 107, 26, 0.16), rgba(255, 255, 255, 0.8));
-  border: 1px solid rgba(255, 107, 26, 0.34);
+  background: linear-gradient(135deg, rgba(255, 107, 26, 0.18), rgba(255, 255, 255, 0.84));
+  border: 1px solid rgba(255, 107, 26, 0.38);
   border-radius: 8px;
   display: grid;
   gap: 10px;
@@ -595,14 +595,46 @@ p {
   padding: 14px;
 }
 
+.ots-proof-head {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.ots-logo-link {
+  align-items: center;
+  background: #fff;
+  border: 1px solid rgba(20, 35, 66, 0.16);
+  border-radius: 8px;
+  display: flex;
+  height: 44px;
+  justify-content: center;
+  overflow: hidden;
+  width: 44px;
+}
+
+.ots-logo-link img {
+  display: block;
+  height: 32px;
+  object-fit: contain;
+  width: 32px;
+}
+
 .proof-kicker {
   color: var(--accent);
+  display: inline-block;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.12em;
   margin: 0 0 4px;
+  text-decoration: none;
   text-transform: uppercase;
+}
+
+.proof-kicker:hover {
+  color: var(--text);
 }
 
 .ots-proof-status {
@@ -1031,6 +1063,21 @@ body:not([data-page-type="home"]) .ots-proof-card {
   gap: 6px;
   margin-top: 6px;
   padding: 9px;
+}
+
+body:not([data-page-type="home"]) .ots-proof-head {
+  gap: 8px;
+  grid-template-columns: 34px minmax(0, 1fr);
+}
+
+body:not([data-page-type="home"]) .ots-logo-link {
+  height: 34px;
+  width: 34px;
+}
+
+body:not([data-page-type="home"]) .ots-logo-link img {
+  height: 25px;
+  width: 25px;
 }
 
 body:not([data-page-type="home"]) .ots-proof-status {
