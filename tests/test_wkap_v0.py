@@ -265,7 +265,7 @@ class WKAPV0Tests(TestCase):
 
         self.assertEqual(display_name_from_wow_subject(raw.subject), "Test Agent")
         self.assertEqual(submission.investor.display_name, "Test Agent")
-        self.assertEqual(submission.investor.public_label, "Test Agent (w0202)")
+        self.assertEqual(submission.investor.public_label, "Test Agent")
 
     def test_wow_html_has_disclaimer_and_hides_private_email(self):
         run_id = "00000000-0000-0000-0000-000000000004"
@@ -724,7 +724,7 @@ class WKAPV0Tests(TestCase):
         index_response = self.client.get("/investors/w0202/wows/")
 
         expected_href = 'href="/investors/w0202/wows/wow-w0202-2026-06-29.html"'
-        expected_label = "Test Agent (w0202) - 2026-06-29"
+        expected_label = "Test Agent - 2026-06-29"
         self.assertContains(home_response, expected_href)
         self.assertContains(home_response, expected_label)
         self.assertContains(index_response, expected_href)
@@ -740,7 +740,7 @@ class WKAPV0Tests(TestCase):
 
         self.assertContains(home_response, 'href="/investors/"')
         self.assertContains(home_response, "Open WoW ledger")
-        self.assertContains(archive_response, "Test Agent (w0202) - 2026-06-29")
+        self.assertContains(archive_response, "Test Agent - 2026-06-29")
         self.assertContains(archive_response, 'href="/investors/w0202/wows/wow-w0202-2026-06-29.html"')
 
     def test_investor_archive_lists_recently_active_investors_first(self):
@@ -758,7 +758,7 @@ class WKAPV0Tests(TestCase):
         response = self.client.get("/investors/")
         content = response.content.decode()
 
-        self.assertLess(content.index("Newer Agent (w0203)"), content.index("Older Agent (w0202)"))
+        self.assertLess(content.index("Newer Agent"), content.index("Older Agent"))
 
     def test_latest_wows_order_by_creation_time_not_market_date(self):
         run_id = "00000000-0000-0000-0000-000000000019"
@@ -783,7 +783,7 @@ class WKAPV0Tests(TestCase):
         response = self.client.get("/investors/")
         content = response.content.decode()
 
-        self.assertLess(content.index("Calendar Old Agent (w0203) - 2026-06-29"), content.index("Calendar New Agent (w0202) - 2026-07-04"))
+        self.assertLess(content.index("Calendar Old Agent - 2026-06-29"), content.index("Calendar New Agent - 2026-07-04"))
 
     def test_home_links_to_investor_log_setup_page(self):
         home_response = self.client.get("/")
@@ -845,8 +845,12 @@ class WKAPV0Tests(TestCase):
         self.assertContains(response, "Agent-readable facts")
         self.assertContains(response, "private_email_published", count=0)
         self.assertContains(response, "investor_id")
-        self.assertContains(response, 'data-field="submitted_by"')
-        self.assertContains(response, "w0202 / Test Agent")
+        self.assertContains(response, 'data-field="ledgered_by"')
+        self.assertContains(response, "Ledgered by")
+        self.assertContains(response, "Test Agent")
+        self.assertContains(response, "Investor ID")
+        self.assertContains(response, 'data-field="investor_id"')
+        self.assertContains(response, "w0202")
         self.assertContains(response, 'data-field="submission_channel"')
         self.assertContains(response, "email")
         self.assertContains(response, 'data-field="received_at_et"')

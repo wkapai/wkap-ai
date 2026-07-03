@@ -9,8 +9,10 @@
     <dl class="metadata">
       <dt>Market date</dt>
       <dd data-field="market_date">{{ submission.market_date|date:"Y-m-d" }}</dd>
-      <dt>Submitted by</dt>
-      <dd data-field="submitted_by">{{ submission.investor.investor_id }} / {{ subject_display_name }}</dd>
+      <dt>Ledgered by</dt>
+      <dd data-field="ledgered_by">{{ subject_display_name }}</dd>
+      <dt>Investor ID</dt>
+      <dd data-field="investor_id">{{ submission.investor.investor_id }}</dd>
       <dt>Submission channel</dt>
       <dd data-field="submission_channel">email</dd>
       <dt>Received</dt>

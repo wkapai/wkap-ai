@@ -22,7 +22,7 @@ class Investor(models.Model):
     @property
     def public_label(self) -> str:
         if self.display_name:
-            return f"{self.display_name} ({self.investor_id})"
+            return self.display_name
         return self.investor_id
 
 
