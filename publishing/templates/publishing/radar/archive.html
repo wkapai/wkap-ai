@@ -1,0 +1,21 @@
+{% extends "publishing/base.html" %}
+{% block title %}{{ meta_title|default:"WKAP Radar Feed" }}{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Official WKAP editorial context</p>
+  <h1>Radar Feed</h1>
+</section>
+<section class="list-stack" aria-label="Radar Feed issues" data-agent-list="radar">
+  {% for issue in issues %}
+    <article class="artifact-row" data-artifact-type="radar" data-market-date="{{ issue.market_date|date:"Y-m-d" }}" data-canonical-url="{{ issue.canonical_url }}" data-content-sha256="{{ issue.content_sha256 }}">
+      <div>
+        <h2><a href="/radar/wkap-radar-feed-{{ issue.market_date|date:"Y-m-d" }}.html">WKAP Radar Feed {{ issue.market_date|date:"Y-m-d" }}</a></h2>
+        <p>{{ issue.title }}</p>
+      </div>
+      <code>{{ issue.content_sha256|default:"pending hash" }}</code>
+    </article>
+  {% empty %}
+    <p class="empty">No Radar Feed issues have been published yet.</p>
+  {% endfor %}
+</section>
+{% endblock %}

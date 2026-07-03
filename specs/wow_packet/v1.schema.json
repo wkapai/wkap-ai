@@ -1,0 +1,106 @@
+{
+  "format_version": "wow_packet_v1",
+  "title": "WKAP Daily WoW Packet",
+  "required_sections": [
+    "1. Reading Log",
+    "2. Agent Suggested 3 WoWs",
+    "3. User Selection / Pass"
+  ],
+  "reading_item_fields": [
+    "source_title",
+    "source_url",
+    "source_type",
+    "published_time",
+    "tickers / themes",
+    "reading_origin",
+    "agent_summary"
+  ],
+  "reading_log_rules": {
+    "max_items": 10,
+    "selection_rule": "The agent must review the user's full market-reading day and include only the top 10 items most worth preserving for the investor log."
+  },
+  "source_type_values": [
+    "article",
+    "filing",
+    "transcript",
+    "X thread",
+    "podcast",
+    "chart",
+    "internal note"
+  ],
+  "reading_origin_values": [
+    "user_browsed",
+    "agent_suggested"
+  ],
+  "suggested_wow_fields": [
+    "wow_id",
+    "source_refs",
+    "ticker / theme",
+    "what's_worth_watching",
+    "why_now",
+    "what_evidence_should_AI_watch_for"
+  ],
+  "selection_fields": [
+    "selected_wow_id",
+    "user_note",
+    "closest_rejected_idea",
+    "why_pass",
+    "missing_evidence"
+  ],
+  "selection_rules": {
+    "pass_value": "none",
+    "pass_only_fields": [
+      "closest_rejected_idea",
+      "why_pass",
+      "missing_evidence"
+    ],
+    "selected_wow_rule": "When selected_wow_id is a suggested WoW ID, pass-only fields must be absent or blank.",
+    "pass_rule": "When selected_wow_id is none, pass-only fields are required."
+  },
+  "agent_crawl_contract": {
+    "rendered_html_version": "agent_wow_html_v1",
+    "selection_status": "Derived by WKAP as selected when selected_wow_id is a suggested WoW ID, otherwise pass when selected_wow_id is none.",
+    "stable_html_attributes": [
+      "data-agent-readable",
+      "data-artifact-type",
+      "data-format-version",
+      "data-selection-status",
+      "data-investor-id",
+      "data-investor-label",
+      "data-market-date",
+      "data-canonical-url",
+      "data-content-sha256",
+      "data-field"
+    ],
+    "rendered_agent_fields": [
+      "selection_status",
+      "investor_id",
+      "investor_label",
+      "market_date",
+      "selected_wow_id",
+      "selected_theme",
+      "themes",
+      "source_urls",
+      "source_types",
+      "reading_origins",
+      "evidence_to_watch",
+      "missing_evidence"
+    ]
+  },
+  "long_artifact_contract": {
+    "raw_email_body": "Must be stored completely before parsing.",
+    "multiline_fields": "Long multiline field values must be preserved in DB records and rendered HTML.",
+    "transport_rule": "Do not pass packet bodies through CLI arguments or shell command strings; use Gmail ingestion, files, stdin, or API payloads."
+  },
+  "format_error_contract": {
+    "sender_policy": "Any sender may submit a Daily WoW Packet.",
+    "save_first": "Malformed packets must still be saved as RawEmail before parsing.",
+    "published": "Publish the ledger page and send the normal receipt.",
+    "received_needs_format_fix": "If deterministic repair/tolerance can parse the packet, publish it and send the normal receipt with a setup-format reminder. If WKAP cannot repair it safely, keep the raw email as needs_format_fix, do not publish, and send a format-fix receipt.",
+    "rejected_spam_or_empty": "Do not publish and do not send a receipt.",
+    "publish_rule": "Only publish packets that parse into reliable ledger fields.",
+    "status": "Set RawEmail.processing_status to needs_format_fix and store the parser message in error_message.",
+    "receipt": "Send or preview a format-fix receipt describing the missing or invalid field."
+  },
+  "raw_email_ledger_path": "raw-emails/wow-packets/wow-packet-{investor_id}-{market_date}.txt"
+}

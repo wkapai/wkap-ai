@@ -1,0 +1,49 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ meta_title|default:"WKAP.ai" }}{% endblock %}</title>
+  <meta name="description" content="{{ meta_description|default:'WKAP.ai publishes agent-validatable Radar Feed and WoW ledger pages.' }}">
+  <meta name="robots" content="index,follow">
+  <meta name="agent-content-type" content="{{ page_type|default:'wkap_page' }}">
+  <meta name="agent-readable" content="true">
+  <meta name="agent-spec-version" content="{{ agent_spec_version|default:'wow_packet_v1' }}">
+  <meta property="og:site_name" content="WKAP.ai">
+  <meta property="og:title" content="{{ meta_title|default:'WKAP.ai' }}">
+  <meta property="og:description" content="{{ meta_description|default:'WKAP.ai publishes agent-validatable Radar Feed and WoW ledger pages.' }}">
+  <meta property="og:type" content="website">
+  {% if canonical_url %}
+  <link rel="canonical" href="{{ canonical_url }}">
+  <meta property="og:url" content="{{ canonical_url }}">
+  {% endif %}
+  <link rel="index" href="/radar/" data-agent-crawl="radar-index">
+  <link rel="index" href="/investors/" data-agent-crawl="wow-ledger-index">
+  {% for link in crawl_links %}
+  <link rel="{{ link.rel }}" href="{{ link.href }}" data-agent-crawl="{{ link.label }}">
+  {% endfor %}
+  <link rel="icon" type="image/png" sizes="512x512" href="{% static 'img/favicon.png' %}?v=wukong-icon-r2c1">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}?v=wukong-icon-r2c1">
+  <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon-16.png' %}?v=wukong-icon-r2c1">
+  <link rel="stylesheet" href="{% static 'css/wkap.css' %}?v=compact-ledger-v1">
+  {% if json_ld %}
+  <script type="application/ld+json">{{ json_ld|safe }}</script>
+  {% endif %}
+</head>
+<body data-page-type="{{ page_type|default:'wkap_page' }}">
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="WKAP home">
+      <img class="brand-logo" src="{% static 'img/wkap-logo.png' %}?v=wukong-wordmark-icon-v4" alt="WKAP">
+    </a>
+    <nav aria-label="Primary">
+      <a href="/radar/">Radar</a>
+      <a href="/investors/">WoW Ledger</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+    {% include "publishing/agent_facts.html" %}
+  </main>
+</body>
+</html>

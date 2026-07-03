@@ -1,0 +1,24 @@
+{% extends "publishing/base.html" %}
+{% block title %}{{ meta_title|default:"WKAP Investor WoWs" }}{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Investor {{ investor.public_label }}</p>
+  <h1>WoW - Worth Watching Workout</h1>
+</section>
+<section class="list-stack" aria-label="Investor WoW submissions" data-agent-list="wow">
+  {% for submission in submissions %}
+    <article class="artifact-row" data-artifact-type="wow" data-investor-id="{{ investor.investor_id }}" data-market-date="{{ submission.market_date|date:"Y-m-d" }}" data-canonical-url="{{ submission.canonical_url }}" data-content-sha256="{{ submission.content_sha256 }}">
+      <div>
+        <p class="artifact-type">{{ submission.market_date|date:"Y-m-d" }}</p>
+        <h2><a href="/investors/{{ investor.investor_id }}/wows/wow-{{ investor.investor_id }}-{{ submission.market_date|date:"Y-m-d" }}.html">{{ investor.public_label }} - {{ submission.market_date|date:"Y-m-d" }}</a></h2>
+        {% with selected=submission.suggested_wows.first %}
+          <p>{{ selected.whats_worth_watching|default:"Daily WoW Packet" }}</p>
+        {% endwith %}
+      </div>
+      <code>{{ submission.content_sha256|default:"pending hash" }}</code>
+    </article>
+  {% empty %}
+    <p class="empty">No WoW submissions have been published yet.</p>
+  {% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "publishing/base.html" %}
+{% block title %}{{ meta_title|default:"WKAP.ai" }}{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="hero-copy">
+    <h1>Build Your <span class="headline-break">Investor Log</span></h1>
+    <p class="hero-subheadline">Turn daily market attention into a public record of judgment.</p>
+    <p class="lede">Every day, your agent surfaces signals. You submit one WoW (Worth Watching Workout): one market claim + one AI-checkable test.</p>
+    <p class="lede">WKAP records what you read, what you judged, what you passed, and what actually mattered - so your investor trail compounds over time.</p>
+    <div class="action-row">
+      <a class="button-link primary" href="/submit-to-wkap-ledger.html">Setup My Investor Log</a>
+      <a class="button-link secondary" href="/investors/">Open WoW ledger</a>
+    </div>
+  </div>
+  <div class="hero-visual" aria-label="WKAP agent ledger preview">
+    <img class="hero-image" src="/static/img/hero-agent-ledger.png" alt="Abstract AI agent ledger interface">
+  </div>
+</section>
+{% endblock %}

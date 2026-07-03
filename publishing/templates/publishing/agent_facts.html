@@ -1,0 +1,11 @@
+{% if agent_facts %}
+<section class="agent-facts" aria-label="Agent-readable page facts" data-agent-readable="true" data-page-type="{{ page_type }}">
+  <h2>Agent-readable facts</h2>
+  <dl>
+    {% for fact in agent_facts %}
+      <dt data-field="{{ fact.name }}">{{ fact.name }}</dt>
+      <dd data-field="{{ fact.name }}">{{ fact.value|default:"pending" }}</dd>
+    {% endfor %}
+  </dl>
+</section>
+{% endif %}

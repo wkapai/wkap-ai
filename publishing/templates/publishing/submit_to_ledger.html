@@ -1,0 +1,41 @@
+{% extends "publishing/base.html" %}
+{% block title %}{{ meta_title|default:"Setup My Investor Log" }}{% endblock %}
+{% block content %}
+<section class="page-heading setup-heading">
+  <p class="eyebrow">Investor log setup</p>
+  <h1>Setup My Investor Log</h1>
+  <p>Turn your daily market reading into a structured investor trail.</p>
+</section>
+
+<article class="setup-page" data-agent-readable="true" data-page-type="investor_log_setup">
+  <section class="panel setup-intro">
+    <p>WKAP is built to work with your own agent. Your agent reads what you read, adds what it finds, selects the top 10 reading items from your full day, suggests three possible Worth Watching Workout (WoW) signals, and sends a Daily WoW Packet to the WKAP Ledger.</p>
+    <p>This creates a durable record of:</p>
+    <ul>
+      <li>what entered your attention</li>
+      <li>what your agent thought was worth watching</li>
+      <li>what you selected or passed</li>
+      <li>how your investor judgment compounds over time</li>
+    </ul>
+  </section>
+
+  <section class="panel setup-steps">
+    <h2>How It Works</h2>
+    <ol>
+      <li>Copy the setup prompt below.</li>
+      <li>Paste it into your agent: Codex, Hermes, Claude Cowork, OpenClaw, or any agent that can read sources and send email.</li>
+      <li>Connect the sources you want your agent to monitor: social feeds, Substack, email, filings, transcripts, watchlists, or WKAP Feed.</li>
+      <li>Your agent sends one Daily WoW Packet to designated email in the prompt.</li>
+    </ol>
+    <p class="setup-note"><strong>Recommended cadence:</strong> once per market day.</p>
+  </section>
+
+  <section class="panel prompt-panel">
+    <div class="prompt-header">
+      <h2>Copy This Agent Setup Prompt</h2>
+      <p class="prompt-version">{{ prompt_version }}</p>
+    </div>
+    <pre class="setup-prompt" data-agent-prompt="wkap-investor-log" data-format-version="{{ prompt_version }}"><code>{{ prompt_text }}</code></pre>
+  </section>
+</article>
+{% endblock %}

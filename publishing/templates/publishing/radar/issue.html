@@ -1,0 +1,18 @@
+{% extends "publishing/base.html" %}
+{% block title %}{{ meta_title|default:issue.title }}{% endblock %}
+{% block content %}
+<article class="artifact-layout radar-issue-layout" data-agent-readable="true" data-artifact-type="radar" data-market-date="{{ issue.market_date|date:"Y-m-d" }}" data-canonical-url="{{ issue.canonical_url }}" data-content-sha256="{{ issue.content_sha256 }}">
+  <section class="artifact-main">
+    <p class="eyebrow">Type: WKAP Radar Feed</p>
+    <h1>{{ issue.title }}</h1>
+    <dl class="metadata">
+      <dt>Market date</dt>
+      <dd>{{ issue.market_date|date:"Y-m-d" }}</dd>
+      <dt>Canonical URL</dt>
+      <dd>{{ issue.canonical_url|default:"pending" }}</dd>
+    </dl>
+    <div class="body-copy" data-agent-body="radar-feed">{{ issue.body_text|urlize|linebreaks }}</div>
+  </section>
+  {% include "publishing/proof_panel.html" with artifact=issue %}
+</article>
+{% endblock %}

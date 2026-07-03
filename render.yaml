@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: wkap-ai
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    preDeployCommand: bash scripts/render_release.sh
+    startCommand: gunicorn wkap_project.wsgi:application
+    envVars:
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: ALLOWED_HOSTS
+        value: wkap.ai,www.wkap.ai
+      - key: DEBUG
+        value: "false"
+      - key: WKAP_BASE_URL
+        value: https://wkap.ai
+      - key: WKAP_ENVIRONMENT
+        value: production
+      - key: WKAP_PUBLIC_SITE_ROOT
+        value: /var/data/wkap/public_site
+      - key: WKAP_LEDGER_REPO_PATH
+        value: /var/data/wkap/ledger
+      - key: WKAP_LEDGER_REPO_URL
+        sync: false
+      - key: WKAP_LEDGER_GITHUB_BASE_URL
+        value: https://github.com/wkapai/wkap-ledger/blob/main
+      - key: WKAP_LEDGER_BRANCH
+        value: main
+      - key: WKAP_GMAIL_ACCOUNT
+        value: playinc@gmail.com
+      - key: WKAP_INBOUND_EMAIL
+        value: ledger@wkap.ai
+      - key: WKAP_LOCAL_INBOUND_EMAIL
+        value: playinc@gmail.com
+      - key: WKAP_RECEIPT_FROM_EMAIL
+        value: playinc@gmail.com
+      - key: WKAP_SEND_RECEIPTS
+        value: "true"
+      - key: WKAP_GMAIL_CREDENTIALS_FILE
+        sync: false
+      - key: WKAP_GMAIL_TOKEN_FILE
+        sync: false
+      - key: WKAP_RADAR_AUTHORIZED_SENDERS
+        value: playinc@gmail.com,minxixi0103@gmail.com
+      - key: WKAP_CLOUDFLARE_INGEST_SECRET
+        sync: false
+      - key: WKAP_OPENTIMESTAMP_ENABLED
+        value: "false"

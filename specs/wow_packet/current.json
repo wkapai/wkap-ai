@@ -1,0 +1,5 @@
+{
+  "current_version": "v1",
+  "schema": "specs/wow_packet/v1.schema.json",
+  "prompt": "specs/wow_packet/v1.prompt.md"
+}
