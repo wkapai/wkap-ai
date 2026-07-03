@@ -1,0 +1,7 @@
+name = "wkap-email-ingest"
+main = "cloudflare/email-worker.js"
+compatibility_date = "2026-07-03"
+
+[vars]
+WKAP_RENDER_INGEST_URL = "https://wkap.ai/internal/cloudflare-email-ingest/"
+WKAP_FORWARD_TO = "playinc@gmail.com"
