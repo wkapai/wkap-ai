@@ -509,6 +509,7 @@ def _render_wow(submission: DailyWoWPacket) -> str:
     selection_status = _wow_selection_status(submission)
     subject_display_name = submission.investor.display_name or "unknown subject name"
     received_at_et = submission.source_email.received_at.astimezone(ET_ZONE)
+    received_at_et_display = received_at_et.strftime("%Y-%m-%d %H:%M ET")
     return render_to_string(
         "publishing/investors/wow.html",
         {
@@ -516,7 +517,7 @@ def _render_wow(submission: DailyWoWPacket) -> str:
             "selected_wow": selected_wow,
             "selection_status": selection_status,
             "subject_display_name": subject_display_name,
-            "received_at_et": received_at_et,
+            "received_at_et_display": received_at_et_display,
             "disclaimer": WOW_DISCLAIMER,
             "page_type": "wow_submission",
             "agent_spec_version": submission.format_version,

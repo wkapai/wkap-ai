@@ -362,6 +362,7 @@ def wow_submission(request, investor_id, market_date):
     description_context = selected_wow.whats_worth_watching if selected_wow else "Daily WoW Packet"
     subject_display_name = submission.investor.display_name or "unknown subject name"
     received_at_et = submission.source_email.received_at.astimezone(ET_ZONE)
+    received_at_et_display = received_at_et.strftime("%Y-%m-%d %H:%M ET")
     return render(
         request,
         "publishing/investors/wow.html",
@@ -382,7 +383,7 @@ def wow_submission(request, investor_id, market_date):
                 {"name": "investor_display_name", "value": submission.investor.display_name},
                 {"name": "subject_line_display_name", "value": subject_display_name},
                 {"name": "submission_channel", "value": "email"},
-                {"name": "received_at_et", "value": received_at_et.strftime("%Y-%m-%d %H:%M ET")},
+                {"name": "received_at_et", "value": received_at_et_display},
                 {"name": "format_version", "value": submission.format_version},
                 {"name": "selection_status", "value": agent_summary["selection_status"]},
                 {"name": "selected_wow_id", "value": submission.selected_wow_id},
@@ -419,7 +420,7 @@ def wow_submission(request, investor_id, market_date):
             selected_wow=selected_wow,
             selection_status=agent_summary["selection_status"],
             subject_display_name=subject_display_name,
-            received_at_et=received_at_et,
+            received_at_et_display=received_at_et_display,
             disclaimer=WOW_DISCLAIMER,
         ),
     )

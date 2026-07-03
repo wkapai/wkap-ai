@@ -851,6 +851,7 @@ class WKAPV0Tests(TestCase):
         self.assertContains(response, "email")
         self.assertContains(response, 'data-field="received_at_et"')
         self.assertContains(response, "2026-07-03 09:14 ET")
+        self.assertNotContains(response, "2026-07-03 13:14 ET")
         self.assertContains(response, "subject_line_display_name")
         self.assertContains(response, 'data-selection-status="selected"')
         self.assertContains(response, 'data-field="selection_status"')
