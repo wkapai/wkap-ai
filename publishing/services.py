@@ -69,6 +69,13 @@ def generate_wow_html(submission: DailyWoWPacket, *, run_id: uuid.UUID) -> Daily
 
 def rebuild_indexes(*, run_id: uuid.UUID) -> None:
     radar_issues = RadarIssue.objects.order_by("-market_date")
+    for issue in radar_issues:
+        _refresh_artifact_files("radar", issue)
+
+    wow_submissions = DailyWoWPacket.objects.select_related("investor", "source_email").order_by("-created_at", "-id")
+    for submission in wow_submissions:
+        _refresh_artifact_files("wow", submission)
+
     _write_public("radar/index.html", render_to_string("publishing/radar/archive.html", {"issues": radar_issues}))
     investors = _investors_with_wows()
     _write_public(
@@ -77,7 +84,7 @@ def rebuild_indexes(*, run_id: uuid.UUID) -> None:
             "publishing/investors/archive.html",
             {
                 "investors": investors,
-                "submissions": DailyWoWPacket.objects.select_related("investor").order_by("-created_at", "-id"),
+                "submissions": wow_submissions,
             },
         ),
     )

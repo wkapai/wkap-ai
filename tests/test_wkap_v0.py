@@ -37,6 +37,7 @@ from publishing.services import (
     generate_radar_html,
     generate_wow_html,
     publish_artifact,
+    rebuild_indexes,
     timestamp_artifact,
     upgrade_opentimestamps,
     validate_ledger,
@@ -282,6 +283,23 @@ class WKAPV0Tests(TestCase):
         self.assertNotIn("private@example.com", html)
         self.assertIn("Reading Log", html)
         self.assertIn("Agent Suggested WoW Signals", html)
+
+    def test_rebuild_indexes_refreshes_existing_artifact_pages(self):
+        run_id = "00000000-0000-0000-0000-000000000028"
+        raw = self.raw_email(sender="refresh@example.com", subject="Daily WoW Packet - 2026-06-29 - Refresh Agent", body=self.wow_packet_body())
+        submission = create_wow_submission(raw, run_id=run_id)
+
+        with TemporaryDirectory() as tmp:
+            with override_settings(WKAP_PUBLIC_SITE_ROOT=Path(tmp), WKAP_LEDGER_REPO_PATH=""):
+                generate_wow_html(submission, run_id=run_id)
+                output = Path(tmp) / "investors" / "w0202" / "wows" / "wow-w0202-2026-06-29.html"
+                output.write_text("stale artifact html", encoding="utf-8")
+
+                rebuild_indexes(run_id=run_id)
+                html = output.read_text(encoding="utf-8")
+
+        self.assertNotIn("stale artifact html", html)
+        self.assertIn('href="/investors/w0202/"', html)
 
     def test_long_radar_body_preserves_formatting_and_field_like_lines(self):
         run_id = "00000000-0000-0000-0000-000000000020"
