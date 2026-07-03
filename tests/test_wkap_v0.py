@@ -820,7 +820,7 @@ class WKAPV0Tests(TestCase):
         self.assertContains(response, 'data-opentimestamp-status="stamped"')
         self.assertContains(response, "This artifact has an OpenTimestamp proof file.")
         self.assertContains(response, 'href="https://opentimestamps.org/"')
-        self.assertContains(response, 'src="/static/img/opentimestamps-logo.png?v=ots-logo-v1"')
+        self.assertContains(response, 'src="/static/img/opentimestamps-logo.png?v=ots-logo-tight-v1"')
         self.assertContains(response, 'alt="OpenTimestamps"')
         self.assertContains(response, "Proof file")
         self.assertContains(response, "Timestamp target")

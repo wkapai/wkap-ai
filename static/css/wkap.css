@@ -616,9 +616,9 @@ p {
 
 .ots-logo-link img {
   display: block;
-  height: 32px;
+  height: 36px;
   object-fit: contain;
-  width: 32px;
+  width: 36px;
 }
 
 .proof-kicker {
@@ -1076,8 +1076,8 @@ body:not([data-page-type="home"]) .ots-logo-link {
 }
 
 body:not([data-page-type="home"]) .ots-logo-link img {
-  height: 25px;
-  width: 25px;
+  height: 29px;
+  width: 29px;
 }
 
 body:not([data-page-type="home"]) .ots-proof-status {
