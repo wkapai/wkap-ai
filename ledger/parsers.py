@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from django.utils import timezone
 
 from ingestion.models import RawEmail
+from ledger.wow_contract import local_wow_id
 from ledger.wow_packet_spec import current_spec
 
 
@@ -114,7 +115,7 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
         raise ParseError("Daily WoW Packet must include at least one suggested WoW.")
 
     selection_fields = _fields(selection_section)
-    selected_wow_id = _first_field(selection_fields, "selected_wow_id", "selected_wow", "selected").strip()
+    selected_wow_id = local_wow_id(_first_field(selection_fields, "selected_wow_id", "selected_wow", "selected").strip())
     if not selected_wow_id:
         raise ParseError("selected_wow_id is required. Use a suggested WoW ID or none.")
     pass_fields = {
@@ -159,7 +160,7 @@ def _fields(text: str) -> dict[str, str]:
         if match:
             current_key = _field_key(match.group(1))
             fields[current_key] = match.group(2).strip()
-        elif current_key and line.strip():
+        elif current_key and line.strip() and line.strip() != "---":
             fields[current_key] = f"{fields[current_key]}\n{line.strip()}".strip()
     return fields
 
@@ -253,7 +254,7 @@ def _parse_suggested_wows(text: str) -> list[ParsedAgentSuggestedWoW]:
     for index, block in enumerate(_blocks(text, r"^(?:#{1,6}\s*)?Suggested WoW\s+\[?(\d+)\]?"), start=1):
         number, content = block
         fields = _fields(content)
-        wow_id = fields.get("wow_id", "").strip()
+        wow_id = local_wow_id(fields.get("wow_id", "").strip())
         if not wow_id:
             raise ParseError(f"Suggested WoW {number or index} missing wow_id.")
         items.append(

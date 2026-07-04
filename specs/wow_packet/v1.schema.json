@@ -57,6 +57,16 @@
     "selected_wow_rule": "When selected_wow_id is a suggested WoW ID, pass-only fields must be absent or blank.",
     "pass_rule": "When selected_wow_id is none, pass-only fields are required."
   },
+  "public_id_rules": {
+    "packet_wow_id": "Email packet IDs are local to the packet, for example WOW-2026-07-03-001.",
+    "public_wow_id": "Rendered WKAP pages and manifests namespace packet WoW IDs with investor_id, for example WOW-w0204-2026-07-03-001.",
+    "first_submission_rule": "Agents should use packet-local IDs in email because a first-time sender may not know the WKAP investor_id yet."
+  },
+  "hash_contract": {
+    "content_sha256_field": "Every public artifact exposes content_sha256 plus content_sha256_covers.",
+    "radar_content_sha256_covers": "sha256 over UTF-8 text: radar\\n{market_date}\\n{title}\\n{body_text}. It does not cover rendered HTML, proof panels, manifests, or OpenTimestamp status.",
+    "wow_content_sha256_covers": "sha256 over UTF-8 text: wow_packet\\n{format_version}\\n{market_date}\\n{investor_id}\\n{selected_wow_id}\\n{reason_for_selection}\\n{closest_rejected_idea}\\n{why_pass}\\n{missing_evidence}\\nreading_items(item_number,source_title,source_url,reading_origin,agent_summary)\\nsuggested_wows(wow_id,ticker_or_theme,whats_worth_watching,why_now,evidence_to_watch_for). It does not cover rendered HTML, proof panels, manifests, raw email text, or OpenTimestamp status."
+  },
   "agent_crawl_contract": {
     "rendered_html_version": "agent_wow_html_v1",
     "selection_status": "Derived by WKAP as selected when selected_wow_id is a suggested WoW ID, otherwise pass when selected_wow_id is none.",
@@ -73,17 +83,26 @@
       "data-field"
     ],
     "rendered_agent_fields": [
+      "content_sha256_covers",
       "selection_status",
       "investor_id",
       "investor_label",
       "market_date",
       "selected_wow_id",
+      "packet_selected_wow_id",
       "selected_theme",
       "themes",
+      "tickers_json",
+      "themes_json",
       "source_urls",
+      "source_urls_json",
       "source_types",
+      "source_types_json",
       "reading_origins",
+      "reading_origins_json",
       "evidence_to_watch",
+      "evidence_to_watch_json",
+      "all_evidence_to_watch_json",
       "missing_evidence"
     ]
   },

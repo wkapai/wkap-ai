@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils.html import escape
 
 from ledger.models import Investor, RadarIssue, DailyWoWPacket
+from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, market_terms
 from ledger.wow_packet_spec import current_prompt, current_spec
 from publishing.services import WOW_DISCLAIMER
 from publishing.urls import investor_home_url, investor_wows_url, radar_archive_url, radar_issue_url, wow_url
@@ -63,6 +64,7 @@ def _artifact_facts(artifact, artifact_type: str) -> list[dict[str, str]]:
         {"name": "market_date", "value": str(artifact.market_date)},
         {"name": "canonical_url", "value": artifact.canonical_url or ""},
         {"name": "content_sha256", "value": artifact.content_sha256 or ""},
+        {"name": "content_sha256_covers", "value": _content_sha256_covers(artifact_type)},
         {"name": "github_file_url", "value": artifact.github_file_url or ""},
         {"name": "github_commit_sha", "value": artifact.github_commit_sha or ""},
         {"name": "manifest_url", "value": artifact.manifest_url or ""},
@@ -96,6 +98,7 @@ def _artifact_json_ld(artifact, artifact_type: str, title: str, body: str, extra
             "@type": "MediaObject",
             "encodingFormat": "text/html",
             "sha256": artifact.content_sha256,
+            "contentSha256Covers": _content_sha256_covers(artifact_type.lower().replace("wkap radar feed", "radar").replace("daily wow packet", "wow")),
         },
         "isPartOf": _website_json_ld(artifact.canonical_url),
         "identifier": [
@@ -119,6 +122,19 @@ def _join_unique(values) -> str:
     return "; ".join(seen)
 
 
+def _unique_values(values) -> list[str]:
+    seen = []
+    for value in values:
+        value = (value or "").strip()
+        if value and value not in seen:
+            seen.append(value)
+    return seen
+
+
+def _content_sha256_covers(artifact_type: str) -> str:
+    return RADAR_CONTENT_SHA256_COVERS if artifact_type == "radar" else WOW_CONTENT_SHA256_COVERS
+
+
 def _wow_selection_status(submission: DailyWoWPacket) -> str:
     return "pass" if submission.selected_wow_id.lower() == "none" else "selected"
 
@@ -126,6 +142,15 @@ def _wow_selection_status(submission: DailyWoWPacket) -> str:
 def _wow_agent_summary(submission: DailyWoWPacket, selected_wow) -> dict[str, str]:
     reading_items = list(submission.reading_items.all())
     suggested_wows = list(submission.suggested_wows.all())
+    terms = market_terms([wow.ticker_or_theme for wow in suggested_wows] + [item.tickers_or_themes for item in reading_items])
+    source_urls = _unique_values(item.source_url for item in reading_items)
+    source_types = _unique_values(item.source_type for item in reading_items)
+    reading_origins = _unique_values(item.reading_origin for item in reading_items)
+    evidence_to_watch = (
+        clean_packet_text(selected_wow.evidence_to_watch_for)
+        if selected_wow and _wow_selection_status(submission) == "selected"
+        else clean_packet_text(submission.missing_evidence)
+    )
     return {
         "selection_status": _wow_selection_status(submission),
         "selected_theme": selected_wow.ticker_or_theme if selected_wow else "",
@@ -133,15 +158,20 @@ def _wow_agent_summary(submission: DailyWoWPacket, selected_wow) -> dict[str, st
             [wow.ticker_or_theme for wow in suggested_wows]
             + [item.tickers_or_themes for item in reading_items]
         ),
-        "source_urls": _join_unique(item.source_url for item in reading_items),
-        "source_types": _join_unique(item.source_type for item in reading_items),
-        "reading_origins": _join_unique(item.reading_origin for item in reading_items),
-        "evidence_to_watch": (
-            selected_wow.evidence_to_watch_for
-            if selected_wow and _wow_selection_status(submission) == "selected"
-            else submission.missing_evidence
-        ),
-        "all_evidence_to_watch": _join_unique(wow.evidence_to_watch_for for wow in suggested_wows),
+        "tickers_json": json_array(terms["tickers"]),
+        "themes_json": json_array(terms["themes"]),
+        "tickers": terms["tickers"],
+        "themes_array": terms["themes"],
+        "source_urls": _join_unique(source_urls),
+        "source_urls_json": json_array(source_urls),
+        "source_types": _join_unique(source_types),
+        "source_types_json": json_array(source_types),
+        "reading_origins": _join_unique(reading_origins),
+        "reading_origins_json": json_array(reading_origins),
+        "evidence_to_watch": evidence_to_watch,
+        "evidence_to_watch_json": json_array([evidence_to_watch]),
+        "all_evidence_to_watch": _join_unique(clean_packet_text(wow.evidence_to_watch_for) for wow in suggested_wows),
+        "all_evidence_to_watch_json": json_array(clean_packet_text(wow.evidence_to_watch_for) for wow in suggested_wows),
     }
 
 
@@ -396,14 +426,22 @@ def wow_submission(request, investor_id, market_date):
                 {"name": "received_at_et", "value": received_at_et_display},
                 {"name": "format_version", "value": submission.format_version},
                 {"name": "selection_status", "value": agent_summary["selection_status"]},
-                {"name": "selected_wow_id", "value": submission.selected_wow_id},
+                {"name": "selected_wow_id", "value": submission.public_selected_wow_id},
+                {"name": "packet_selected_wow_id", "value": submission.selected_wow_id},
                 {"name": "selected_theme", "value": agent_summary["selected_theme"]},
                 {"name": "themes", "value": agent_summary["themes"]},
+                {"name": "tickers_json", "value": agent_summary["tickers_json"]},
+                {"name": "themes_json", "value": agent_summary["themes_json"]},
                 {"name": "source_urls", "value": agent_summary["source_urls"]},
+                {"name": "source_urls_json", "value": agent_summary["source_urls_json"]},
                 {"name": "source_types", "value": agent_summary["source_types"]},
+                {"name": "source_types_json", "value": agent_summary["source_types_json"]},
                 {"name": "reading_origins", "value": agent_summary["reading_origins"]},
+                {"name": "reading_origins_json", "value": agent_summary["reading_origins_json"]},
                 {"name": "evidence_to_watch", "value": agent_summary["evidence_to_watch"]},
+                {"name": "evidence_to_watch_json", "value": agent_summary["evidence_to_watch_json"]},
                 {"name": "all_evidence_to_watch", "value": agent_summary["all_evidence_to_watch"]},
+                {"name": "all_evidence_to_watch_json", "value": agent_summary["all_evidence_to_watch_json"]},
             ]
             + _optional_facts(
                 [
@@ -428,7 +466,7 @@ def wow_submission(request, investor_id, market_date):
                         "name": submission.investor.public_label,
                     },
                     "about": title_context,
-                    "keywords": agent_summary["themes"],
+                    "keywords": [*agent_summary["tickers"], *agent_summary["themes_array"]],
                     "additionalType": agent_summary["selection_status"],
                 },
             ),

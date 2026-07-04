@@ -29,14 +29,14 @@
       </div>
       <div>
         <dt>Selected WoW</dt>
-        <dd data-field="selected_wow_id">{{ submission.selected_wow_id|default:"none" }}</dd>
+        <dd data-field="selected_wow_id" data-packet-wow-id="{{ submission.selected_wow_id|default:"none" }}">{{ submission.public_selected_wow_id|default:"none" }}</dd>
       </div>
     </dl>
     <section class="body-copy" data-agent-body="wow-packet">
       <h2>Reading Log <span class="section-count">top {{ submission.reading_items.count }}</span></h2>
       <div class="packet-grid packet-reading-grid">
         {% for item in submission.reading_items.all %}
-          <article class="packet-item" data-reading-item="{{ item.item_number }}" data-source-type="{{ item.source_type }}" data-reading-origin="{{ item.reading_origin }}" data-source-url="{{ item.source_url }}" data-themes="{{ item.tickers_or_themes }}">
+          <article class="packet-item" data-reading-item="{{ item.item_number }}" data-source-type="{{ item.source_type }}" data-reading-origin="{{ item.reading_origin }}" data-source-url="{{ item.source_url }}" data-market-terms="{{ item.tickers_or_themes }}">
             <h3>Reading Item {{ item.item_number }}</h3>
             <p data-field="source_title"><strong>{{ item.source_title|default:"Untitled source" }}</strong></p>
             {% if item.source_url %}<p class="packet-url" data-field="source_url"><a href="{{ item.source_url }}">{{ item.source_url }}</a></p>{% endif %}
@@ -51,12 +51,12 @@
       <h2>Agent Suggested WoW Signals</h2>
       <div class="packet-grid packet-wow-grid">
         {% for wow in submission.suggested_wows.all %}
-          <article class="packet-item" data-suggested-wow="{{ wow.wow_id }}" data-wow-id="{{ wow.wow_id }}" data-selected="{{ wow.selected|yesno:'true,false' }}" data-theme="{{ wow.ticker_or_theme }}">
-            <h3><span data-field="wow_id">{{ wow.wow_id }}</span>{% if wow.selected %} &middot; <span data-field="selected">selected</span>{% endif %}</h3>
+          <article class="packet-item" data-suggested-wow="{{ wow.public_wow_id }}" data-wow-id="{{ wow.public_wow_id }}" data-packet-wow-id="{{ wow.wow_id }}" data-selected="{{ wow.selected|yesno:'true,false' }}" data-theme="{{ wow.ticker_or_theme }}">
+            <h3><span data-field="wow_id" data-packet-wow-id="{{ wow.wow_id }}">{{ wow.public_wow_id }}</span>{% if wow.selected %} &middot; <span data-field="selected">selected</span>{% endif %}</h3>
             <p data-field="ticker_or_theme"><strong>{{ wow.ticker_or_theme|default:"Untitled theme" }}</strong></p>
             <p data-field="whats_worth_watching">{{ wow.whats_worth_watching }}</p>
             <p><strong>Why now:</strong> <span data-field="why_now">{{ wow.why_now }}</span></p>
-            <p><strong>Evidence to watch:</strong> <span data-field="evidence_to_watch_for">{{ wow.evidence_to_watch_for }}</span></p>
+            <p><strong>Evidence to watch:</strong> <span data-field="evidence_to_watch_for">{{ wow.public_evidence_to_watch_for }}</span></p>
             {% if wow.source_refs %}<p><strong>Source refs:</strong> <span data-field="source_refs">{{ wow.source_refs }}</span></p>{% endif %}
           </article>
         {% empty %}
@@ -67,7 +67,7 @@
       <h2>User Selection / Pass</h2>
       <dl class="packet-decision" data-selection-status="{{ selection_status }}">
         <dt>Selected WoW ID</dt>
-        <dd data-field="selected_wow_id">{{ submission.selected_wow_id|default:"none" }}</dd>
+        <dd data-field="selected_wow_id" data-packet-wow-id="{{ submission.selected_wow_id|default:"none" }}">{{ submission.public_selected_wow_id|default:"none" }}</dd>
         <dt>Reason for selection</dt>
         <dd data-field="reason_for_selection">{{ submission.reason_for_selection|default:"none" }}</dd>
         {% if submission.selected_wow_id == "none" or submission.closest_rejected_idea or submission.why_pass or submission.missing_evidence %}

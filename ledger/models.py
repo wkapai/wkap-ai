@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from ledger.wow_contract import clean_packet_text, public_wow_id
+
 
 class Investor(models.Model):
     class Status(models.TextChoices):
@@ -98,6 +100,10 @@ class DailyWoWPacket(ArtifactProofFields):
     def __str__(self) -> str:
         return f"WoW {self.investor.investor_id} {self.market_date}"
 
+    @property
+    def public_selected_wow_id(self) -> str:
+        return public_wow_id(self.investor.investor_id, self.selected_wow_id)
+
 
 class ReadingLogItem(models.Model):
     packet = models.ForeignKey(DailyWoWPacket, on_delete=models.CASCADE, related_name="reading_items")
@@ -139,6 +145,14 @@ class AgentSuggestedWoW(models.Model):
 
     def __str__(self) -> str:
         return f"{self.wow_id} for {self.packet_id}"
+
+    @property
+    def public_wow_id(self) -> str:
+        return public_wow_id(self.packet.investor.investor_id, self.wow_id)
+
+    @property
+    def public_evidence_to_watch_for(self) -> str:
+        return clean_packet_text(self.evidence_to_watch_for)
 
 
 class LedgerEvent(models.Model):

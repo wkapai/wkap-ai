@@ -398,6 +398,16 @@ class WKAPV0Tests(TestCase):
         self.assertEqual(parsed.suggested_wows[0].ticker_or_theme, "Physical AI")
         self.assertEqual(parsed.suggested_wows[0].evidence_to_watch_for, "Check next quarterly disclosures.")
 
+    def test_wow_packet_parser_accepts_public_namespaced_wow_ids(self):
+        body = self.wow_packet_body(selected="WOW-w0204-2026-06-29-001")
+        body = body.replace("wow_id: WOW-2026-06-29-001", "wow_id: WOW-w0204-2026-06-29-001")
+        raw = self.raw_email(subject="Daily WoW Packet - 2026-06-29 - Namespaced Agent", body=body)
+
+        parsed = parse_wow(raw)
+
+        self.assertEqual(parsed.selected_wow_id, "WOW-2026-06-29-001")
+        self.assertEqual(parsed.suggested_wows[0].wow_id, "WOW-2026-06-29-001")
+
     def test_wow_packet_parser_accepts_legacy_user_note_field(self):
         body = self.wow_packet_body().replace("reason_for_selection:", "user_note:")
         raw = self.raw_email(subject="Daily WoW Packet - 2026-06-29 - Legacy Agent", body=body)
@@ -560,6 +570,11 @@ class WKAPV0Tests(TestCase):
                 self.assertTrue(stamped.ots_proof_url.endswith(f"timestamps/wow-{packet.id}.json.ots"))
                 self.assertEqual(manifest_payload["ots_status"], "stamped")
                 self.assertEqual(target_payload["content_sha256"], stamped.content_sha256)
+                self.assertIn("content_sha256_covers", manifest_payload)
+                self.assertIn("content_sha256_covers", target_payload)
+                self.assertEqual(manifest_payload["public_selected_wow_id"], "WOW-w0202-2026-06-29-001")
+                self.assertEqual(manifest_payload["suggested_wows"][0]["public_wow_id"], "WOW-w0202-2026-06-29-001")
+                self.assertEqual(manifest_payload["source_urls"], ["https://example.com/source"])
                 self.assertNotIn("ots_status", target_payload)
                 self.assertTrue(LedgerEvent.objects.filter(event_name="opentimestamp_succeeded", entity_type="wow").exists())
 
@@ -935,6 +950,13 @@ class WKAPV0Tests(TestCase):
         self.assertNotIn("Raw email SHA256", summary_html)
         self.assertNotIn("Canonical URL", summary_html)
         self.assertContains(response, "subject_line_display_name")
+        self.assertContains(response, "WOW-w0202-2026-06-29-001")
+        self.assertContains(response, "packet_selected_wow_id")
+        self.assertContains(response, "content_sha256_covers")
+        self.assertContains(response, "tickers_json")
+        self.assertContains(response, "themes_json")
+        self.assertContains(response, "source_urls_json")
+        self.assertContains(response, "evidence_to_watch_json")
         self.assertContains(response, 'data-field="closest_rejected_idea"')
         self.assertContains(response, 'data-field="missing_evidence"')
         self.assertContains(response, "N/A - Not Applicable", count=2)

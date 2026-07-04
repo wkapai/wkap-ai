@@ -16,6 +16,7 @@ from django.template.loader import render_to_string
 from core.events import log_event
 from ingestion.models import RawEmail
 from ledger.models import LedgerEvent, RadarIssue, DailyWoWPacket
+from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, market_terms
 from publishing.receipts import send_radar_receipt, send_wow_receipt
 from publishing.urls import (
     investor_home_path,
@@ -407,6 +408,7 @@ def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
         "entity_id": artifact.id,
         "canonical_url": artifact.canonical_url,
         "content_sha256": artifact.content_sha256,
+        "content_sha256_covers": _content_sha256_covers(entity_type),
         "github_file_url": artifact.github_file_url,
         "github_commit_sha": artifact.github_commit_sha,
         "manifest_url": artifact.manifest_url,
@@ -417,6 +419,8 @@ def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
         "market_date": str(artifact.market_date),
     }
     if entity_type == "wow":
+        wow_terms = _wow_market_terms(artifact)
+        selected_wow = artifact.suggested_wows.filter(wow_id=artifact.selected_wow_id).first()
         payload.update(
             {
                 "format_version": artifact.format_version,
@@ -426,6 +430,23 @@ def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
                 "raw_email_commit_sha": artifact.raw_email_commit_sha,
                 "raw_email_ledger_path": _raw_email_public_path(artifact),
                 "selected_wow_id": artifact.selected_wow_id,
+                "public_selected_wow_id": artifact.public_selected_wow_id,
+                "tickers": wow_terms["tickers"],
+                "themes": wow_terms["themes"],
+                "source_urls": _unique_values(item.source_url for item in artifact.reading_items.all()),
+                "source_types": _unique_values(item.source_type for item in artifact.reading_items.all()),
+                "reading_origins": _unique_values(item.reading_origin for item in artifact.reading_items.all()),
+                "evidence_to_watch": _wow_evidence_to_watch(artifact, selected_wow),
+                "all_evidence_to_watch": _unique_values(clean_packet_text(wow.evidence_to_watch_for) for wow in artifact.suggested_wows.all()),
+                "suggested_wows": [
+                    {
+                        "public_wow_id": wow.public_wow_id,
+                        "packet_wow_id": wow.wow_id,
+                        "ticker_or_theme": wow.ticker_or_theme,
+                        "selected": wow.selected,
+                    }
+                    for wow in artifact.suggested_wows.all()
+                ],
             }
         )
     return payload
@@ -475,6 +496,7 @@ def _timestamp_target_payload(entity_type: str, artifact) -> dict[str, Any]:
         "entity_id": artifact.id,
         "canonical_url": artifact.canonical_url,
         "content_sha256": artifact.content_sha256,
+        "content_sha256_covers": _content_sha256_covers(entity_type),
         "github_file_url": artifact.github_file_url,
         "github_commit_sha": artifact.github_commit_sha,
         "manifest_url": artifact.manifest_url,
@@ -596,6 +618,19 @@ def _join_unique(values) -> str:
     return "; ".join(seen)
 
 
+def _unique_values(values) -> list[str]:
+    seen = []
+    for value in values:
+        value = (value or "").strip()
+        if value and value not in seen:
+            seen.append(value)
+    return seen
+
+
+def _content_sha256_covers(entity_type: str) -> str:
+    return RADAR_CONTENT_SHA256_COVERS if entity_type == "radar" else WOW_CONTENT_SHA256_COVERS
+
+
 def _wow_selection_status(submission: DailyWoWPacket) -> str:
     return "pass" if submission.selected_wow_id.lower() == "none" else "selected"
 
@@ -622,15 +657,12 @@ def _timestamp_upgrade_candidates(entity_type: str | None, entity_id: int | None
 def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status: str) -> list[dict[str, str]]:
     reading_items = list(submission.reading_items.all())
     suggested_wows = list(submission.suggested_wows.all())
+    terms = _wow_market_terms(submission, reading_items=reading_items, suggested_wows=suggested_wows)
     themes = _join_unique([wow.ticker_or_theme for wow in suggested_wows] + [item.tickers_or_themes for item in reading_items])
-    source_urls = _join_unique(item.source_url for item in reading_items)
-    source_types = _join_unique(item.source_type for item in reading_items)
-    reading_origins = _join_unique(item.reading_origin for item in reading_items)
-    evidence_to_watch = (
-        selected_wow.evidence_to_watch_for
-        if selected_wow and selection_status == "selected"
-        else submission.missing_evidence
-    )
+    source_urls = _unique_values(item.source_url for item in reading_items)
+    source_types = _unique_values(item.source_type for item in reading_items)
+    reading_origins = _unique_values(item.reading_origin for item in reading_items)
+    evidence_to_watch = _wow_evidence_to_watch(submission, selected_wow, selection_status=selection_status)
     subject_display_name = submission.investor.display_name or "unknown subject name"
     received_at_et = submission.source_email.received_at.astimezone(ET_ZONE)
     facts = [
@@ -638,6 +670,7 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         {"name": "market_date", "value": str(submission.market_date)},
         {"name": "canonical_url", "value": submission.canonical_url or ""},
         {"name": "content_sha256", "value": submission.content_sha256 or ""},
+        {"name": "content_sha256_covers", "value": WOW_CONTENT_SHA256_COVERS},
         {"name": "github_file_url", "value": submission.github_file_url or ""},
         {"name": "github_commit_sha", "value": submission.github_commit_sha or ""},
         {"name": "manifest_url", "value": submission.manifest_url or ""},
@@ -649,14 +682,22 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         {"name": "received_at_et", "value": received_at_et.strftime("%Y-%m-%d %H:%M ET")},
         {"name": "format_version", "value": submission.format_version},
         {"name": "selection_status", "value": selection_status},
-        {"name": "selected_wow_id", "value": submission.selected_wow_id},
+        {"name": "selected_wow_id", "value": submission.public_selected_wow_id},
+        {"name": "packet_selected_wow_id", "value": submission.selected_wow_id},
         {"name": "selected_theme", "value": selected_wow.ticker_or_theme if selected_wow else ""},
         {"name": "themes", "value": themes},
-        {"name": "source_urls", "value": source_urls},
-        {"name": "source_types", "value": source_types},
-        {"name": "reading_origins", "value": reading_origins},
+        {"name": "tickers_json", "value": json_array(terms["tickers"])},
+        {"name": "themes_json", "value": json_array(terms["themes"])},
+        {"name": "source_urls", "value": _join_unique(source_urls)},
+        {"name": "source_urls_json", "value": json_array(source_urls)},
+        {"name": "source_types", "value": _join_unique(source_types)},
+        {"name": "source_types_json", "value": json_array(source_types)},
+        {"name": "reading_origins", "value": _join_unique(reading_origins)},
+        {"name": "reading_origins_json", "value": json_array(reading_origins)},
         {"name": "evidence_to_watch", "value": evidence_to_watch},
-        {"name": "all_evidence_to_watch", "value": _join_unique(wow.evidence_to_watch_for for wow in suggested_wows)},
+        {"name": "evidence_to_watch_json", "value": json_array([evidence_to_watch])},
+        {"name": "all_evidence_to_watch", "value": _join_unique(clean_packet_text(wow.evidence_to_watch_for) for wow in suggested_wows)},
+        {"name": "all_evidence_to_watch_json", "value": json_array(clean_packet_text(wow.evidence_to_watch_for) for wow in suggested_wows)},
         {"name": "raw_email_sha256", "value": submission.raw_email_sha256},
         {"name": "raw_email_github_url", "value": submission.raw_email_github_url},
         {"name": "disclaimer", "value": WOW_DISCLAIMER},
@@ -664,6 +705,19 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
     facts.append({"name": "closest_rejected_idea", "value": _wow_pass_fact_value(submission, selection_status, submission.closest_rejected_idea)})
     facts.append({"name": "missing_evidence", "value": _wow_pass_fact_value(submission, selection_status, submission.missing_evidence)})
     return facts
+
+
+def _wow_market_terms(submission: DailyWoWPacket, *, reading_items=None, suggested_wows=None) -> dict[str, list[str]]:
+    reading_items = list(reading_items) if reading_items is not None else list(submission.reading_items.all())
+    suggested_wows = list(suggested_wows) if suggested_wows is not None else list(submission.suggested_wows.all())
+    return market_terms([wow.ticker_or_theme for wow in suggested_wows] + [item.tickers_or_themes for item in reading_items])
+
+
+def _wow_evidence_to_watch(submission: DailyWoWPacket, selected_wow, *, selection_status: str | None = None) -> str:
+    status = selection_status or _wow_selection_status(submission)
+    if selected_wow and status == "selected":
+        return clean_packet_text(selected_wow.evidence_to_watch_for)
+    return clean_packet_text(submission.missing_evidence)
 
 
 def _radar_content_hash(issue: RadarIssue) -> str:
