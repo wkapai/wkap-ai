@@ -4,7 +4,7 @@
 <article class="artifact-layout" data-agent-readable="true" data-artifact-type="wow" data-format-version="{{ submission.format_version }}" data-selection-status="{{ selection_status }}" data-investor-id="{{ submission.investor.investor_id }}" data-investor-label="{{ submission.investor.public_label }}" data-market-date="{{ submission.market_date|date:"Y-m-d" }}" data-canonical-url="{{ submission.canonical_url }}" data-content-sha256="{{ submission.content_sha256 }}">
   <section class="artifact-main">
     <p class="eyebrow">Type: Daily WoW Packet</p>
-    <h1>{{ selected_wow.ticker_or_theme|default:"Daily WoW Packet" }}</h1>
+    <h1>{{ wow_display_title|default:"Daily WoW Packet" }}</h1>
     <p class="disclaimer">{{ disclaimer }}</p>
     <dl class="summary-strip wow-summary-strip" aria-label="WoW submission metadata">
       <div>
@@ -45,22 +45,35 @@
       </div>
       <h2>Agent Suggested WoW Signals</h2>
       <div class="packet-grid packet-wow-grid">
-        {% for wow in submission.suggested_wows.all %}
+        {% for signal in wow_signal_records %}
+          {% with wow=signal.wow %}
           <article class="packet-item" data-suggested-wow="{{ wow.public_wow_id }}" data-wow-id="{{ wow.public_wow_id }}" data-packet-wow-id="{{ wow.wow_id }}" data-selected="{{ wow.selected|yesno:'true,false' }}" data-theme="{{ wow.ticker_or_theme }}">
-            <h3><span data-field="wow_id" data-packet-wow-id="{{ wow.wow_id }}">{{ wow.public_wow_id }}</span>{% if wow.selected %} &middot; <span data-field="selected">selected</span>{% endif %}</h3>
+            <h3><span data-field="wow_id" data-packet-wow-id="{{ wow.wow_id }}">{{ wow.public_wow_id }}</span> <span class="wow-type-chip" data-field="wow_type">{{ signal.wow_type }}</span>{% if wow.selected %} &middot; <span data-field="selected">selected</span>{% endif %}</h3>
             <p data-field="ticker_or_theme"><strong>{{ wow.ticker_or_theme|default:"Untitled theme" }}</strong></p>
             <p data-field="whats_worth_watching">{{ wow.whats_worth_watching }}</p>
             <p><strong>Why now:</strong> <span data-field="why_now">{{ wow.why_now }}</span></p>
             <p><strong>Evidence to watch:</strong> <span data-field="evidence_to_watch_for">{{ wow.public_evidence_to_watch_for }}</span></p>
             {% if wow.source_refs %}<p><strong>Source refs:</strong> <span data-field="source_refs">{{ wow.source_refs }}</span></p>{% endif %}
+            <details class="wow-type-details" data-agent-wow-type-fields="{{ signal.wow_type }}">
+              <summary>fields</summary>
+              <dl class="wow-type-fields">
+                {% for row in signal.type_rows %}
+                  <div>
+                    <dt>{{ row.label }}</dt>
+                    <dd data-field="{{ row.field }}">{{ row.value }}</dd>
+                  </div>
+                {% endfor %}
+              </dl>
+            </details>
           </article>
+          {% endwith %}
         {% empty %}
           <p>No suggested WoWs were parsed.</p>
         {% endfor %}
       </div>
 
       {% if status_update_records %}
-        <h2>Lifecycle Updates <span class="section-count">{{ status_update_records|length }}</span></h2>
+        <h2>Existing WoW Signal Status Update <span class="section-count">{{ status_update_records|length }}</span></h2>
         <div class="lifecycle-list" data-agent-lifecycle="status_updates">
           {% for update in status_update_records %}
             <article class="lifecycle-update" data-wow-id="{{ update.wow_id }}" data-target-wow-id="{{ update.target_wow_id }}" data-target-root-wow-id="{{ update.target_root_wow_id }}" data-update-type="{{ update.update_type }}" data-previous-status="{{ update.previous_status }}" data-new-status="{{ update.new_status }}">
@@ -90,8 +103,8 @@
         <dt>Reason for selection</dt>
         <dd data-field="reason_for_selection">{{ submission.reason_for_selection|default:"none" }}</dd>
         {% if submission.selected_wow_id == "none" or submission.closest_rejected_idea or submission.why_pass or submission.missing_evidence %}
-          <dt>Closest rejected idea</dt>
-          <dd data-field="closest_rejected_idea">{{ submission.closest_rejected_idea|default:"none" }}</dd>
+          <dt>Closest rejected WoW</dt>
+          <dd data-field="closest_rejected_wow">{{ submission.closest_rejected_idea|default:"none" }}</dd>
           <dt>Reason for pass</dt>
           <dd data-field="reason_for_pass">{{ submission.why_pass|default:"none" }}</dd>
           <dt>Missing evidence</dt>

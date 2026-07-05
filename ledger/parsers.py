@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from ingestion.models import RawEmail
 from ledger.wow_contract import local_wow_id
+from ledger.wow_lifecycle_rules import VALID_WOW_TYPES, validate_status_transition
 from ledger.wow_packet_spec import current_spec
 
 
@@ -143,13 +144,14 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
         raise ParseError("selected_wow_id is required. Use a suggested WoW ID or none.")
     pass_fields = {
         "reason_for_pass": _first_field(selection_fields, "reason_for_pass", "why_pass").strip(),
-        "closest_rejected_idea": selection_fields.get("closest_rejected_idea", "").strip(),
+        "closest_rejected_idea": _first_field(selection_fields, "closest_rejected_wow", "closest_rejected_idea").strip(),
         "missing_evidence": selection_fields.get("missing_evidence", "").strip(),
     }
     if selected_wow_id.lower() == "none":
         missing_pass_fields = [name for name, value in pass_fields.items() if not value]
         if missing_pass_fields:
-            raise ParseError(f"Pass selection missing required fields: {', '.join(missing_pass_fields)}")
+            raise ParseError(f"Pass selection missing required fields: {_public_pass_field_names(missing_pass_fields)}")
+        _validate_closest_rejected_wow(pass_fields["closest_rejected_idea"], suggested_wows)
     else:
         known_ids = {wow.wow_id for wow in suggested_wows}
         if selected_wow_id not in known_ids:
@@ -158,7 +160,7 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
         if used_pass_fields:
             raise ParseError(
                 "Pass-only fields must be blank when selected_wow_id is not none: "
-                + ", ".join(used_pass_fields)
+                + _public_pass_field_names(used_pass_fields)
             )
 
     return ParsedWoWPacket(
@@ -231,7 +233,7 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
     selection = packet.get("selection") if isinstance(packet.get("selection"), dict) else {}
     selected_wow_id = local_wow_id(str(selection.get("selected_wow_id") or packet.get("selected_wow_id") or "none").strip())
     reason_for_selection = str(selection.get("reason_for_selection") or packet.get("reason_for_selection") or "").strip()
-    closest_rejected_idea = str(selection.get("closest_rejected_idea") or "").strip()
+    closest_rejected_idea = str(selection.get("closest_rejected_wow") or selection.get("closest_rejected_idea") or "").strip()
     why_pass = str(selection.get("reason_for_pass") or selection.get("why_pass") or "").strip()
     missing_evidence = str(selection.get("missing_evidence") or "").strip()
 
@@ -243,7 +245,7 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
             name
             for name, value in {
                 "reason_for_pass": why_pass,
-                "closest_rejected_idea": closest_rejected_idea,
+                "closest_rejected_wow": closest_rejected_idea,
                 "missing_evidence": missing_evidence,
             }.items()
             if value
@@ -258,13 +260,14 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
             name
             for name, value in {
                 "reason_for_pass": why_pass,
-                "closest_rejected_idea": closest_rejected_idea,
+                "closest_rejected_wow": closest_rejected_idea,
                 "missing_evidence": missing_evidence,
             }.items()
             if not value
         ]
         if missing_pass_fields:
-            raise ParseError(f"Pass selection missing required fields: {', '.join(missing_pass_fields)}")
+            raise ParseError(f"Pass selection missing required fields: {_public_pass_field_names(missing_pass_fields)}")
+        _validate_closest_rejected_wow(closest_rejected_idea, suggested_wows)
 
     human_view = packet.get("human_view") if isinstance(packet.get("human_view"), dict) else {}
     agent_facts = packet.get("agent_facts") if isinstance(packet.get("agent_facts"), dict) else {}
@@ -337,7 +340,6 @@ def _structured_reading_items(items) -> list[ParsedReadingLogItem]:
 
 
 def _validate_structured_wow_items(items: list[dict]) -> None:
-    valid_types = {"candidate_wow", "trackable_wow", "scoreable_signal", "thesis_wow", "context_note", "status_update"}
     for index, item in enumerate(items, start=1):
         if not isinstance(item, dict):
             raise ParseError(f"Structured WoW item {index} must be an object.")
@@ -345,12 +347,14 @@ def _validate_structured_wow_items(items: list[dict]) -> None:
         if not wow_id:
             raise ParseError(f"Structured WoW item {index} missing wow_id.")
         wow_type = str(item.get("wow_type") or "").strip() or "candidate_wow"
-        if wow_type not in valid_types:
+        if wow_type not in VALID_WOW_TYPES:
             raise ParseError(f"Structured WoW item {wow_id} has invalid wow_type: {wow_type}")
+        if wow_type == "scoreable_signal" and str(item.get("signal_status") or "").strip() == "pending":
+            item["signal_status"] = "pending_scoreable"
         if wow_type == "status_update":
             missing = [
                 field
-                for field in ("target_wow_id", "target_root_wow_id", "update_type")
+                for field in ("target_wow_type", "target_wow_id", "target_root_wow_id", "update_type", "previous_status")
                 if not str(item.get(field) or "").strip()
             ]
             new_status = str(item.get("new_status") or item.get("signal_status") or item.get("trackable_status") or "").strip()
@@ -358,6 +362,14 @@ def _validate_structured_wow_items(items: list[dict]) -> None:
                 missing.append("new_status")
             if missing:
                 raise ParseError(f"status_update {wow_id} missing required fields: {', '.join(missing)}")
+            transition_error = validate_status_transition(
+                target_wow_type=str(item.get("target_wow_type") or "").strip(),
+                previous_status=str(item.get("previous_status") or "").strip(),
+                new_status=new_status,
+                update_type=str(item.get("update_type") or "").strip(),
+            )
+            if transition_error:
+                raise ParseError(f"status_update {wow_id} invalid transition: {transition_error}")
             continue
         root_wow_id = str(item.get("root_wow_id") or "").strip()
         if not root_wow_id:
@@ -365,6 +377,17 @@ def _validate_structured_wow_items(items: list[dict]) -> None:
         parent_wow_id = item.get("parent_wow_id")
         if parent_wow_id in (None, "") and root_wow_id != wow_id:
             raise ParseError(f"Structured WoW item {wow_id} root_wow_id must equal wow_id when parent_wow_id is null.")
+
+
+def _validate_closest_rejected_wow(value: str, suggested_wows: list[ParsedAgentSuggestedWoW]) -> None:
+    rejected_wow_id = local_wow_id(value)
+    known_ids = {wow.wow_id for wow in suggested_wows}
+    if rejected_wow_id not in known_ids:
+        raise ParseError(f"closest_rejected_wow must match one of today's suggested WoW IDs: {', '.join(sorted(known_ids))}")
+
+
+def _public_pass_field_names(names: list[str]) -> str:
+    return ", ".join("closest_rejected_wow" if name == "closest_rejected_idea" else name for name in names)
 
 
 def _structured_wow_items(items: list[dict]) -> list[ParsedAgentSuggestedWoW]:

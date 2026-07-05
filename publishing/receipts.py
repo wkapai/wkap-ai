@@ -75,7 +75,7 @@ def wow_format_fix_body(raw_email: RawEmail) -> str:
             "",
             "If selected_wow_id is none, also include:",
             "reason_for_pass:",
-            "closest_rejected_idea:",
+            "closest_rejected_wow:",
             "missing_evidence:",
             "",
             "- WKAP",

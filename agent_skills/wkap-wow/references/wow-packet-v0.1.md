@@ -15,11 +15,24 @@ Required `wow_type` values:
 
 Only `scoreable_signal` is calibration-scoreable.
 
+Type decision shortcuts:
+
+- `candidate_wow`: early observation, not yet clearly monitorable or scoreable.
+- `trackable_wow`: concrete pattern to monitor with evidence/cadence, but not binary.
+- `scoreable_signal`: falsifiable claim with `invalidate_test`, `resolve_by`, and `resolution_source`; default `signal_status: pending_scoreable`.
+- `thesis_wow`: broader thesis with child WoWs.
+- `context_note`: useful background, not a market call.
+- `status_update`: append-only CRM state change for an existing WoW.
+
 Normal WoW items use `parent_wow_id` and `root_wow_id`.
 
 Root WoWs use `parent_wow_id: null` and `root_wow_id: wow_id`.
 
-Status updates are append-only maintenance events. They use `target_wow_id` and `target_root_wow_id` and are not lineage nodes.
+Status updates are append-only maintenance events. They use `target_wow_type`, `target_wow_id`, `target_root_wow_id`, `previous_status`, and `new_status`, and are not lineage nodes.
+
+Status updates must follow the allowed Agent CRM status transition table in the public skill/spec.
+
+Do not use `pending_scoreable` as `status_update.new_status`. A promotion update marks the old candidate or trackable as `promoted_scoreable`; the new child scoreable starts with `signal_status: pending_scoreable`.
 
 Every public lifecycle item or status update must reconcile across WKAP backend `LedgerEvent` lifecycle logs, the public WoW page/agent facts, and the local Private WoW Journal CRM files.
 
@@ -29,10 +42,12 @@ Daily workout rule:
 
 1. Select up to 10 reading items.
 2. Suggest exactly 3 WoW signals.
-3. User selects 1, 2, 3, or passes.
-4. Selection requires `reason_for_selection`.
-5. Pass requires `reason_for_pass`, `closest_rejected_idea`, and `missing_evidence`.
-6. Selection/pass plus required reason is approval to submit to WKAP Ledger.
+3. Any of the 3 suggestions may be a new WoW signal or an append-only `status_update` for an existing WoW signal.
+4. User selects 1, 2, 3, or passes.
+5. Selection requires `reason_for_selection`.
+6. Pass requires `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence`.
+7. On pass days, `closest_rejected_wow` must be one of today's suggested `wow_id` values.
+8. Selection/pass plus required reason is approval to submit to WKAP Ledger.
 
 Agent tracking rule:
 

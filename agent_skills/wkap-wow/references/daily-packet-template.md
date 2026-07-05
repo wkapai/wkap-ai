@@ -37,7 +37,7 @@ packet:
     selected_wow_id: none
     reason_for_selection:
     reason_for_pass:
-    closest_rejected_idea:
+    closest_rejected_wow:
     missing_evidence:
   validation_notes:
     schema_valid: true
@@ -55,6 +55,10 @@ Rules:
 - A prose list of top private WoWs is not enough; preserve this full packet structure even when the packet stays private.
 - Default scope is one Daily WoW Packet for the current US market day, not a weekly review.
 - Use `status_update` only for append-only updates to existing WoWs.
+- Every `status_update` must include `target_wow_type`, `target_wow_id`, `target_root_wow_id`, `update_type`, `previous_status`, and `new_status`.
+- Every status transition must follow the allowed Agent CRM status table in the public skill/spec.
+- Do not use `pending_scoreable` as `status_update.new_status`; promotion updates use `promoted_scoreable`, while the new child scoreable signal starts with `signal_status: pending_scoreable`.
 - User selection/pass plus required reason is approval to submit.
 - If `selected_wow_id` is not `none`, leave pass-only fields blank.
-- If `selected_wow_id` is `none`, fill `reason_for_pass`, `closest_rejected_idea`, and `missing_evidence`.
+- If `selected_wow_id` is `none`, fill `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence`.
+- On pass days, `closest_rejected_wow` must be one of today's suggested `wow_id` values, not prose.

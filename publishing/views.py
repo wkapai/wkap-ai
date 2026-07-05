@@ -10,8 +10,8 @@ from django.shortcuts import get_object_or_404, render
 from django.utils.html import escape
 
 from ledger.models import Investor, RadarIssue, DailyWoWPacket
-from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, market_terms
-from ledger.wow_lifecycle import lifecycle_records_json, status_update_records
+from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, local_wow_id, market_terms
+from ledger.wow_lifecycle import lifecycle_records, lifecycle_records_json, status_update_records
 from ledger.wow_packet_spec import current_spec
 from publishing.services import WOW_DISCLAIMER
 from publishing.urls import investor_home_url, investor_wows_url, radar_archive_url, radar_issue_url, wow_url
@@ -432,7 +432,7 @@ def wow_submission(request, investor_id, market_date):
     )
     selected_wow = submission.suggested_wows.filter(wow_id=submission.selected_wow_id).first() or submission.suggested_wows.first()
     agent_summary = _wow_agent_summary(submission, selected_wow)
-    title_context = selected_wow.ticker_or_theme if selected_wow else "Daily WoW Packet"
+    title_context = _wow_display_title(submission, selected_wow)
     description_context = selected_wow.whats_worth_watching if selected_wow else "Daily WoW Packet"
     subject_display_name = submission.investor.display_name or "unknown subject name"
     received_at_et = submission.source_email.received_at.astimezone(ET_ZONE)
@@ -442,6 +442,7 @@ def wow_submission(request, investor_id, market_date):
         investor_id=submission.investor.investor_id,
         packet_id=submission.packet_id,
     )
+    wow_signal_records = _wow_signal_records(submission)
     return render(
         request,
         "publishing/investors/wow.html",
@@ -503,6 +504,14 @@ def wow_submission(request, investor_id, market_date):
                     ),
                 },
                 {
+                    "name": "current_wow_state_json",
+                    "value": lifecycle_records_json(
+                        submission.wow_items_json,
+                        investor_id=submission.investor.investor_id,
+                        packet_id=submission.packet_id,
+                    ),
+                },
+                {
                     "name": "status_updates_json",
                     "value": json.dumps(lifecycle_status_updates, ensure_ascii=False, sort_keys=True),
                 },
@@ -510,7 +519,7 @@ def wow_submission(request, investor_id, market_date):
             + _optional_facts(
                 [
                     ("reason_for_pass", _wow_pass_fact_value(submission, submission.why_pass)),
-                    ("closest_rejected_idea", _wow_pass_fact_value(submission, submission.closest_rejected_idea)),
+                    ("closest_rejected_wow", _wow_pass_fact_value(submission, submission.closest_rejected_idea)),
                     ("missing_evidence", _wow_pass_fact_value(submission, submission.missing_evidence)),
                 ]
             )
@@ -539,6 +548,8 @@ def wow_submission(request, investor_id, market_date):
             ),
             submission=submission,
             selected_wow=selected_wow,
+            wow_display_title=title_context,
+            wow_signal_records=wow_signal_records,
             selection_status=agent_summary["selection_status"],
             status_update_records=lifecycle_status_updates,
             subject_display_name=subject_display_name,
@@ -546,6 +557,145 @@ def wow_submission(request, investor_id, market_date):
             disclaimer=WOW_DISCLAIMER,
         ),
     )
+
+
+def _wow_signal_records(submission: DailyWoWPacket) -> list[dict[str, object]]:
+    lifecycle_by_id = {}
+    for record in lifecycle_records(
+        submission.wow_items_json,
+        investor_id=submission.investor.investor_id,
+        packet_id=submission.packet_id,
+    ):
+        for key in (str(record.get("wow_id") or ""), str(record.get("public_wow_id") or "")):
+            if key:
+                lifecycle_by_id[key] = record
+                lifecycle_by_id[local_wow_id(key)] = record
+    raw_by_id = {}
+    for item in submission.wow_items_json or []:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("wow_id") or "")
+        if key:
+            raw_by_id[key] = item
+            raw_by_id[local_wow_id(key)] = item
+    records = []
+    for wow in submission.suggested_wows.all():
+        lifecycle = lifecycle_by_id.get(wow.wow_id, {})
+        raw = raw_by_id.get(wow.wow_id, {})
+        wow_type = str(lifecycle.get("wow_type") or raw.get("wow_type") or "candidate_wow")
+        records.append(
+            {
+                "wow": wow,
+                "wow_type": wow_type,
+                "type_rows": _wow_type_rows(wow_type, raw, lifecycle),
+            }
+        )
+    return records
+
+
+def _wow_type_rows(wow_type: str, raw: dict, lifecycle: dict) -> list[dict[str, str]]:
+    rows = [
+        {"label": "WoW type", "field": "wow_type", "value": wow_type},
+        {"label": "Parent WoW ID", "field": "parent_wow_id", "value": _row_value(lifecycle, raw, "parent_wow_id")},
+        {"label": "Root WoW ID", "field": "root_wow_id", "value": _row_value(lifecycle, raw, "root_wow_id")},
+        {"label": "Scoreable", "field": "scoreable", "value": _bool_row_value(lifecycle.get("scoreable", raw.get("scoreable")))},
+        {
+            "label": "Accuracy endpoint eligible",
+            "field": "accuracy_endpoint_eligible",
+            "value": _bool_row_value(lifecycle.get("accuracy_endpoint_eligible", raw.get("accuracy_endpoint_eligible"))),
+        },
+    ]
+    if wow_type == "status_update":
+        rows.extend(
+            [
+                {"label": "Target WoW type", "field": "target_wow_type", "value": _row_value(lifecycle, raw, "target_wow_type")},
+                {"label": "Target WoW ID", "field": "target_wow_id", "value": _row_value(lifecycle, raw, "target_wow_id")},
+                {"label": "Target root WoW ID", "field": "target_root_wow_id", "value": _row_value(lifecycle, raw, "target_root_wow_id")},
+                {"label": "Update type", "field": "update_type", "value": _row_value(lifecycle, raw, "update_type")},
+                {"label": "Previous status", "field": "previous_status", "value": _row_value(lifecycle, raw, "previous_status")},
+                {"label": "New status", "field": "new_status", "value": _row_value(lifecycle, raw, "new_status")},
+                {"label": "Update summary", "field": "update_summary", "value": _row_value(lifecycle, raw, "update_summary")},
+                {"label": "Evidence summary", "field": "evidence_summary", "value": _row_value(lifecycle, raw, "evidence_summary")},
+                {"label": "Resolution source used", "field": "resolution_source_used", "value": _row_value(lifecycle, raw, "resolution_source_used")},
+                {"label": "Lineage node", "field": "lineage_node", "value": "false"},
+            ]
+        )
+    elif wow_type == "scoreable_signal":
+        rows.extend(
+            [
+                {"label": "Claim", "field": "claim", "value": _row_value(lifecycle, raw, "claim")},
+                {"label": "Invalidate test", "field": "invalidate_test", "value": _row_value(lifecycle, raw, "invalidate_test")},
+                {"label": "Resolve by", "field": "resolve_by", "value": _row_value(lifecycle, raw, "resolve_by")},
+                {"label": "Resolution source", "field": "resolution_source", "value": _row_value(lifecycle, raw, "resolution_source")},
+                {"label": "Signal status", "field": "signal_status", "value": _row_value(lifecycle, raw, "signal_status")},
+            ]
+        )
+    elif wow_type == "trackable_wow":
+        rows.extend(
+            [
+                {"label": "Claim", "field": "claim", "value": _row_value(lifecycle, raw, "claim")},
+                {"label": "Evidence to watch", "field": "evidence_to_watch", "value": _list_row_value(raw.get("evidence_to_watch"))},
+                {"label": "Review cadence", "field": "review_cadence", "value": _row_value(lifecycle, raw, "review_cadence")},
+                {"label": "Next review", "field": "next_review_at", "value": _row_value(lifecycle, raw, "next_review_at")},
+                {"label": "Trackable status", "field": "trackable_status", "value": _row_value(lifecycle, raw, "trackable_status")},
+            ]
+        )
+    elif wow_type == "thesis_wow":
+        rows.extend(
+            [
+                {"label": "Thesis claim", "field": "thesis_claim", "value": _row_value(lifecycle, raw, "thesis_claim", "claim")},
+                {"label": "Thesis status", "field": "thesis_status", "value": _row_value(lifecycle, raw, "thesis_status")},
+            ]
+        )
+    elif wow_type == "context_note":
+        rows.extend(
+            [
+                {"label": "Observation", "field": "observation", "value": _row_value(lifecycle, raw, "observation", "claim")},
+                {"label": "Context status", "field": "context_status", "value": _row_value(lifecycle, raw, "context_status")},
+            ]
+        )
+    else:
+        rows.extend(
+            [
+                {"label": "Observation", "field": "observation", "value": _row_value(lifecycle, raw, "observation", "claim")},
+                {"label": "Why worth watching", "field": "why_worth_watching", "value": _row_value(lifecycle, raw, "why_worth_watching", "why_worth_watching")},
+            ]
+        )
+    rows.append({"label": "Source refs", "field": "source_refs", "value": _list_row_value(lifecycle.get("source_refs") or raw.get("source_refs"))})
+    return [row for row in rows if row["value"] not in ("", None)]
+
+
+def _row_value(primary: dict, fallback: dict, *keys: str) -> str:
+    for source in (primary, fallback):
+        for key in keys:
+            value = source.get(key)
+            if value not in (None, ""):
+                return _list_row_value(value)
+    return ""
+
+
+def _list_row_value(value) -> str:
+    if isinstance(value, list):
+        return "; ".join(str(item) for item in value if item not in (None, ""))
+    return str(value or "")
+
+
+def _bool_row_value(value) -> str:
+    return "true" if bool(value) else "false"
+
+
+def _wow_display_title(submission: DailyWoWPacket, selected_wow) -> str:
+    human_title = (submission.human_title or "").strip()
+    if selected_wow:
+        for item in submission.wow_items_json or []:
+            if str(item.get("wow_id") or "") == selected_wow.wow_id and item.get("wow_type") == "status_update":
+                return human_title if human_title and human_title.lower() != "status_update" else "Existing WoW Signal Status Update"
+        title = (selected_wow.ticker_or_theme or "").strip()
+        if title and title.lower() != "status_update":
+            return title
+    if human_title and human_title.lower() != "status_update":
+        return human_title
+    return "Existing WoW Signal Status Update" if submission.status_update_count else "Daily WoW Packet"
 
 
 def robots_txt(request):

@@ -150,6 +150,24 @@ Private noticed is not public proof. Public submitted is not the same as receipt
 15. Update private lifecycle state after submission.
 ```
 
+## Agent CRM Operating Loop
+
+The Private WoW Journal is not just a packet archive. It is the agent CRM for investment ideas.
+
+Before suggesting the 3 daily WoWs, the agent must run this operating loop:
+
+```text
+1. Load today's reading log candidates.
+2. Load active CRM state: active candidates, active trackables, pending scoreable signals, active thesis records, context notes, receipts, and public verification.
+3. Check whether today's reading creates a new idea, strengthens an existing idea, weakens an existing idea, resolves a scoreable signal, makes a prior test invalid, or makes an old idea stale.
+4. Classify each possible daily option with the WoW type decision rules below.
+5. If an existing idea changes state, prepare an append-only status_update instead of rewriting the old idea.
+6. Pick the 3 highest-value daily options for the user. These 3 options may include new WoWs, existing-WoW status updates, or a mix.
+7. After the user selects or passes, generate the final packet, submit it, then update the local CRM files from the submitted packet plus the public WKAP URL.
+```
+
+The agent must never treat a public WoW artifact as mutable. Current CRM state is derived from the original item plus later public or private status updates.
+
 ## Daily WoW Workout Routine
 
 The daily routine is a workout, not a drafting loop.
@@ -163,6 +181,8 @@ The agent must suggest exactly 3 WoW signals. The user must choose one of:
 4. pass today
 ```
 
+Any of the 3 options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, a promotion, a resolution, or a maintenance event.
+
 Required user fields:
 
 ```yaml
@@ -171,7 +191,7 @@ selected:
     - selected_wow_id
     - reason_for_selection
   pass_only_fields:
-    closest_rejected_idea: null
+    closest_rejected_wow: null
     why_pass: null
     missing_evidence: null
 
@@ -179,9 +199,11 @@ passed:
   required:
     - selected_wow_id: none
     - reason_for_pass
-    - closest_rejected_idea
+    - closest_rejected_wow
     - missing_evidence
 ```
+
+For a pass, `closest_rejected_wow` must be the `wow_id` of one of today's 3 suggested WoW signals. Do not invent a new prose rejected idea at selection time.
 
 The user selection/pass plus required reason is submission approval. Do not ask for a second approval after the user completes the daily choice.
 
@@ -232,6 +254,46 @@ valid_wow_types:
 The agent must not treat `trackable_wow`, `context_note`, `thesis_wow`, or `status_update` as scoreable predictions.
 
 Only `scoreable_signal` is eligible for calibration scoring.
+
+### WoW Type Decision Rules
+
+Use these rules before presenting the 3 daily options:
+
+```yaml
+candidate_wow:
+  use_when: An observation is worth preserving, but the monitorable evidence, cadence, or falsifiable test is not clear yet.
+  default_status: active_candidate
+  example: GPU rental prices look weak, but the source set is still too thin.
+
+trackable_wow:
+  use_when: The idea has a concrete claim or pattern and evidence to monitor, but it is not cleanly binary or date-bound.
+  default_status: active_trackable
+  required_agent_question: What evidence should I watch next, and when should I review it?
+  example: AI data-center power availability is becoming a repeated constraint in hyperscaler commentary.
+
+scoreable_signal:
+  use_when: The claim is specific, falsifiable, has an invalidate_test, has a resolve_by date, and has a resolution_source.
+  default_status: pending_scoreable
+  required_agent_question: What would prove this wrong by the deadline?
+  example: By 2026-09-30, at least two hyperscalers will cite power availability as a gating factor for AI capacity growth.
+
+thesis_wow:
+  use_when: The idea is a higher-level thesis that can collect child WoWs over time.
+  default_status: active_thesis
+  example: Stablecoin revenue architecture is shifting from issuer exclusivity to distribution-layer bargaining power.
+
+context_note:
+  use_when: The item is useful market context, vocabulary, source quality, or background, but not an investable claim.
+  default_status: active_context
+  example: A China AI article reframes competition around deployment and manufacturing integration.
+
+status_update:
+  use_when: Today's reading changes the CRM state of an existing WoW.
+  default_status: none; it updates a target item.
+  required_agent_question: Which existing wow_id changed, what was its previous_status, and what allowed new_status now applies?
+```
+
+If the agent is unsure between two types, choose the less scoreable type. Do not force a weak idea into `scoreable_signal`.
 
 ## User Approval Rule
 
@@ -305,6 +367,107 @@ One of the 3 daily WoW suggestions may be a `status_update` when today's reading
 
 After public submission, update private lifecycle files to reflect the selected/public packet. Do not mutate old public artifacts.
 
+### Status Update Playbook
+
+When preparing a `status_update`, the agent must do all of the following:
+
+```text
+1. Identify the target item in the Private WoW Journal or public WKAP Ledger.
+2. Copy its target_wow_type, target_wow_id, target_root_wow_id, and current status.
+3. Choose exactly one allowed new_status from the status transition table.
+4. Choose update_type that matches the new_status.
+5. Add update_summary and evidence_summary in plain language.
+6. Include source_refs from today's reading log.
+7. Put the status_update in the 3 daily choices if it is one of today's most important investor actions.
+8. After public submission, update the local CRM tracking file for the target item with the public packet URL and new status.
+```
+
+Use this mapping for common actions:
+
+```yaml
+candidate_to_trackable:
+  target_wow_type: candidate_wow
+  previous_status: active_candidate
+  new_status: promoted_trackable
+  update_type: promotion
+  required_follow_up: create or reference the promoted trackable_wow item
+
+candidate_to_scoreable:
+  target_wow_type: candidate_wow
+  previous_status: active_candidate
+  new_status: promoted_scoreable
+  update_type: promotion
+  required_follow_up: create or reference the new scoreable_signal child with signal_status pending_scoreable
+
+trackable_to_scoreable:
+  target_wow_type: trackable_wow
+  previous_status: active_trackable
+  new_status: promoted_scoreable
+  update_type: promotion
+  required_follow_up: create or reference the new scoreable_signal child with signal_status pending_scoreable
+
+scoreable_resolved_correct:
+  target_wow_type: scoreable_signal
+  previous_status: pending_scoreable | unresolved
+  new_status: resolved_correct
+  update_type: resolution
+  required_fields: resolution_source_used, evidence_summary
+
+scoreable_resolved_incorrect:
+  target_wow_type: scoreable_signal
+  previous_status: pending_scoreable | unresolved
+  new_status: resolved_incorrect
+  update_type: resolution
+  required_fields: resolution_source_used, evidence_summary
+
+scoreable_unresolved:
+  target_wow_type: scoreable_signal
+  previous_status: pending_scoreable
+  new_status: unresolved
+  update_type: resolution
+  required_fields: evidence_summary
+
+scoreable_invalid_test:
+  target_wow_type: scoreable_signal
+  previous_status: pending_scoreable | unresolved
+  new_status: invalid_test
+  update_type: invalid_test
+  required_fields: evidence_summary
+
+scoreable_voided:
+  target_wow_type: scoreable_signal
+  previous_status: pending_scoreable | unresolved
+  new_status: voided
+  update_type: voided
+  required_fields: evidence_summary
+
+trackable_killed:
+  target_wow_type: trackable_wow
+  previous_status: active_trackable | stale
+  new_status: killed
+  update_type: killed
+
+candidate_killed:
+  target_wow_type: candidate_wow
+  previous_status: active_candidate | stale
+  new_status: killed
+  update_type: killed
+
+thesis_supported_or_weakened:
+  target_wow_type: thesis_wow
+  previous_status: active_thesis | supported | weakened
+  new_status: supported | weakened | retired
+  update_type: thesis_update
+
+context_superseded_or_retired:
+  target_wow_type: context_note
+  previous_status: active_context
+  new_status: superseded | retired
+  update_type: context_update
+```
+
+Do not use `pending_scoreable` as the `new_status` of a promotion update. Promotion updates mark the old candidate or trackable as `promoted_scoreable`; the new child scoreable signal starts with `signal_status: pending_scoreable`.
+
 ## Lifecycle Sync Contract
 
 The agent must keep the Private WoW Journal and WKAP Public Ledger in sync.
@@ -342,7 +505,75 @@ The agent maintenance loop prepares `status_update` items for resolution, promot
 
 The agent should prepare unresolved-to-voided `status_update` items after the default 30-day unresolved grace window when a scoreable signal remains unjudgeable.
 
-Status updates reference `target_wow_id` and `target_root_wow_id`. They are not new market calls and not lineage nodes.
+Status updates reference `target_wow_type`, `target_wow_id`, and `target_root_wow_id`. They are not new market calls and not lineage nodes.
+
+## Agent CRM Status Model
+
+The Private WoW Journal is an agent CRM for investment ideas. The agent must classify and update ideas using this exact state model.
+
+Default initial statuses:
+
+```yaml
+default_status:
+  candidate_wow: active_candidate
+  trackable_wow: active_trackable
+  scoreable_signal: pending_scoreable
+  thesis_wow: active_thesis
+  context_note: active_context
+```
+
+Allowed status transitions:
+
+```yaml
+allowed_status_transitions:
+  candidate_wow:
+    active_candidate: [promoted_trackable, promoted_scoreable, killed, stale]
+    stale: [active_candidate, killed]
+  trackable_wow:
+    active_trackable: [promoted_scoreable, killed, stale]
+    stale: [active_trackable, killed]
+  scoreable_signal:
+    pending_scoreable: [resolved_correct, resolved_incorrect, unresolved, invalid_test, voided]
+    unresolved: [resolved_correct, resolved_incorrect, invalid_test, voided]
+  thesis_wow:
+    active_thesis: [supported, weakened, retired]
+    supported: [weakened, retired]
+    weakened: [supported, retired]
+  context_note:
+    active_context: [superseded, retired]
+```
+
+Status update packet items must include:
+
+```yaml
+status_update_required_fields:
+  - target_wow_type
+  - target_wow_id
+  - target_root_wow_id
+  - update_type
+  - previous_status
+  - new_status
+  - update_summary
+  - evidence_summary
+```
+
+The agent must not invent transitions outside the allowed table. If evidence suggests a different lifecycle move, choose the closest allowed transition or keep the idea in its current status.
+
+The local CRM files must store enough information for the next run to reconstruct current state without reading every old packet from scratch:
+
+```yaml
+crm_record_minimum_fields:
+  - wow_id
+  - wow_type
+  - root_wow_id
+  - current_status
+  - latest_public_url
+  - latest_packet_id
+  - last_reviewed_at
+  - next_review_at
+  - source_refs
+  - status_history
+```
 
 ## Receipt + Public Site Verification
 

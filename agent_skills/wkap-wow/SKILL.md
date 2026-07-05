@@ -55,10 +55,22 @@ Ask the user only for information that is required and cannot be inferred or saf
 ## Strict Daily Workout
 
 - Show exactly 3 WoW signal options, numbered 1-3.
+- Any of the 3 options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, a promotion, a resolution, or a maintenance event.
 - Require `selected_wow_id` and `reason_for_selection` when the user selects an option.
-- Require `selected_wow_id: none`, `reason_for_pass`, `closest_rejected_idea`, and `missing_evidence` when the user passes.
+- Require `selected_wow_id: none`, `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence` when the user passes.
+- For a pass, `closest_rejected_wow` must be the `wow_id` of one of today's 3 suggested WoW signals, not a free-text rejected idea.
 - Do not run a default edit/research/approval loop. If the user asks for edits or more research, complete that request, then return to selection/pass plus reason.
 - Selection/pass plus reason is approval to send the Daily WoW Packet to WKAP Ledger.
+
+## WoW Type Decision Rules
+
+- Use `candidate_wow` for an early observation worth preserving when evidence, cadence, or test is not clear yet.
+- Use `trackable_wow` for a concrete claim or pattern with evidence to monitor and a review cadence, but no clean binary resolution.
+- Use `scoreable_signal` only when the claim has `invalidate_test`, `resolve_by`, and `resolution_source`; default `signal_status` is `pending_scoreable`.
+- Use `thesis_wow` for a broader thesis that can collect child WoWs over time.
+- Use `context_note` for useful background, source quality, vocabulary, or framing that is not an investable claim.
+- Use `status_update` only when today's reading changes the CRM state of an existing WoW.
+- If unsure, choose the less scoreable type. Do not force weak ideas into `scoreable_signal`.
 
 ## Tracking Review
 
@@ -66,7 +78,31 @@ Before suggesting the 3 WoWs, inspect `active-trackables.md`, `pending-scoreable
 
 Use the tracking review to decide whether each daily option is a new `candidate_wow`, `trackable_wow`, `scoreable_signal`, `thesis_wow`, `context_note`, or append-only `status_update`.
 
+Use the exact Agent CRM status model from the public skill/spec. Every `status_update` must include `target_wow_type`, `target_wow_id`, `target_root_wow_id`, `update_type`, `previous_status`, and `new_status`, and the transition must be allowed by the status table.
+
 After public submission, update the private tracking files. Never mutate old public artifacts.
+
+## Agent CRM Operating Loop
+
+1. Load today's reading candidates.
+2. Load active CRM state from the local Private WoW Journal.
+3. Decide whether today's evidence creates a new WoW or changes an existing WoW.
+4. Express existing-item changes as append-only `status_update` items.
+5. Pick the 3 highest-value options for the user's daily choice.
+6. After submission, update local CRM files from the submitted packet plus public WKAP URL.
+
+Status update playbook:
+
+- `candidate_wow active_candidate -> promoted_trackable`: use `update_type: promotion`; create/reference the promoted trackable.
+- `candidate_wow active_candidate -> promoted_scoreable`: use `update_type: promotion`; create/reference a child `scoreable_signal` with `signal_status: pending_scoreable`.
+- `trackable_wow active_trackable -> promoted_scoreable`: use `update_type: promotion`; create/reference a child `scoreable_signal` with `signal_status: pending_scoreable`.
+- `scoreable_signal pending_scoreable -> resolved_correct | resolved_incorrect | unresolved | invalid_test | voided`: use the matching `update_type` and include evidence.
+- `scoreable_signal unresolved -> resolved_correct | resolved_incorrect | invalid_test | voided`: use the matching `update_type` and include evidence.
+- `candidate_wow` or `trackable_wow -> killed | stale`: use `update_type: killed` or `stale`.
+- `thesis_wow -> supported | weakened | retired`: use `update_type: thesis_update`.
+- `context_note -> superseded | retired`: use `update_type: context_update`.
+
+Do not use `pending_scoreable` as a `status_update.new_status`. A promotion update marks the old item as `promoted_scoreable`; the new child scoreable starts with `signal_status: pending_scoreable`.
 
 ## Lifecycle Sync Contract
 

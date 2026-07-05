@@ -18,6 +18,7 @@ from ingestion.models import RawEmail
 from ingestion.services import classify_email
 from ledger.investor_id import display_name_from_wow_subject, find_or_create_investor
 from ledger.models import LedgerEvent
+from ledger.wow_lifecycle_rules import ALLOWED_STATUS_TRANSITIONS
 from ledger.services import create_radar_issue, create_wow_submission
 from ledger.parsers import ParseError, parse_radar, parse_wow
 from publishing.receipts import (
@@ -108,7 +109,7 @@ class WKAPV0Tests(TestCase):
                     "",
                     "### If Pass Only",
                     "",
-                    "closest_rejected_idea: Robotics suppliers may show order acceleration.",
+                    "closest_rejected_wow: WOW-2026-06-29-002",
                     "why_pass: The signal was interesting but not concrete enough today.",
                     "missing_evidence: Confirmed backlog growth or named customer commentary.",
                 ]
@@ -190,7 +191,7 @@ packet:
       invalidate_test: No hyperscaler cites power availability as an AI capex bottleneck by resolve_by.
       resolve_by: 2026-09-30
       resolution_source: hyperscaler earnings transcripts
-      signal_status: pending
+      signal_status: pending_scoreable
       source_refs:
         - Reading Item 1
       agent_facts:
@@ -215,7 +216,7 @@ packet:
     selected_wow_id: WOW-w0202-2026-06-29-001
     reason_for_selection: Best daily watch item with clear follow-up evidence.
     reason_for_pass:
-    closest_rejected_idea:
+    closest_rejected_wow:
     missing_evidence:
   validation_notes:
     schema_valid: true
@@ -262,11 +263,12 @@ packet:
     - wow_id: WOW-w0202-2026-07-01-001
       wow_type: status_update
       author_id: w0202
+      target_wow_type: trackable_wow
       target_wow_id: WOW-w0202-2026-06-29-001
       target_root_wow_id: WOW-w0202-2026-06-29-001
       update_type: promotion
       previous_status: active_trackable
-      new_status: pending_scoreable
+      new_status: promoted_scoreable
       update_summary: Utility queue evidence makes the prior AI power bottleneck WoW scoreable.
       evidence_summary: A named utility backlog item can now be checked against future earnings commentary.
       scoreable: false
@@ -277,11 +279,12 @@ packet:
       agent_facts:
         wow_type: status_update
         lineage_node: false
+        target_wow_type: trackable_wow
         target_wow_id: WOW-w0202-2026-06-29-001
         target_root_wow_id: WOW-w0202-2026-06-29-001
         update_type: promotion
         previous_status: active_trackable
-        new_status: pending_scoreable
+        new_status: promoted_scoreable
     - wow_id: WOW-w0202-2026-07-01-002
       wow_type: scoreable_signal
       scoreable: true
@@ -292,7 +295,7 @@ packet:
       invalidate_test: No hyperscaler cites power access as an AI deployment constraint by resolve_by.
       resolve_by: 2026-09-30
       resolution_source: hyperscaler earnings transcripts
-      signal_status: pending
+      signal_status: pending_scoreable
       source_refs:
         - Reading Item 1
       agent_facts:
@@ -316,7 +319,148 @@ packet:
     selected_wow_id: WOW-w0202-2026-07-01-001
     reason_for_selection: The promotion captures the day's most important lifecycle change.
     reason_for_pass:
-    closest_rejected_idea:
+    closest_rejected_wow:
+    missing_evidence:
+  validation_notes:
+    schema_valid: true
+    missing_fields: []
+    warnings: []
+```
+"""
+
+    def structured_lifecycle_packet_body(
+        self,
+        *,
+        market_date: str,
+        update_index: int,
+        target_wow_type: str,
+        previous_status: str,
+        new_status: str,
+        update_type: str,
+    ):
+        target_id = f"WOW-w0202-2026-06-29-{update_index:03d}"
+        packet_id = f"WKAP-w0202-{market_date}"
+        wow_id = f"WOW-w0202-{market_date}-001"
+        theme = {
+            "candidate_wow": "GPU rental pricing pressure",
+            "trackable_wow": "AI data-center power availability",
+            "scoreable_signal": "Stablecoin reserve-income architecture",
+            "thesis_wow": "Regulated exchange moat thesis",
+            "context_note": "China AI deployment context",
+        }.get(target_wow_type, "AI infrastructure")
+        source_title = {
+            "candidate_wow": "Cloud GPU rental price checks show early loosening",
+            "trackable_wow": "AI data-center power constraints appear in hyperscaler commentary",
+            "scoreable_signal": "How Open USD Sent Circle Down 17%",
+            "thesis_wow": "Why established exchanges are harder to displace than the market believes",
+            "context_note": "中国 AI 会像电动车一样“反超”美国吗？",
+        }.get(target_wow_type, "AI infrastructure source")
+        source_url = {
+            "candidate_wow": "https://www.coreweave.com/blog",
+            "trackable_wow": "https://www.digitimes.com/",
+            "scoreable_signal": "https://reports.tiger-research.com/p/how-open-usd-sent-circle-down-17-eng",
+            "thesis_wow": "https://substack.com/home/post/p-204294860",
+            "context_note": "https://mp.weixin.qq.com/s/HdZmqCHfzRBUyFT1QjAlzw",
+        }.get(target_wow_type, "https://www.reuters.com/technology/")
+        ticker = {
+            "candidate_wow": "CRWV",
+            "trackable_wow": "NVDA",
+            "scoreable_signal": "CRCL",
+            "thesis_wow": "CME",
+            "context_note": "BABA",
+        }.get(target_wow_type, "NVDA")
+        return f"""# WKAP Daily WoW Packet
+
+```yaml
+packet:
+  packet_id: {packet_id}
+  author_id: w0202
+  market_date: {market_date}
+  created_at: {market_date}T21:00:00Z
+  packet_spec_version: v0.1
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
+  skill_version: v0.1
+  skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
+  human_view:
+    title: {theme} lifecycle check
+    summary: Daily lifecycle update for {theme}.
+  agent_facts:
+    packet_id: {packet_id}
+    author_id: w0202
+    packet_spec_version: v0.1
+  reading_log:
+    - item_number: 1
+      source_title: {source_title}
+      source_url: {source_url}
+      source_type: article
+      published_time: {market_date}T13:00:00Z
+      tickers:
+        - {ticker}
+      themes:
+        - {theme}
+      reading_origin: agent_suggested
+      agent_summary: Public market evidence changed the lifecycle status for {theme}; the item is useful for testing how WKAP agents preserve idea state.
+  wow_items:
+    - wow_id: {wow_id}
+      wow_type: status_update
+      author_id: w0202
+      target_wow_type: {target_wow_type}
+      target_wow_id: {target_id}
+      target_root_wow_id: {target_id}
+      update_type: {update_type}
+      previous_status: {previous_status}
+      new_status: {new_status}
+      update_summary: {target_wow_type} moved from {previous_status} to {new_status}.
+      evidence_summary: Evidence from today's public market source supports the lifecycle update.
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      lineage_node: false
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: status_update
+        lineage_node: false
+        target_wow_type: {target_wow_type}
+        target_wow_id: {target_id}
+        target_root_wow_id: {target_id}
+        update_type: {update_type}
+        previous_status: {previous_status}
+        new_status: {new_status}
+    - wow_id: WOW-w0202-{market_date}-002
+      wow_type: scoreable_signal
+      scoreable: true
+      accuracy_endpoint_eligible: true
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-{market_date}-002
+      claim: At least one public-market source will mention AI power constraints before 2026-09-30.
+      invalidate_test: No qualifying source mentions AI power constraints by resolve_by.
+      resolve_by: 2026-09-30
+      resolution_source: public filings or earnings transcripts
+      signal_status: pending_scoreable
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: scoreable_signal
+        scoreable: true
+        accuracy_endpoint_eligible: true
+    - wow_id: WOW-w0202-{market_date}-003
+      wow_type: context_note
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-{market_date}-003
+      observation: Market context remains relevant but not scoreable today.
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: context_note
+        scoreable: false
+        accuracy_endpoint_eligible: false
+  selection:
+    selected_wow_id: {wow_id}
+    reason_for_selection: This lifecycle update is the most important CRM maintenance item today.
+    reason_for_pass:
+    closest_rejected_wow:
     missing_evidence:
   validation_notes:
     schema_valid: true
@@ -694,7 +838,7 @@ packet:
             [
                 self.wow_packet_body(),
                 "",
-                "closest_rejected_idea: Robotics suppliers may show order acceleration.",
+                "closest_rejected_wow: WOW-2026-06-29-002",
                 "why_pass: Interesting but not selected.",
                 "missing_evidence: Confirmed backlog growth.",
             ]
@@ -710,9 +854,19 @@ packet:
         parsed = parse_wow(raw)
 
         self.assertEqual(parsed.selected_wow_id, "none")
-        self.assertEqual(parsed.closest_rejected_idea, "Robotics suppliers may show order acceleration.")
+        self.assertEqual(parsed.closest_rejected_idea, "WOW-2026-06-29-002")
         self.assertEqual(parsed.why_pass, "The signal was interesting but not concrete enough today.")
         self.assertEqual(parsed.missing_evidence, "Confirmed backlog growth or named customer commentary.")
+
+    def test_wow_packet_parser_requires_closest_rejected_wow_to_match_suggested_wow(self):
+        body = self.wow_packet_body(selected="none").replace(
+            "closest_rejected_wow: WOW-2026-06-29-002",
+            "closest_rejected_wow: GPU rental price weakness could signal supply normalization.",
+        )
+        raw = self.raw_email(subject="Daily WoW Packet - 2026-06-29 - Test Agent", body=body)
+
+        with self.assertRaisesMessage(ParseError, "closest_rejected_wow must match one of today's suggested WoW IDs"):
+            parse_wow(raw)
 
     def test_wow_packet_parser_accepts_reason_for_pass_field(self):
         body = self.wow_packet_body(selected="none").replace(
@@ -1179,10 +1333,12 @@ packet:
         self.assertContains(setup_response, "Based on my behavior pattern, infer when I usually finish most of my daily market investment research")
         self.assertContains(setup_response, "set the Daily WoW Packet send time after that")
         self.assertContains(setup_response, "If you cannot infer it, ask me")
-        self.assertContains(setup_response, "Once per US market day, suggest exactly 3 WoW signals")
-        self.assertContains(setup_response, "ask for my reason_for_selection")
-        self.assertContains(setup_response, "ask for reason_for_pass")
-        self.assertContains(setup_response, "Do not ask for a second approval")
+        self.assertContains(setup_response, "Run the daily workflow exactly as the installed WKAP WoW Skill specifies")
+        self.assertNotContains(setup_response, "existing WoW signal status update")
+        self.assertNotContains(setup_response, "Once per US market day, suggest exactly 3 WoW signals")
+        self.assertNotContains(setup_response, "ask for my reason_for_selection")
+        self.assertNotContains(setup_response, "ask for reason_for_pass")
+        self.assertNotContains(setup_response, "Do not ask for a second approval")
         self.assertNotContains(setup_response, "Schedule it once per market day")
         self.assertContains(setup_response, "/skills/wkap-wow-codex/SKILL.md")
         self.assertNotContains(setup_response, "Fallback Agent Setup Prompt")
@@ -1268,6 +1424,10 @@ packet:
         self.assertIn("reason_for_pass", body)
         self.assertIn("User selection/pass plus the required reason is approval to submit", body)
         self.assertIn("tracking_inputs", body)
+        self.assertIn("WoW Type Decision Rules", body)
+        self.assertIn("candidate_to_scoreable", body)
+        self.assertIn("Do not use `pending_scoreable` as the `new_status`", body)
+        self.assertIn("signal_status: pending_scoreable", body)
 
     def test_wkap_wow_skill_markdown_contains_private_journal_contract(self):
         response = self.client.get("/skills/wkap-wow-skill-v0.1.md")
@@ -1323,6 +1483,13 @@ packet:
         self.assertIn("private_crm", body)
         self.assertIn("public_page", body)
         self.assertIn("A day is not publicly done until it appears on WKAP Ledger", body)
+        self.assertIn("Agent CRM Operating Loop", body)
+        self.assertIn("WoW Type Decision Rules", body)
+        self.assertIn("Status Update Playbook", body)
+        self.assertIn("candidate_to_trackable", body)
+        self.assertIn("trackable_to_scoreable", body)
+        self.assertIn("Do not use `pending_scoreable` as the `new_status`", body)
+        self.assertIn("crm_record_minimum_fields", body)
 
     def test_codex_wkap_wow_skill_uses_low_friction_defaults(self):
         response = self.client.get("/skills/wkap-wow-codex/SKILL.md")
@@ -1349,6 +1516,9 @@ packet:
         self.assertIn("backend WKAP parse data plus `LedgerEvent` lifecycle logs", body)
         self.assertIn("local Private WoW Journal tracking files", body)
         self.assertIn("public WKAP WoW page and agent-readable facts", body)
+        self.assertIn("WoW Type Decision Rules", body)
+        self.assertIn("Agent CRM Operating Loop", body)
+        self.assertIn("Do not use `pending_scoreable` as a `status_update.new_status`", body)
 
     def test_pages_expose_agent_search_metadata(self):
         run_id = "00000000-0000-0000-0000-000000000009"
@@ -1429,7 +1599,7 @@ packet:
         self.assertContains(response, "source_urls_json")
         self.assertContains(response, "evidence_to_watch_json")
         self.assertContains(response, 'data-field="reason_for_pass"')
-        self.assertContains(response, 'data-field="closest_rejected_idea"')
+        self.assertContains(response, 'data-field="closest_rejected_wow"')
         self.assertContains(response, 'data-field="missing_evidence"')
         self.assertContains(response, "N/A - Not Applicable", count=3)
         self.assertContains(response, 'data-selection-status="selected"')
@@ -1464,11 +1634,12 @@ packet:
         self.assertEqual(status_events.count(), 1)
         status_details = status_events.get().details
         self.assertEqual(status_details["wow_id"], "WOW-w0202-2026-07-01-001")
+        self.assertEqual(status_details["target_wow_type"], "trackable_wow")
         self.assertEqual(status_details["target_wow_id"], "WOW-w0202-2026-06-29-001")
         self.assertEqual(status_details["target_root_wow_id"], "WOW-w0202-2026-06-29-001")
         self.assertEqual(status_details["update_type"], "promotion")
         self.assertEqual(status_details["previous_status"], "active_trackable")
-        self.assertEqual(status_details["new_status"], "pending_scoreable")
+        self.assertEqual(status_details["new_status"], "promoted_scoreable")
 
         submission.github_file_url = "https://github.com/wkapai/wkap-ledger/blob/main/investors/w0202/wows/wow-w0202-2026-07-01.html"
         submission.github_commit_sha = "a" * 40
@@ -1491,13 +1662,27 @@ packet:
         submission.save()
 
         response = self.client.get("/investors/w0202/wows/wow-w0202-2026-07-01.html")
-        self.assertContains(response, "Lifecycle Updates")
+        self.assertContains(response, "<h1>AI power bottleneck lifecycle update</h1>", html=True)
+        self.assertContains(response, 'data-agent-wow-type-fields="status_update"')
+        self.assertContains(response, 'data-agent-wow-type-fields="scoreable_signal"')
+        self.assertContains(response, 'data-agent-wow-type-fields="context_note"')
+        self.assertContains(response, 'data-field="target_wow_id"')
+        self.assertContains(response, 'data-field="target_wow_type"')
+        self.assertContains(response, 'data-field="target_root_wow_id"')
+        self.assertContains(response, 'data-field="previous_status"')
+        self.assertContains(response, 'data-field="new_status"')
+        self.assertContains(response, 'data-field="invalidate_test"')
+        self.assertContains(response, 'data-field="resolve_by"')
+        self.assertContains(response, 'data-field="resolution_source"')
+        self.assertContains(response, 'data-field="observation"')
+        self.assertContains(response, "Existing WoW Signal Status Update")
         self.assertContains(response, 'data-agent-lifecycle="status_updates"')
         self.assertContains(response, 'data-target-wow-id="WOW-w0202-2026-06-29-001"')
         self.assertContains(response, 'data-update-type="promotion"')
         self.assertContains(response, "active_trackable")
-        self.assertContains(response, "pending_scoreable")
+        self.assertContains(response, "promoted_scoreable")
         self.assertContains(response, "lifecycle_events_json")
+        self.assertContains(response, "current_wow_state_json")
         self.assertContains(response, "status_updates_json")
         self.assertContains(response, "target_root_wow_id")
         self.assertContains(response, "WOW-w0202-2026-06-29-001")
@@ -1520,6 +1705,91 @@ packet:
             parse_wow(raw)
 
         self.assertIn("status_update WOW-w0202-2026-07-01-001 missing required fields: target_root_wow_id", str(exc.exception))
+
+    def test_invalid_status_transition_is_rejected_before_publish(self):
+        body = self.structured_status_update_packet_body().replace(
+            "      new_status: promoted_scoreable",
+            "      new_status: resolved_correct",
+            1,
+        )
+        raw = self.raw_email(
+            sender="bad-transition@example.com",
+            subject="Daily WoW Packet - 2026-07-01 - Bad Transition Agent",
+            body=body,
+        )
+
+        with self.assertRaises(ParseError) as exc:
+            parse_wow(raw)
+
+        self.assertIn("trackable_wow cannot transition from active_trackable to resolved_correct", str(exc.exception))
+
+    def test_one_investor_lifecycle_crm_covers_all_allowed_status_transitions(self):
+        investor_sender = "one-crm-investor@example.com"
+        created_packets = []
+        update_index = 1
+        for target_wow_type, previous_map in ALLOWED_STATUS_TRANSITIONS.items():
+            for previous_status, new_statuses in previous_map.items():
+                for new_status in sorted(new_statuses):
+                    market_date = (datetime(2026, 8, 1).date() + timedelta(days=update_index - 1)).isoformat()
+                    body = self.structured_lifecycle_packet_body(
+                        market_date=market_date,
+                        update_index=update_index,
+                        target_wow_type=target_wow_type,
+                        previous_status=previous_status,
+                        new_status=new_status,
+                        update_type=self._update_type_for_new_status(new_status),
+                    )
+                    raw = self.raw_email(
+                        sender=investor_sender,
+                        subject=f"Daily WoW Packet - {market_date} - Lifecycle CRM Agent",
+                        body=body,
+                    )
+                    packet = create_wow_submission(raw, run_id=f"00000000-0000-0000-0000-{update_index:012d}")
+                    created_packets.append(packet)
+                    update_index += 1
+
+        investor_ids = {packet.investor.investor_id for packet in created_packets}
+        self.assertEqual(len(investor_ids), 1)
+        expected_transition_count = sum(
+            len(new_statuses)
+            for previous_map in ALLOWED_STATUS_TRANSITIONS.values()
+            for new_statuses in previous_map.values()
+        )
+        self.assertEqual(len(created_packets), expected_transition_count)
+
+        status_events = LedgerEvent.objects.filter(event_name="wow_lifecycle_status_update_logged", entity_type="wow")
+        self.assertEqual(status_events.count(), len(created_packets))
+        for event in status_events:
+            self.assertIn(event.details["new_status"], ALLOWED_STATUS_TRANSITIONS[event.details["target_wow_type"]][event.details["previous_status"]])
+
+        sample = created_packets[0]
+        response = self.client.get(f"/investors/{sample.investor.investor_id}/wows/wow-{sample.investor.investor_id}-{sample.market_date}.html")
+        self.assertContains(response, 'data-agent-wow-type-fields="status_update"')
+        self.assertContains(response, 'data-field="target_wow_type"')
+        self.assertContains(response, 'data-field="previous_status"')
+        self.assertContains(response, 'data-field="new_status"')
+        self.assertContains(response, 'data-field="target_root_wow_id"')
+        self.assertContains(response, 'data-field="lifecycle_events_json"')
+        self.assertContains(response, 'data-field="current_wow_state_json"')
+
+    def _update_type_for_new_status(self, new_status: str) -> str:
+        if new_status in {"promoted_trackable", "promoted_scoreable", "pending_scoreable"}:
+            return "promotion"
+        if new_status in {"resolved_correct", "resolved_incorrect", "unresolved"}:
+            return "resolution"
+        if new_status == "killed":
+            return "killed"
+        if new_status == "stale":
+            return "stale"
+        if new_status == "voided":
+            return "voided"
+        if new_status == "invalid_test":
+            return "invalid_test"
+        if new_status in {"supported", "weakened", "retired"}:
+            return "thesis_update"
+        if new_status == "superseded":
+            return "context_update"
+        return "other"
 
     def test_robots_and_sitemap_are_agent_friendly(self):
         run_id = "00000000-0000-0000-0000-000000000011"

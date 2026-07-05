@@ -67,7 +67,7 @@ packet:
     selected_wow_id: string | none
     reason_for_selection: string | null
     reason_for_pass: string | null
-    closest_rejected_idea: string | null
+    closest_rejected_wow: string | null
     missing_evidence: string | null
   validation_notes:
     schema_valid: boolean
@@ -98,11 +98,15 @@ daily_workout_contract:
   pass_requires:
     - selected_wow_id: none
     - reason_for_pass
-    - closest_rejected_idea
+    - closest_rejected_wow
     - missing_evidence
 ```
 
 The agent prepares the options. The user performs the judgment by selecting one of the 3 WoW signals or passing. User selection/pass plus the required reason is approval to submit the packet to WKAP Ledger.
+
+Any of the 3 daily options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, a promotion, a resolution, or a maintenance event.
+
+When the user passes, `closest_rejected_wow` MUST be the `wow_id` of one of today's 3 suggested WoW signals. It is not a free-text idea field; put the idea text inside the suggested WoW item.
 
 If the user does not provide a choice or required reason, the packet is incomplete for public submission. Save it privately as no-reply or incomplete, and ask only for the missing required field.
 
@@ -124,6 +128,20 @@ The 3 suggested WoW signals may include new observations, trackables, scoreable 
 
 After public submission, the agent should update private lifecycle state. Public artifacts remain immutable.
 
+The Private WoW Journal acts as the agent CRM for investment ideas. Agents should be able to reconstruct the current state of each idea from CRM files plus public WKAP pages.
+
+Daily CRM loop:
+
+```text
+1. Load today's top reading candidates.
+2. Load active CRM state: candidates, trackables, scoreable signals, theses, context notes, receipts, and public verification.
+3. Decide whether today's evidence creates a new WoW or changes an existing WoW.
+4. Classify new items with the WoW type decision rules.
+5. Express existing-item changes as append-only status_update items.
+6. Present exactly 3 daily choices to the user.
+7. After the user selects or passes, submit the packet and update private CRM records from the public URL.
+```
+
 ## Valid WoW Types
 
 Every WoW item must declare `wow_type`.
@@ -144,6 +162,47 @@ valid_wow_types:
 `thesis_wow` is a broader thesis supported by child WoWs.  
 `context_note` is background context and must not be treated as a market call.  
 `status_update` is an append-only maintenance item for an existing WoW.
+
+## WoW Type Decision Rules
+
+```yaml
+candidate_wow:
+  use_when: Early observation worth saving, but monitorable evidence, review cadence, or falsifiable test is not clear yet.
+  default_status: active_candidate
+  scoreable: false
+
+trackable_wow:
+  use_when: Concrete claim or pattern worth monitoring, with evidence_to_watch and next_review_at, but not cleanly binary.
+  default_status: active_trackable
+  scoreable: false
+
+scoreable_signal:
+  use_when: Specific falsifiable claim with invalidate_test, resolve_by, and resolution_source.
+  default_status: pending_scoreable
+  scoreable: true
+
+thesis_wow:
+  use_when: Higher-level thesis that can collect child WoWs over time.
+  default_status: active_thesis
+  scoreable: false
+
+context_note:
+  use_when: Useful background context, source quality note, vocabulary, or framing that is not an investable claim.
+  default_status: active_context
+  scoreable: false
+
+status_update:
+  use_when: Today's reading changes the CRM state of an existing WoW.
+  required_target_fields:
+    - target_wow_type
+    - target_wow_id
+    - target_root_wow_id
+    - previous_status
+    - new_status
+  scoreable: false
+```
+
+If an item is not clearly scoreable, do not force it into `scoreable_signal`.
 
 ## Type-Level Requirements
 
@@ -177,7 +236,7 @@ scoreable_signal:
   invalidate_test: string
   resolve_by: ISO date
   resolution_source: string
-  signal_status: pending
+  signal_status: pending_scoreable
   source_refs: list
   created_at: ISO timestamp
   scoreable: true
@@ -259,7 +318,7 @@ A trackable must eventually become promoted, killed, or stale. A trackable that 
 
 ```yaml
 signal_status:
-  - pending
+  - pending_scoreable
   - resolved_correct
   - resolved_incorrect
   - unresolved
@@ -267,7 +326,7 @@ signal_status:
   - voided
 ```
 
-`pending` means the resolution date or event has not arrived.  
+`pending_scoreable` means the resolution date or event has not arrived.
 `resolved_correct` means the claim resolved in favor of the author under the declared test.  
 `resolved_incorrect` means the claim was invalidated under the declared test.  
 `unresolved` means the resolve date arrived, but available evidence is not sufficient to judge. It is pending-past-due, not neutral, and it is not terminal.  
@@ -279,7 +338,7 @@ Default grace window:
 ```yaml
 unresolved_grace_window_days: 30
 pending_statuses:
-  - pending
+  - pending_scoreable
   - unresolved
 ```
 
@@ -322,9 +381,12 @@ Status changes are append-only. A `status_update` is a later packet item, not a 
 status_update:
   wow_type: status_update
   wow_id: string
+  target_wow_type: candidate_wow | trackable_wow | scoreable_signal | thesis_wow | context_note
   target_wow_id: string
   target_root_wow_id: string
-  update_type: resolution | promotion | killed | stale | voided | invalid_test | other
+  update_type: resolution | promotion | killed | stale | voided | invalid_test | thesis_update | context_update | other
+  previous_status: string
+  new_status: string
   created_at: ISO timestamp
   author_id: string
   source_refs: list
@@ -356,6 +418,129 @@ Original WoW artifacts remain immutable. Current state is derived from the origi
 Every public `status_update` must be machine-reconcilable across WKAP backend logs, the public WoW page, and the user's Private WoW Journal.
 
 WKAP stores parsed lifecycle items in packet JSON and writes backend `LedgerEvent` lifecycle logs. Agents should mirror the same transition in local CRM files after public verification.
+
+## Agent CRM Status Model
+
+Agents should maintain Private WoW Journal CRM files using the same status model exposed on WKAP pages.
+
+Default initial statuses:
+
+```yaml
+default_status:
+  candidate_wow: active_candidate
+  trackable_wow: active_trackable
+  scoreable_signal: pending_scoreable
+  thesis_wow: active_thesis
+  context_note: active_context
+```
+
+Allowed status transitions:
+
+```yaml
+allowed_status_transitions:
+  candidate_wow:
+    active_candidate:
+      - promoted_trackable
+      - promoted_scoreable
+      - killed
+      - stale
+    stale:
+      - active_candidate
+      - killed
+  trackable_wow:
+    active_trackable:
+      - promoted_scoreable
+      - killed
+      - stale
+    stale:
+      - active_trackable
+      - killed
+  scoreable_signal:
+    pending_scoreable:
+      - resolved_correct
+      - resolved_incorrect
+      - unresolved
+      - invalid_test
+      - voided
+    unresolved:
+      - resolved_correct
+      - resolved_incorrect
+      - invalid_test
+      - voided
+  thesis_wow:
+    active_thesis:
+      - supported
+      - weakened
+      - retired
+    supported:
+      - weakened
+      - retired
+    weakened:
+      - supported
+      - retired
+  context_note:
+    active_context:
+      - superseded
+      - retired
+```
+
+Every `status_update` MUST include `target_wow_type`, `previous_status`, `new_status`, `target_wow_id`, and `target_root_wow_id`. Agents must reject or repair packets that attempt a status transition outside this table.
+
+Status update playbook:
+
+```yaml
+candidate_to_trackable:
+  target_wow_type: candidate_wow
+  previous_status: active_candidate
+  new_status: promoted_trackable
+  update_type: promotion
+
+candidate_to_scoreable:
+  target_wow_type: candidate_wow
+  previous_status: active_candidate
+  new_status: promoted_scoreable
+  update_type: promotion
+  note: The new child scoreable_signal starts separately with signal_status pending_scoreable.
+
+trackable_to_scoreable:
+  target_wow_type: trackable_wow
+  previous_status: active_trackable
+  new_status: promoted_scoreable
+  update_type: promotion
+  note: The new child scoreable_signal starts separately with signal_status pending_scoreable.
+
+scoreable_resolved_correct:
+  target_wow_type: scoreable_signal
+  previous_status: pending_scoreable | unresolved
+  new_status: resolved_correct
+  update_type: resolution
+
+scoreable_resolved_incorrect:
+  target_wow_type: scoreable_signal
+  previous_status: pending_scoreable | unresolved
+  new_status: resolved_incorrect
+  update_type: resolution
+
+scoreable_unresolved:
+  target_wow_type: scoreable_signal
+  previous_status: pending_scoreable
+  new_status: unresolved
+  update_type: resolution
+
+scoreable_invalid_test:
+  target_wow_type: scoreable_signal
+  previous_status: pending_scoreable | unresolved
+  new_status: invalid_test
+  update_type: invalid_test
+
+scoreable_voided:
+  target_wow_type: scoreable_signal
+  previous_status: pending_scoreable | unresolved
+  new_status: voided
+  update_type: voided
+```
+
+Do not use `pending_scoreable` as the `new_status` of a status update. A promotion status update marks the prior candidate or trackable as `promoted_scoreable`; the new scoreable child item carries `signal_status: pending_scoreable`.
 
 ## Status Update Authority
 
@@ -459,7 +644,7 @@ packet:
     selected_wow_id: string | none
     reason_for_selection: string | null
     reason_for_pass: string | null
-    closest_rejected_idea: string | null
+    closest_rejected_wow: string | null
     missing_evidence: string | null
 ```
 

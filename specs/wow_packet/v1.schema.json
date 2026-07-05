@@ -48,21 +48,21 @@
     "selected_wow_id",
     "reason_for_selection",
     "reason_for_pass",
-    "closest_rejected_idea",
+    "closest_rejected_wow",
     "missing_evidence"
   ],
   "selection_rules": {
     "pass_value": "none",
     "pass_only_fields": [
       "reason_for_pass",
-      "closest_rejected_idea",
+      "closest_rejected_wow",
       "missing_evidence"
     ],
     "legacy_aliases": {
       "why_pass": "reason_for_pass"
     },
     "selected_wow_rule": "When selected_wow_id is a suggested WoW ID, pass-only fields must be absent or blank.",
-    "pass_rule": "When selected_wow_id is none, reason_for_pass, closest_rejected_idea, and missing_evidence are required.",
+    "pass_rule": "When selected_wow_id is none, reason_for_pass, closest_rejected_wow, and missing_evidence are required. closest_rejected_wow must match one of today's suggested wow_id values.",
     "approval_rule": "User selection/pass plus required reason is approval to submit the packet to WKAP Ledger."
   },
   "public_id_rules": {
@@ -73,7 +73,7 @@
   "hash_contract": {
     "content_sha256_field": "Every public artifact exposes content_sha256 plus content_sha256_covers.",
     "radar_content_sha256_covers": "sha256 over UTF-8 text: radar\\n{market_date}\\n{title}\\n{body_text}. It does not cover rendered HTML, proof panels, manifests, or OpenTimestamp status.",
-    "wow_content_sha256_covers": "sha256 over UTF-8 text: wow_packet\\n{format_version}\\n{market_date}\\n{investor_id}\\n{selected_wow_id}\\n{reason_for_selection}\\n{reason_for_pass}\\n{closest_rejected_idea}\\n{missing_evidence}\\nreading_items(item_number,source_title,source_url,reading_origin,agent_summary)\\nsuggested_wows(wow_id,ticker_or_theme,whats_worth_watching,why_now,evidence_to_watch_for). It does not cover rendered HTML, proof panels, manifests, raw email text, or OpenTimestamp status."
+    "wow_content_sha256_covers": "sha256 over UTF-8 text: wow_packet\\n{format_version}\\n{market_date}\\n{investor_id}\\n{selected_wow_id}\\n{reason_for_selection}\\n{reason_for_pass}\\n{closest_rejected_wow}\\n{missing_evidence}\\nreading_items(item_number,source_title,source_url,reading_origin,agent_summary)\\nsuggested_wows(wow_id,ticker_or_theme,whats_worth_watching,why_now,evidence_to_watch_for). It does not cover rendered HTML, proof panels, manifests, raw email text, or OpenTimestamp status."
   },
   "agent_crawl_contract": {
     "rendered_html_version": "agent_wow_html_v1",

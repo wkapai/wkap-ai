@@ -50,7 +50,7 @@ def _item_record(item: dict, agent_facts: dict, *, index: int, investor_id: str,
         "root_wow_id": _value(item, "root_wow_id"),
         "scoreable": _bool_value(item, "scoreable"),
         "accuracy_endpoint_eligible": _bool_value(item, "accuracy_endpoint_eligible"),
-        "signal_status": _value(item, "signal_status"),
+        "signal_status": _signal_status_value(item, "signal_status"),
         "trackable_status": _value(item, "trackable_status"),
         "thesis_status": _value(item, "thesis_status"),
         "claim": _value(item, "claim", "observation", "thesis_claim", "summary"),
@@ -66,12 +66,13 @@ def _status_update_record(item: dict, agent_facts: dict, *, index: int, investor
         "wow_id": _value(item, "wow_id"),
         "wow_type": "status_update",
         "author_id": _value(item, "author_id", default=investor_id),
+        "target_wow_type": _value(item, "target_wow_type"),
         "target_wow_id": _value(item, "target_wow_id"),
         "target_root_wow_id": _value(item, "target_root_wow_id"),
         "update_type": _value(item, "update_type", default="other"),
         "previous_status": _value(item, "previous_status"),
-        "new_status": _value(item, "new_status", "signal_status", "trackable_status"),
-        "signal_status": _value(item, "signal_status"),
+        "new_status": _signal_status_value(item, "new_status", "signal_status", "trackable_status"),
+        "signal_status": _signal_status_value(item, "signal_status"),
         "trackable_status": _value(item, "trackable_status"),
         "resolution_source_used": _value(item, "resolution_source_used"),
         "evidence_summary": _value(item, "evidence_summary"),
@@ -90,6 +91,11 @@ def _value(item: dict, *keys: str, default: str = "") -> str:
         if value is not None and str(value).strip():
             return str(value).strip()
     return default
+
+
+def _signal_status_value(item: dict, *keys: str, default: str = "") -> str:
+    value = _value(item, *keys, default=default)
+    return "pending_scoreable" if value == "pending" else value
 
 
 def _bool_value(item: dict, key: str) -> bool:

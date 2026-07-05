@@ -911,9 +911,89 @@ code {
   border-top: 1px solid rgba(20, 35, 66, 0.1);
 }
 
+.wow-type-chip {
+  background: rgba(20, 35, 66, 0.06);
+  border: 1px solid rgba(20, 35, 66, 0.1);
+  border-radius: 999px;
+  color: rgba(10, 13, 18, 0.58);
+  display: inline-flex;
+  font: 700 9px/1 var(--font-mono);
+  margin-left: 4px;
+  padding: 2px 5px;
+  text-transform: lowercase;
+  vertical-align: 1px;
+}
+
 .packet-meta,
 .packet-url {
   font-size: 11px;
+}
+
+.wow-type-details {
+  margin: 1px 0 0;
+  padding-top: 1px;
+  border-top: 1px solid rgba(20, 35, 66, 0.06);
+}
+
+.wow-type-details summary {
+  display: inline-flex;
+  color: rgba(10, 13, 18, 0.38);
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.wow-type-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.wow-type-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  margin: 3px 0 0;
+  padding-top: 0;
+  border-top: 0;
+  font-size: 8px;
+  line-height: 1.15;
+}
+
+.wow-type-fields div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wow-type-fields dt,
+.wow-type-fields dd {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.wow-type-fields dt {
+  color: rgba(10, 13, 18, 0.62);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.wow-type-fields dt::after {
+  content: ":";
+}
+
+.wow-type-fields dd {
+  min-width: 0;
+  max-width: min(360px, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(31, 41, 55, 0.68);
 }
 
 .body-copy p,

@@ -11,7 +11,7 @@
     <h2>Latest WoWs</h2>
     <div class="list-stack" data-agent-list="wow">
       {% for submission in submissions %}
-        <p data-artifact-type="wow" data-investor-id="{{ submission.investor.investor_id }}" data-market-date="{{ submission.market_date|date:"Y-m-d" }}" data-canonical-url="{{ submission.canonical_url }}" data-content-sha256="{{ submission.content_sha256 }}"><a href="/investors/{{ submission.investor.investor_id }}/wows/wow-{{ submission.investor.investor_id }}-{{ submission.market_date|date:"Y-m-d" }}.html">{{ submission.investor.public_label }} - {{ submission.market_date|date:"Y-m-d" }}</a></p>
+        <p data-artifact-type="wow" data-investor-id="{{ submission.investor.investor_id }}" data-market-date="{{ submission.market_date|date:"Y-m-d" }}" data-canonical-url="{{ submission.canonical_url }}" data-content-sha256="{{ submission.content_sha256 }}"><a href="/investors/{{ submission.investor.investor_id }}/wows/wow-{{ submission.investor.investor_id }}-{{ submission.market_date|date:"Y-m-d" }}.html">{{ submission.investor.investor_id }} - {{ submission.investor.public_label }} - {{ submission.market_date|date:"Y-m-d" }}</a></p>
       {% empty %}
         <p class="empty">No WoW submissions have been published yet.</p>
       {% endfor %}
@@ -21,7 +21,7 @@
     <h2>Investors</h2>
     <div class="list-stack" data-agent-list="investors">
       {% for investor in investors %}
-        <p data-investor-id="{{ investor.investor_id }}"><a href="/investors/{{ investor.investor_id }}/">{{ investor.public_label }}</a> &middot; <a href="/investors/{{ investor.investor_id }}/wows/">WoWs</a></p>
+        <p data-investor-id="{{ investor.investor_id }}"><a href="/investors/{{ investor.investor_id }}/">{{ investor.public_label }}</a></p>
       {% empty %}
         <p class="empty">No investors have published WoWs yet.</p>
       {% endfor %}

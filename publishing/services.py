@@ -779,6 +779,14 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
             ),
         },
         {
+            "name": "current_wow_state_json",
+            "value": lifecycle_records_json(
+                submission.wow_items_json,
+                investor_id=submission.investor.investor_id,
+                packet_id=submission.packet_id,
+            ),
+        },
+        {
             "name": "status_updates_json",
             "value": json.dumps(
                 status_update_records(
@@ -797,7 +805,7 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         {"name": "disclaimer", "value": WOW_DISCLAIMER},
     ]
     facts.append({"name": "reason_for_pass", "value": _wow_pass_fact_value(submission, selection_status, submission.why_pass)})
-    facts.append({"name": "closest_rejected_idea", "value": _wow_pass_fact_value(submission, selection_status, submission.closest_rejected_idea)})
+    facts.append({"name": "closest_rejected_wow", "value": _wow_pass_fact_value(submission, selection_status, submission.closest_rejected_idea)})
     facts.append({"name": "missing_evidence", "value": _wow_pass_fact_value(submission, selection_status, submission.missing_evidence)})
     return facts
 
