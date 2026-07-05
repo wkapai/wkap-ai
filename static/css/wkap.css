@@ -653,6 +653,45 @@ p {
   color: var(--accent);
 }
 
+.lifecycle-list {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 18px;
+}
+
+.lifecycle-update {
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(20, 35, 66, 0.12);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.lifecycle-update p {
+  margin: 4px 0 0;
+}
+
+.lifecycle-update p:first-child {
+  margin-top: 0;
+}
+
+.lifecycle-line {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lifecycle-line strong {
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.lifecycle-status {
+  color: #4f5a6c;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 .ots-proof-card {
   background: linear-gradient(135deg, rgba(255, 107, 26, 0.18), rgba(255, 255, 255, 0.84));
   border: 1px solid rgba(255, 107, 26, 0.38);
@@ -1210,6 +1249,27 @@ body:not([data-page-type="home"]) .summary-strip dd {
   font-size: 11px;
 }
 
+body:not([data-page-type="home"]) .wow-summary-strip {
+  align-items: stretch;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: 6px;
+}
+
+body:not([data-page-type="home"]) .wow-summary-strip div {
+  min-height: 0;
+  padding: 5px 7px;
+}
+
+body:not([data-page-type="home"]) .wow-summary-strip dt {
+  font-size: 7px;
+  line-height: 1;
+}
+
+body:not([data-page-type="home"]) .wow-summary-strip dd {
+  font-size: 10px;
+  line-height: 1.12;
+}
+
 body:not([data-page-type="home"]) dt,
 body:not([data-page-type="home"]) dd {
   padding: 7px 9px;
@@ -1387,6 +1447,10 @@ body:not([data-page-type="home"]) .agent-facts {
 
   .artifact-row {
     grid-template-columns: 1fr;
+  }
+
+  body:not([data-page-type="home"]) .wow-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hero-visual {

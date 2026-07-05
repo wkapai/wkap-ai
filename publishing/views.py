@@ -11,6 +11,7 @@ from django.utils.html import escape
 
 from ledger.models import Investor, RadarIssue, DailyWoWPacket
 from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, market_terms
+from ledger.wow_lifecycle import lifecycle_records_json, status_update_records
 from ledger.wow_packet_spec import current_spec
 from publishing.services import WOW_DISCLAIMER
 from publishing.urls import investor_home_url, investor_wows_url, radar_archive_url, radar_issue_url, wow_url
@@ -436,6 +437,11 @@ def wow_submission(request, investor_id, market_date):
     subject_display_name = submission.investor.display_name or "unknown subject name"
     received_at_et = submission.source_email.received_at.astimezone(ET_ZONE)
     received_at_et_display = received_at_et.strftime("%Y-%m-%d %H:%M ET")
+    lifecycle_status_updates = status_update_records(
+        submission.wow_items_json,
+        investor_id=submission.investor.investor_id,
+        packet_id=submission.packet_id,
+    )
     return render(
         request,
         "publishing/investors/wow.html",
@@ -488,6 +494,18 @@ def wow_submission(request, investor_id, market_date):
                 {"name": "evidence_to_watch_json", "value": agent_summary["evidence_to_watch_json"]},
                 {"name": "all_evidence_to_watch", "value": agent_summary["all_evidence_to_watch"]},
                 {"name": "all_evidence_to_watch_json", "value": agent_summary["all_evidence_to_watch_json"]},
+                {
+                    "name": "lifecycle_events_json",
+                    "value": lifecycle_records_json(
+                        submission.wow_items_json,
+                        investor_id=submission.investor.investor_id,
+                        packet_id=submission.packet_id,
+                    ),
+                },
+                {
+                    "name": "status_updates_json",
+                    "value": json.dumps(lifecycle_status_updates, ensure_ascii=False, sort_keys=True),
+                },
             ]
             + _optional_facts(
                 [
@@ -522,6 +540,7 @@ def wow_submission(request, investor_id, market_date):
             submission=submission,
             selected_wow=selected_wow,
             selection_status=agent_summary["selection_status"],
+            status_update_records=lifecycle_status_updates,
             subject_display_name=subject_display_name,
             received_at_et_display=received_at_et_display,
             disclaimer=WOW_DISCLAIMER,

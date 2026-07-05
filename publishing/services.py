@@ -15,8 +15,10 @@ from django.template.loader import render_to_string
 
 from core.events import log_event
 from ingestion.models import RawEmail
+from ledger.lifecycle_events import ensure_wow_lifecycle_events
 from ledger.models import LedgerEvent, RadarIssue, DailyWoWPacket
 from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, market_terms
+from ledger.wow_lifecycle import ITEM_EVENT, STATUS_UPDATE_EVENT, lifecycle_records, lifecycle_records_json, status_update_records
 from publishing.receipts import send_radar_receipt, send_wow_receipt
 from publishing.urls import (
     investor_home_path,
@@ -53,6 +55,7 @@ def generate_wow_html(submission: DailyWoWPacket, *, run_id: uuid.UUID) -> Daily
     submission.raw_email_sha256 = _sha256(submission.source_email.raw_body)
     submission.content_sha256 = _wow_content_hash(submission)
     submission.save(update_fields=["canonical_url", "raw_email_sha256", "content_sha256", "updated_at"])
+    ensure_wow_lifecycle_events(submission, run_id=run_id)
     html = _render_wow(submission)
     _write_public(wow_path(submission.investor.investor_id, submission.market_date), html)
     log_event(
@@ -356,10 +359,41 @@ def validate_ledger(entity_type: str, entity_id: int) -> list[str]:
         for field in ("raw_email_sha256", "raw_email_github_url", "raw_email_commit_sha"):
             if not getattr(artifact, field):
                 errors.append(f"{field} is missing")
+        errors.extend(_wow_lifecycle_validation_errors(artifact))
     if entity_type == "wow" and WOW_DISCLAIMER not in _public_file(wow_path(artifact.investor.investor_id, artifact.market_date)).read_text(
         encoding="utf-8"
     ):
         errors.append("WoW disclaimer is missing from public HTML")
+    return errors
+
+
+def _wow_lifecycle_validation_errors(submission: DailyWoWPacket) -> list[str]:
+    records = lifecycle_records(
+        submission.wow_items_json,
+        investor_id=submission.investor.investor_id,
+        packet_id=submission.packet_id,
+    )
+    if not records:
+        return ["wow lifecycle records are missing"]
+
+    errors: list[str] = []
+    for record in records:
+        wow_id = str(record.get("wow_id") or "")
+        if not wow_id:
+            errors.append(f"wow lifecycle record {record.get('item_number')} missing wow_id")
+            continue
+        if record.get("wow_type") == "status_update":
+            for field in ("target_wow_id", "target_root_wow_id", "update_type", "new_status"):
+                if not record.get(field):
+                    errors.append(f"status_update {wow_id} missing {field}")
+        event_name = STATUS_UPDATE_EVENT if record.get("wow_type") == "status_update" else ITEM_EVENT
+        if not LedgerEvent.objects.filter(
+            entity_type="wow",
+            entity_id=str(submission.id),
+            event_name=event_name,
+            details__wow_id=wow_id,
+        ).exists():
+            errors.append(f"lifecycle LedgerEvent missing for {wow_id}")
     return errors
 
 
@@ -571,6 +605,11 @@ def _render_wow(submission: DailyWoWPacket) -> str:
             "page_type": "wow_submission",
             "agent_spec_version": submission.format_version,
             "agent_facts": _wow_agent_facts(submission, selected_wow, selection_status),
+            "status_update_records": status_update_records(
+                submission.wow_items_json,
+                investor_id=submission.investor.investor_id,
+                packet_id=submission.packet_id,
+            ),
             "crawl_links": [
                 {"rel": "up", "href": f"/investors/{submission.investor.investor_id}/wows/", "label": "investor-wow-archive"},
                 {"rel": "archives", "href": "/investors/", "label": "wow-ledger"},
@@ -731,6 +770,26 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         {"name": "evidence_to_watch_json", "value": json_array([evidence_to_watch])},
         {"name": "all_evidence_to_watch", "value": _join_unique(clean_packet_text(wow.evidence_to_watch_for) for wow in suggested_wows)},
         {"name": "all_evidence_to_watch_json", "value": json_array(clean_packet_text(wow.evidence_to_watch_for) for wow in suggested_wows)},
+        {
+            "name": "lifecycle_events_json",
+            "value": lifecycle_records_json(
+                submission.wow_items_json,
+                investor_id=submission.investor.investor_id,
+                packet_id=submission.packet_id,
+            ),
+        },
+        {
+            "name": "status_updates_json",
+            "value": json.dumps(
+                status_update_records(
+                    submission.wow_items_json,
+                    investor_id=submission.investor.investor_id,
+                    packet_id=submission.packet_id,
+                ),
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        },
         {"name": "raw_email_sha256", "value": submission.raw_email_sha256},
         {"name": "raw_email_github_url", "value": submission.raw_email_github_url},
         {"name": "raw_packet_json", "value": json.dumps(submission.raw_packet_json, ensure_ascii=False, sort_keys=True)},

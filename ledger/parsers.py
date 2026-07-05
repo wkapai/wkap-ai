@@ -219,6 +219,7 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
         raise ParseError("Structured WoW Packet requires at least one wow_items entry.")
     if len(wow_items) != 3:
         raise ParseError("Structured WoW Packet must include exactly 3 wow_items entries.")
+    _validate_structured_wow_items(wow_items)
 
     reading_items = _structured_reading_items(packet.get("reading_log") or packet.get("reading_items") or [])
     if len(reading_items) > 10:
@@ -333,6 +334,37 @@ def _structured_reading_items(items) -> list[ParsedReadingLogItem]:
             )
         )
     return parsed
+
+
+def _validate_structured_wow_items(items: list[dict]) -> None:
+    valid_types = {"candidate_wow", "trackable_wow", "scoreable_signal", "thesis_wow", "context_note", "status_update"}
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            raise ParseError(f"Structured WoW item {index} must be an object.")
+        wow_id = str(item.get("wow_id") or "").strip()
+        if not wow_id:
+            raise ParseError(f"Structured WoW item {index} missing wow_id.")
+        wow_type = str(item.get("wow_type") or "").strip() or "candidate_wow"
+        if wow_type not in valid_types:
+            raise ParseError(f"Structured WoW item {wow_id} has invalid wow_type: {wow_type}")
+        if wow_type == "status_update":
+            missing = [
+                field
+                for field in ("target_wow_id", "target_root_wow_id", "update_type")
+                if not str(item.get(field) or "").strip()
+            ]
+            new_status = str(item.get("new_status") or item.get("signal_status") or item.get("trackable_status") or "").strip()
+            if not new_status:
+                missing.append("new_status")
+            if missing:
+                raise ParseError(f"status_update {wow_id} missing required fields: {', '.join(missing)}")
+            continue
+        root_wow_id = str(item.get("root_wow_id") or "").strip()
+        if not root_wow_id:
+            raise ParseError(f"Structured WoW item {wow_id} missing root_wow_id.")
+        parent_wow_id = item.get("parent_wow_id")
+        if parent_wow_id in (None, "") and root_wow_id != wow_id:
+            raise ParseError(f"Structured WoW item {wow_id} root_wow_id must equal wow_id when parent_wow_id is null.")
 
 
 def _structured_wow_items(items: list[dict]) -> list[ParsedAgentSuggestedWoW]:

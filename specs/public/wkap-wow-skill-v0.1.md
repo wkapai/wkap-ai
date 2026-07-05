@@ -305,6 +305,35 @@ One of the 3 daily WoW suggestions may be a `status_update` when today's reading
 
 After public submission, update private lifecycle files to reflect the selected/public packet. Do not mutate old public artifacts.
 
+## Lifecycle Sync Contract
+
+The agent must keep the Private WoW Journal and WKAP Public Ledger in sync.
+
+Every public lifecycle item or status change must reconcile across:
+
+```yaml
+lifecycle_sync_required:
+  backend_ledger: parsed packet plus LedgerEvent lifecycle logs on WKAP
+  private_crm: local Private WoW Journal tracking files
+  public_page: WKAP WoW page human view plus agent-readable facts
+```
+
+Use stable IDs as the reconciliation keys:
+
+```yaml
+sync_keys:
+  - packet_id
+  - author_id
+  - wow_id
+  - root_wow_id
+  - parent_wow_id
+  - target_wow_id
+  - target_root_wow_id
+  - market_date
+```
+
+After a successful public submission, update the local CRM files with the public URL, receipt/public verification status, and any lifecycle transition. A day is not publicly done until it appears on WKAP Ledger.
+
 ## Status Update Preparation
 
 Status changes must be append-only.

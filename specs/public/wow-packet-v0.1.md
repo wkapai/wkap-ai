@@ -353,6 +353,10 @@ required_fields:
 
 Original WoW artifacts remain immutable. Current state is derived from the original WoW plus later update items.
 
+Every public `status_update` must be machine-reconcilable across WKAP backend logs, the public WoW page, and the user's Private WoW Journal.
+
+WKAP stores parsed lifecycle items in packet JSON and writes backend `LedgerEvent` lifecycle logs. Agents should mirror the same transition in local CRM files after public verification.
+
 ## Status Update Authority
 
 In v0.1, a `status_update` is valid only if its `author_id` matches the target WoW author_id.

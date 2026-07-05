@@ -21,6 +21,8 @@ Root WoWs use `parent_wow_id: null` and `root_wow_id: wow_id`.
 
 Status updates are append-only maintenance events. They use `target_wow_id` and `target_root_wow_id` and are not lineage nodes.
 
+Every public lifecycle item or status update must reconcile across WKAP backend `LedgerEvent` lifecycle logs, the public WoW page/agent facts, and the local Private WoW Journal CRM files.
+
 Private lineage trains the agent. Public lineage proves timing.
 
 Daily workout rule:

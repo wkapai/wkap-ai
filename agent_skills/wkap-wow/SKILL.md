@@ -68,6 +68,18 @@ Use the tracking review to decide whether each daily option is a new `candidate_
 
 After public submission, update the private tracking files. Never mutate old public artifacts.
 
+## Lifecycle Sync Contract
+
+Keep the agent CRM and WKAP Public Ledger synchronized. Every public lifecycle item or status change must reconcile across:
+
+- backend WKAP parse data plus `LedgerEvent` lifecycle logs
+- local Private WoW Journal tracking files
+- public WKAP WoW page and agent-readable facts
+
+Use stable IDs as the sync keys: `packet_id`, `author_id`, `wow_id`, `root_wow_id`, `parent_wow_id`, `target_wow_id`, `target_root_wow_id`, and `market_date`.
+
+After public submission, update the local CRM files with the public URL, receipt/public verification status, and any lifecycle transition. A day is not publicly done until it appears on WKAP Ledger.
+
 ## Codex Local Journal Layout
 
 For this repo, create/use:

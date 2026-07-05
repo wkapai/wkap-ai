@@ -9,6 +9,7 @@ from core.events import log_event
 from ingestion.models import RawEmail
 from ingestion.services import ensure_radar_authorized
 from ledger.investor_id import find_or_create_investor, set_investor_display_name_from_subject
+from ledger.lifecycle_events import ensure_wow_lifecycle_events
 from ledger.models import AgentSuggestedWoW, DailyWoWPacket, LedgerEvent, RadarIssue, ReadingLogItem
 from ledger.parsers import ParseError, parse_radar, parse_wow
 
@@ -140,6 +141,7 @@ def create_wow_submission(raw_email: RawEmail, *, run_id: uuid.UUID) -> DailyWoW
             investor=investor,
             artifact=packet,
         )
+        ensure_wow_lifecycle_events(packet, run_id=run_id)
         if not used_setup_format:
             log_event(
                 "wow_format_repaired",

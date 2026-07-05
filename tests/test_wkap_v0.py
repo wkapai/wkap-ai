@@ -224,6 +224,107 @@ packet:
 ```
 """
 
+    def structured_status_update_packet_body(self):
+        return """# WKAP Daily WoW Packet
+
+```yaml
+packet:
+  packet_id: WKAP-w0202-2026-07-01
+  author_id: w0202
+  market_date: 2026-07-01
+  created_at: 2026-07-01T21:00:00Z
+  packet_spec_version: v0.1
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
+  skill_version: v0.1
+  skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
+  human_view:
+    title: AI power bottleneck lifecycle update
+    summary: New utility evidence promotes yesterday's AI power bottleneck from trackable to scoreable.
+  agent_facts:
+    packet_id: WKAP-w0202-2026-07-01
+    author_id: w0202
+    packet_spec_version: v0.1
+  reading_log:
+    - item_number: 1
+      source_title: Utility interconnection queue update
+      source_url: https://example.com/utility-queue
+      source_type: filing
+      published_time: 2026-07-01T13:00:00Z
+      tickers:
+        - NVDA
+        - NEE
+      themes:
+        - AI data centers
+        - power bottlenecks
+      reading_origin: agent_suggested
+      agent_summary: Interconnection queue disclosures made the AI power bottleneck more testable.
+  wow_items:
+    - wow_id: WOW-w0202-2026-07-01-001
+      wow_type: status_update
+      author_id: w0202
+      target_wow_id: WOW-w0202-2026-06-29-001
+      target_root_wow_id: WOW-w0202-2026-06-29-001
+      update_type: promotion
+      previous_status: active_trackable
+      new_status: pending_scoreable
+      update_summary: Utility queue evidence makes the prior AI power bottleneck WoW scoreable.
+      evidence_summary: A named utility backlog item can now be checked against future earnings commentary.
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      lineage_node: false
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: status_update
+        lineage_node: false
+        target_wow_id: WOW-w0202-2026-06-29-001
+        target_root_wow_id: WOW-w0202-2026-06-29-001
+        update_type: promotion
+        previous_status: active_trackable
+        new_status: pending_scoreable
+    - wow_id: WOW-w0202-2026-07-01-002
+      wow_type: scoreable_signal
+      scoreable: true
+      accuracy_endpoint_eligible: true
+      parent_wow_id: WOW-w0202-2026-06-29-001
+      root_wow_id: WOW-w0202-2026-06-29-001
+      claim: A hyperscaler will cite power access as an AI deployment constraint by 2026-09-30.
+      invalidate_test: No hyperscaler cites power access as an AI deployment constraint by resolve_by.
+      resolve_by: 2026-09-30
+      resolution_source: hyperscaler earnings transcripts
+      signal_status: pending
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: scoreable_signal
+        scoreable: true
+        accuracy_endpoint_eligible: true
+    - wow_id: WOW-w0202-2026-07-01-003
+      wow_type: context_note
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-2026-07-01-003
+      observation: Power names may become part of the AI infrastructure basket.
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: context_note
+        scoreable: false
+        accuracy_endpoint_eligible: false
+  selection:
+    selected_wow_id: WOW-w0202-2026-07-01-001
+    reason_for_selection: The promotion captures the day's most important lifecycle change.
+    reason_for_pass:
+    closest_rejected_idea:
+    missing_evidence:
+  validation_notes:
+    schema_valid: true
+    missing_fields: []
+    warnings: []
+```
+"""
+
     def cloudflare_payload(self, *, sender="investor@example.com", subject="Daily WoW Packet - 2026-06-29 - Cloud Agent", body=None):
         body = body or self.wow_packet_body()
         raw_mime = (
@@ -550,7 +651,9 @@ packet:
         self.assertEqual(packet.wow_items_json[1]["wow_type"], "scoreable_signal")
 
         response = self.client.get("/investors/w0202/wows/wow-w0202-2026-06-29.html")
-        self.assertContains(response, "Protocol WoW Items")
+        self.assertNotContains(response, "Packet Summary")
+        self.assertNotContains(response, "Protocol WoW Items")
+        self.assertContains(response, "Agent Suggested WoW Signals")
         self.assertContains(response, "scoreable_signal")
         self.assertContains(response, "trackable_wow")
         self.assertContains(response, "candidate_wow")
@@ -1215,6 +1318,11 @@ packet:
         self.assertIn("WKAP receipt email", body)
         self.assertIn("WKAP public site / public ledger", body)
         self.assertIn("If no receipt exists but the packet is published on WKAP", body)
+        self.assertIn("Lifecycle Sync Contract", body)
+        self.assertIn("backend_ledger", body)
+        self.assertIn("private_crm", body)
+        self.assertIn("public_page", body)
+        self.assertIn("A day is not publicly done until it appears on WKAP Ledger", body)
 
     def test_codex_wkap_wow_skill_uses_low_friction_defaults(self):
         response = self.client.get("/skills/wkap-wow-codex/SKILL.md")
@@ -1237,6 +1345,10 @@ packet:
         self.assertIn("Selection/pass plus reason is approval", body)
         self.assertIn("Before suggesting the 3 WoWs, inspect", body)
         self.assertIn("Ask the user only for information that is required and cannot be inferred or safely defaulted", body)
+        self.assertIn("Lifecycle Sync Contract", body)
+        self.assertIn("backend WKAP parse data plus `LedgerEvent` lifecycle logs", body)
+        self.assertIn("local Private WoW Journal tracking files", body)
+        self.assertIn("public WKAP WoW page and agent-readable facts", body)
 
     def test_pages_expose_agent_search_metadata(self):
         run_id = "00000000-0000-0000-0000-000000000009"
@@ -1284,7 +1396,7 @@ packet:
         response = self.client.get("/investors/w0202/wows/wow-w0202-2026-06-29.html")
 
         self.assertContains(response, 'data-artifact-type="wow"')
-        self.assertContains(response, 'class="summary-strip"')
+        self.assertContains(response, 'class="summary-strip wow-summary-strip"')
         self.assertContains(response, "Agent-readable facts")
         self.assertContains(response, "private_email_published", count=0)
         self.assertContains(response, "investor_id")
@@ -1300,11 +1412,14 @@ packet:
         self.assertContains(response, 'data-field="received_at_et"')
         self.assertContains(response, "2026-07-03 09:14 ET")
         self.assertNotContains(response, "2026-07-03 13:14 ET")
-        summary_start = response.content.decode().index('class="summary-strip"')
+        summary_start = response.content.decode().index('class="summary-strip wow-summary-strip"')
         summary_end = response.content.decode().index("</dl>", summary_start)
         summary_html = response.content.decode()[summary_start:summary_end]
         self.assertNotIn("Raw email SHA256", summary_html)
         self.assertNotIn("Canonical URL", summary_html)
+        self.assertNotIn("Packet ID", summary_html)
+        self.assertNotIn("Selected WoW", summary_html)
+        self.assertNotIn("WoW Items", summary_html)
         self.assertContains(response, "subject_line_display_name")
         self.assertContains(response, "WOW-w0202-2026-06-29-001")
         self.assertContains(response, "packet_selected_wow_id")
@@ -1324,6 +1439,87 @@ packet:
         self.assertContains(response, "selected_theme")
         self.assertContains(response, "source_urls")
         self.assertNotContains(response, "private-wow@example.com")
+
+    def test_wow_lifecycle_status_updates_are_logged_validated_and_displayed(self):
+        run_id = "00000000-0000-0000-0000-000000000099"
+        raw = self.raw_email(
+            sender="lifecycle-wow@example.com",
+            subject="Daily WoW Packet - 2026-07-01 - Lifecycle Agent",
+            body=self.structured_status_update_packet_body(),
+        )
+
+        submission = create_wow_submission(raw, run_id=run_id)
+
+        item_events = LedgerEvent.objects.filter(
+            entity_type="wow",
+            entity_id=str(submission.id),
+            event_name="wow_lifecycle_item_logged",
+        )
+        status_events = LedgerEvent.objects.filter(
+            entity_type="wow",
+            entity_id=str(submission.id),
+            event_name="wow_lifecycle_status_update_logged",
+        )
+        self.assertEqual(item_events.count(), 2)
+        self.assertEqual(status_events.count(), 1)
+        status_details = status_events.get().details
+        self.assertEqual(status_details["wow_id"], "WOW-w0202-2026-07-01-001")
+        self.assertEqual(status_details["target_wow_id"], "WOW-w0202-2026-06-29-001")
+        self.assertEqual(status_details["target_root_wow_id"], "WOW-w0202-2026-06-29-001")
+        self.assertEqual(status_details["update_type"], "promotion")
+        self.assertEqual(status_details["previous_status"], "active_trackable")
+        self.assertEqual(status_details["new_status"], "pending_scoreable")
+
+        submission.github_file_url = "https://github.com/wkapai/wkap-ledger/blob/main/investors/w0202/wows/wow-w0202-2026-07-01.html"
+        submission.github_commit_sha = "a" * 40
+        submission.manifest_url = "https://github.com/wkapai/wkap-ledger/blob/main/manifests/wow-1.json"
+        submission.ots_status = "queued"
+        submission.raw_email_github_url = "https://github.com/wkapai/wkap-ledger/blob/main/raw-emails/wow-packets/wow-packet-w0202-2026-07-01.txt"
+        submission.raw_email_commit_sha = "a" * 40
+        submission.save()
+        generate_wow_html(submission, run_id=run_id)
+        self.assertEqual(validate_ledger("wow", submission.id), [])
+
+        status_events.delete()
+        self.assertIn("lifecycle LedgerEvent missing for WOW-w0202-2026-07-01-001", validate_ledger("wow", submission.id))
+
+        # Restore the evidence event so page checks below represent the healthy path.
+        create_wow_submission(raw, run_id=run_id)
+        submission.refresh_from_db()
+        submission.canonical_url = "https://wkap.ai/investors/w0202/wows/wow-w0202-2026-07-01.html"
+        submission.content_sha256 = "d" * 64
+        submission.save()
+
+        response = self.client.get("/investors/w0202/wows/wow-w0202-2026-07-01.html")
+        self.assertContains(response, "Lifecycle Updates")
+        self.assertContains(response, 'data-agent-lifecycle="status_updates"')
+        self.assertContains(response, 'data-target-wow-id="WOW-w0202-2026-06-29-001"')
+        self.assertContains(response, 'data-update-type="promotion"')
+        self.assertContains(response, "active_trackable")
+        self.assertContains(response, "pending_scoreable")
+        self.assertContains(response, "lifecycle_events_json")
+        self.assertContains(response, "status_updates_json")
+        self.assertContains(response, "target_root_wow_id")
+        self.assertContains(response, "WOW-w0202-2026-06-29-001")
+        self.assertNotContains(response, "Packet Summary")
+        self.assertNotContains(response, "Protocol WoW Items")
+
+    def test_malformed_status_update_is_rejected_before_publish(self):
+        body = self.structured_status_update_packet_body().replace(
+            "      target_root_wow_id: WOW-w0202-2026-06-29-001\n",
+            "",
+            1,
+        )
+        raw = self.raw_email(
+            sender="bad-lifecycle@example.com",
+            subject="Daily WoW Packet - 2026-07-01 - Bad Lifecycle Agent",
+            body=body,
+        )
+
+        with self.assertRaises(ParseError) as exc:
+            parse_wow(raw)
+
+        self.assertIn("status_update WOW-w0202-2026-07-01-001 missing required fields: target_root_wow_id", str(exc.exception))
 
     def test_robots_and_sitemap_are_agent_friendly(self):
         run_id = "00000000-0000-0000-0000-000000000011"
