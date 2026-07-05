@@ -1042,6 +1042,8 @@ packet:
         self.assertContains(setup_response, "Install or load the WKAP WoW Skill as a durable skill/workflow")
         self.assertContains(setup_response, "Use this universal skill as the source of truth")
         self.assertContains(setup_response, "If you are Codex, install or load this Codex-native skill")
+        self.assertContains(setup_response, "verify the install by checking for a local wkap-wow/SKILL.md file")
+        self.assertContains(setup_response, "Tell me whether the install is verified")
         self.assertNotContains(setup_response, "Read and follow:")
         self.assertContains(setup_response, "adapt the universal WKAP WoW Skill to your native format")
         self.assertContains(setup_response, "Store my private WoW Journal in agent memory or ask me for a local file path")
