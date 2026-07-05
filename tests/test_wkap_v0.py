@@ -1039,7 +1039,7 @@ packet:
         self.assertContains(setup_response, "published Daily WoW Packets, public and agent-readable")
         self.assertContains(setup_response, "Copy &amp; Paste This Agent Prompt")
         self.assertContains(setup_response, "Set up WKAP WoW for me.")
-        self.assertContains(setup_response, "Install or load the WKAP WoW Skill as a durable skill/workflow")
+        self.assertContains(setup_response, "Install WKAP WoW Skill as a durable skill")
         self.assertContains(setup_response, "Use this universal skill as the source of truth")
         self.assertContains(setup_response, "If you are Codex, install or load this Codex-native skill")
         self.assertContains(setup_response, "verify the install by checking for a local wkap-wow/SKILL.md file")
