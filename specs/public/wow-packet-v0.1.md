@@ -61,7 +61,14 @@ packet:
     thesis_count: integer
     candidate_count: integer
     status_update_count: integer
+  reading_log: list
   wow_items: list
+  selection:
+    selected_wow_id: string | none
+    reason_for_selection: string | null
+    reason_for_pass: string | null
+    closest_rejected_idea: string | null
+    missing_evidence: string | null
   validation_notes:
     schema_valid: boolean
     missing_fields: list
@@ -69,6 +76,53 @@ packet:
 ```
 
 Persistent identity is required. No persistent identity, no durable calibration record.
+
+## Daily Workout Contract
+
+A Daily WoW Packet represents one market-day workout.
+
+The packet must include:
+
+```yaml
+daily_workout_contract:
+  reading_log_max_items: 10
+  suggested_wow_count: 3
+  user_decision:
+    - select_1
+    - select_2
+    - select_3
+    - pass
+  selection_requires:
+    - selected_wow_id
+    - reason_for_selection
+  pass_requires:
+    - selected_wow_id: none
+    - reason_for_pass
+    - closest_rejected_idea
+    - missing_evidence
+```
+
+The agent prepares the options. The user performs the judgment by selecting one of the 3 WoW signals or passing. User selection/pass plus the required reason is approval to submit the packet to WKAP Ledger.
+
+If the user does not provide a choice or required reason, the packet is incomplete for public submission. Save it privately as no-reply or incomplete, and ask only for the missing required field.
+
+## Agent Tracking Workflow
+
+Before finalizing the 3 daily WoW signals, the agent should inspect private journal state:
+
+```yaml
+tracking_inputs:
+  - active-trackables.md
+  - pending-scoreables.md
+  - thesis-map.md
+  - receipts.md
+  - public-verification.md
+  - prior daily packets
+```
+
+The 3 suggested WoW signals may include new observations, trackables, scoreable signals, thesis children, context notes, or append-only status updates on prior WoWs.
+
+After public submission, the agent should update private lifecycle state. Public artifacts remain immutable.
 
 ## Valid WoW Types
 
@@ -380,13 +434,29 @@ Agents should reconcile public status using both WKAP receipt email and WKAP pub
 packet:
   packet_id: string
   author_id: string
+  market_date: ISO date
   created_at: ISO timestamp
+  reading_log:
+    - item_number: integer
+      source_title: string
+      source_url: string | null
+      source_type: string
+      tickers: list
+      themes: list
+      reading_origin: user_browsed | agent_suggested
+      agent_summary: string
   wow_items:
     - wow_id: string
       wow_type: string
       scoreable: boolean
       source_refs: list
       agent_facts: object
+  selection:
+    selected_wow_id: string | none
+    reason_for_selection: string | null
+    reason_for_pass: string | null
+    closest_rejected_idea: string | null
+    missing_evidence: string | null
 ```
 
 Private journal state fields do not need to be included in public packets unless explicitly submitted as part of a public artifact.
@@ -441,6 +511,9 @@ v0.1 - Initial public draft
 - Added agent facts requirements.
 - Added future-proofing note for version-aware flexible storage.
 - Excluded fake hash fields until real artifact hashing is implemented.
+- Added daily workout contract: up to 10 reading items, exactly 3 WoW signals, user select 1-3 or pass.
+- Added selection/pass plus reason as the public submission approval trigger.
+- Added agent tracking workflow before suggestions and private lifecycle updates after submission.
 
 ## Related Resources
 

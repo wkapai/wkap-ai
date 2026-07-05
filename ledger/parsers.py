@@ -133,16 +133,17 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
             "Ask the agent to pick the top items from the full day history."
         )
     suggested_wows = _parse_suggested_wows(suggested_section)
-    if not suggested_wows:
-        raise ParseError("Daily WoW Packet must include at least one suggested WoW.")
+    required_wow_count = int(spec["schema_data"].get("suggested_wow_rules", {}).get("required_count", 3))
+    if len(suggested_wows) != required_wow_count:
+        raise ParseError(f"Daily WoW Packet must include exactly {required_wow_count} suggested WoW signals.")
 
     selection_fields = _fields(selection_section)
     selected_wow_id = local_wow_id(_first_field(selection_fields, "selected_wow_id", "selected_wow", "selected").strip())
     if not selected_wow_id:
         raise ParseError("selected_wow_id is required. Use a suggested WoW ID or none.")
     pass_fields = {
+        "reason_for_pass": _first_field(selection_fields, "reason_for_pass", "why_pass").strip(),
         "closest_rejected_idea": selection_fields.get("closest_rejected_idea", "").strip(),
-        "why_pass": selection_fields.get("why_pass", "").strip(),
         "missing_evidence": selection_fields.get("missing_evidence", "").strip(),
     }
     if selected_wow_id.lower() == "none":
@@ -185,7 +186,7 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
         selected_wow_id=selected_wow_id,
         reason_for_selection=_first_field(selection_fields, "reason_for_selection", "user_note", "note").strip(),
         closest_rejected_idea=pass_fields["closest_rejected_idea"],
-        why_pass=pass_fields["why_pass"],
+        why_pass=pass_fields["reason_for_pass"],
         missing_evidence=pass_fields["missing_evidence"],
         submitted_at=raw_email.received_at or timezone.now(),
     )
@@ -216,20 +217,53 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
     wow_items = packet.get("wow_items") or []
     if not isinstance(wow_items, list) or not wow_items:
         raise ParseError("Structured WoW Packet requires at least one wow_items entry.")
+    if len(wow_items) != 3:
+        raise ParseError("Structured WoW Packet must include exactly 3 wow_items entries.")
 
     reading_items = _structured_reading_items(packet.get("reading_log") or packet.get("reading_items") or [])
+    if len(reading_items) > 10:
+        raise ParseError(
+            "Structured WoW Packet Reading Log can include at most 10 items. "
+            "Ask the agent to pick the top items from the full day history."
+        )
     suggested_wows = _structured_wow_items(wow_items)
     selection = packet.get("selection") if isinstance(packet.get("selection"), dict) else {}
     selected_wow_id = local_wow_id(str(selection.get("selected_wow_id") or packet.get("selected_wow_id") or "none").strip())
     reason_for_selection = str(selection.get("reason_for_selection") or packet.get("reason_for_selection") or "").strip()
     closest_rejected_idea = str(selection.get("closest_rejected_idea") or "").strip()
-    why_pass = str(selection.get("why_pass") or "").strip()
+    why_pass = str(selection.get("reason_for_pass") or selection.get("why_pass") or "").strip()
     missing_evidence = str(selection.get("missing_evidence") or "").strip()
 
     if selected_wow_id.lower() != "none":
         known_ids = {wow.wow_id for wow in suggested_wows}
         if selected_wow_id not in known_ids:
             raise ParseError(f"selected_wow_id does not match a structured WoW item: {selected_wow_id}")
+        used_pass_fields = [
+            name
+            for name, value in {
+                "reason_for_pass": why_pass,
+                "closest_rejected_idea": closest_rejected_idea,
+                "missing_evidence": missing_evidence,
+            }.items()
+            if value
+        ]
+        if used_pass_fields:
+            raise ParseError(
+                "Pass-only fields must be blank when selected_wow_id is not none: "
+                + ", ".join(used_pass_fields)
+            )
+    else:
+        missing_pass_fields = [
+            name
+            for name, value in {
+                "reason_for_pass": why_pass,
+                "closest_rejected_idea": closest_rejected_idea,
+                "missing_evidence": missing_evidence,
+            }.items()
+            if not value
+        ]
+        if missing_pass_fields:
+            raise ParseError(f"Pass selection missing required fields: {', '.join(missing_pass_fields)}")
 
     human_view = packet.get("human_view") if isinstance(packet.get("human_view"), dict) else {}
     agent_facts = packet.get("agent_facts") if isinstance(packet.get("agent_facts"), dict) else {}

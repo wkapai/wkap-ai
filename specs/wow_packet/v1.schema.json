@@ -19,6 +19,10 @@
     "max_items": 10,
     "selection_rule": "The agent must review the user's full market-reading day and include only the top 10 items most worth preserving for the investor log."
   },
+  "suggested_wow_rules": {
+    "required_count": 3,
+    "selection_rule": "The agent must suggest exactly 3 WoW signals for the daily user choice."
+  },
   "source_type_values": [
     "article",
     "filing",
@@ -43,19 +47,23 @@
   "selection_fields": [
     "selected_wow_id",
     "reason_for_selection",
+    "reason_for_pass",
     "closest_rejected_idea",
-    "why_pass",
     "missing_evidence"
   ],
   "selection_rules": {
     "pass_value": "none",
     "pass_only_fields": [
+      "reason_for_pass",
       "closest_rejected_idea",
-      "why_pass",
       "missing_evidence"
     ],
+    "legacy_aliases": {
+      "why_pass": "reason_for_pass"
+    },
     "selected_wow_rule": "When selected_wow_id is a suggested WoW ID, pass-only fields must be absent or blank.",
-    "pass_rule": "When selected_wow_id is none, pass-only fields are required."
+    "pass_rule": "When selected_wow_id is none, reason_for_pass, closest_rejected_idea, and missing_evidence are required.",
+    "approval_rule": "User selection/pass plus required reason is approval to submit the packet to WKAP Ledger."
   },
   "public_id_rules": {
     "packet_wow_id": "Email packet IDs are local to the packet, for example WOW-2026-07-03-001.",
@@ -65,7 +73,7 @@
   "hash_contract": {
     "content_sha256_field": "Every public artifact exposes content_sha256 plus content_sha256_covers.",
     "radar_content_sha256_covers": "sha256 over UTF-8 text: radar\\n{market_date}\\n{title}\\n{body_text}. It does not cover rendered HTML, proof panels, manifests, or OpenTimestamp status.",
-    "wow_content_sha256_covers": "sha256 over UTF-8 text: wow_packet\\n{format_version}\\n{market_date}\\n{investor_id}\\n{selected_wow_id}\\n{reason_for_selection}\\n{closest_rejected_idea}\\n{why_pass}\\n{missing_evidence}\\nreading_items(item_number,source_title,source_url,reading_origin,agent_summary)\\nsuggested_wows(wow_id,ticker_or_theme,whats_worth_watching,why_now,evidence_to_watch_for). It does not cover rendered HTML, proof panels, manifests, raw email text, or OpenTimestamp status."
+    "wow_content_sha256_covers": "sha256 over UTF-8 text: wow_packet\\n{format_version}\\n{market_date}\\n{investor_id}\\n{selected_wow_id}\\n{reason_for_selection}\\n{reason_for_pass}\\n{closest_rejected_idea}\\n{missing_evidence}\\nreading_items(item_number,source_title,source_url,reading_origin,agent_summary)\\nsuggested_wows(wow_id,ticker_or_theme,whats_worth_watching,why_now,evidence_to_watch_for). It does not cover rendered HTML, proof panels, manifests, raw email text, or OpenTimestamp status."
   },
   "agent_crawl_contract": {
     "rendered_html_version": "agent_wow_html_v1",

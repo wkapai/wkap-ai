@@ -214,8 +214,8 @@ packet:
   selection:
     selected_wow_id: WOW-w0202-2026-06-29-001
     reason_for_selection: Best daily watch item with clear follow-up evidence.
+    reason_for_pass:
     closest_rejected_idea:
-    why_pass:
     missing_evidence:
   validation_notes:
     schema_valid: true
@@ -610,6 +610,28 @@ packet:
         self.assertEqual(parsed.closest_rejected_idea, "Robotics suppliers may show order acceleration.")
         self.assertEqual(parsed.why_pass, "The signal was interesting but not concrete enough today.")
         self.assertEqual(parsed.missing_evidence, "Confirmed backlog growth or named customer commentary.")
+
+    def test_wow_packet_parser_accepts_reason_for_pass_field(self):
+        body = self.wow_packet_body(selected="none").replace(
+            "why_pass: The signal was interesting but not concrete enough today.",
+            "reason_for_pass: The signal was interesting but not concrete enough today.",
+        )
+        raw = self.raw_email(subject="Daily WoW Packet - 2026-06-29 - Test Agent", body=body)
+
+        parsed = parse_wow(raw)
+
+        self.assertEqual(parsed.selected_wow_id, "none")
+        self.assertEqual(parsed.why_pass, "The signal was interesting but not concrete enough today.")
+
+    def test_wow_packet_parser_requires_exactly_three_suggested_wows(self):
+        body = (
+            self.wow_packet_body().split("### Suggested WoW 3")[0]
+            + "## 3. User Selection / Pass\nselected_wow_id: WOW-2026-06-29-001\nreason_for_selection: Focus."
+        )
+        raw = self.raw_email(subject="Daily WoW Packet - 2026-06-29 - Test Agent", body=body)
+
+        with self.assertRaisesMessage(ParseError, "exactly 3 suggested WoW signals"):
+            parse_wow(raw)
 
     def test_malformed_wow_is_saved_as_needs_format_fix(self):
         run_id = "00000000-0000-0000-0000-000000000026"
@@ -1030,7 +1052,7 @@ packet:
         self.assertContains(setup_response, "Start Daily WoW Training")
         self.assertContains(setup_response, "Set up the feedback loop for you and your agent")
         self.assertContains(setup_response, "WKAP turns daily investment research into a repeatable WoW routine")
-        self.assertContains(setup_response, "only publishes to the WKAP Ledger after approval")
+        self.assertContains(setup_response, "asks you to select one of three WoW signals or pass")
         self.assertContains(setup_response, "Daily WoW Packet")
         self.assertContains(setup_response, "ledger@wkap.ai")
         self.assertContains(setup_response, "Private WoW Loop")
@@ -1054,8 +1076,10 @@ packet:
         self.assertContains(setup_response, "Based on my behavior pattern, infer when I usually finish most of my daily market investment research")
         self.assertContains(setup_response, "set the Daily WoW Packet send time after that")
         self.assertContains(setup_response, "If you cannot infer it, ask me")
-        self.assertContains(setup_response, "Once per US market day, prepare one Daily WoW Packet")
-        self.assertContains(setup_response, "only submit to WKAP Ledger after I approve")
+        self.assertContains(setup_response, "Once per US market day, suggest exactly 3 WoW signals")
+        self.assertContains(setup_response, "ask for my reason_for_selection")
+        self.assertContains(setup_response, "ask for reason_for_pass")
+        self.assertContains(setup_response, "Do not ask for a second approval")
         self.assertNotContains(setup_response, "Schedule it once per market day")
         self.assertContains(setup_response, "/skills/wkap-wow-codex/SKILL.md")
         self.assertNotContains(setup_response, "Fallback Agent Setup Prompt")
@@ -1072,6 +1096,8 @@ packet:
         self.assertContains(setup_response, "wkap_wow_codex_skill_url")
         self.assertContains(setup_response, "private_journal_required")
         self.assertContains(setup_response, "public_submission_requires_user_approval")
+        self.assertContains(setup_response, "user_decision_is_submission_approval")
+        self.assertContains(setup_response, "required_wow_options")
         self.assertContains(setup_response, "current_submission_format")
         self.assertContains(setup_response, "protocol_reference_version")
         self.assertNotContains(setup_response, "Before preparing any Daily WoW Packet, read:")
@@ -1134,6 +1160,11 @@ packet:
         self.assertIn("Future packet formats will change", body)
         self.assertIn("version-aware", body)
         self.assertIn("https://wkap.ai/skills/wkap-wow-skill-latest.md", body)
+        self.assertIn("reading_log_max_items: 10", body)
+        self.assertIn("suggested_wow_count: 3", body)
+        self.assertIn("reason_for_pass", body)
+        self.assertIn("User selection/pass plus the required reason is approval to submit", body)
+        self.assertIn("tracking_inputs", body)
 
     def test_wkap_wow_skill_markdown_contains_private_journal_contract(self):
         response = self.client.get("/skills/wkap-wow-skill-v0.1.md")
@@ -1156,10 +1187,13 @@ packet:
         self.assertIn("weekly_review_requires_explicit_user_request: true", body)
         self.assertIn("The default WKAP WoW run is one Daily WoW Packet for the current US market day", body)
         self.assertIn("Do not summarize the user's past 7 days", body)
-        self.assertIn("Prepare a full v0.1 Daily WoW Packet with reading_log, wow_items, wow_type fields, selection, agent_facts, and validation_notes", body)
-        self.assertIn("Do not decide to keep the packet private on the user's behalf", body)
+        self.assertIn("Suggest exactly 3 WoW signals for the user to choose from", body)
+        self.assertIn("reason_for_pass", body)
+        self.assertIn("The user selection/pass plus required reason is submission approval", body)
+        self.assertIn("Do not ask for a second approval", body)
+        self.assertIn("The agent must not decide that a completed daily choice should stay private", body)
         self.assertIn('A prose list of "top private WoWs" is not a valid WKAP WoW output by itself', body)
-        self.assertIn("approve for WKAP Ledger submission", body)
+        self.assertIn("select WoW 1", body)
         self.assertIn("Do not block private setup on WKAP `author_id`", body)
         self.assertIn("Default approval flow is assumed", body)
         self.assertIn("The Private WoW Journal must be stored in durable user-owned storage", body)
@@ -1169,7 +1203,7 @@ packet:
         self.assertIn("tell the user where the Private WoW Journal is stored", body)
         self.assertIn("Every prepared Daily WoW Packet must be saved to the Private WoW Journal", body)
         self.assertIn("Private journal drafts may be saved without approval", body)
-        self.assertIn("Public submission requires user approval", body)
+        self.assertIn("Public submission requires user approval, and the daily user decision is the approval", body)
         self.assertIn("save the prepared packet privately and must not submit publicly", body)
         self.assertIn("private_status: user_no_reply", body)
         self.assertIn("submission_status: not_submitted", body)
@@ -1198,8 +1232,10 @@ packet:
         self.assertIn("Default scope is one Daily WoW Packet for the current US market day", body)
         self.assertIn("Do not produce a past-7-day summary, weekly review, or general private research memo", body)
         self.assertIn("A prose list of top private WoWs is not enough", body)
-        self.assertIn("Do not decide to keep the packet private on the user's behalf", body)
-        self.assertIn("default to preparing the packet, showing it to the user, and waiting for approval", body)
+        self.assertIn("Do not decide to keep a completed daily choice private", body)
+        self.assertIn("Show exactly 3 WoW signal options", body)
+        self.assertIn("Selection/pass plus reason is approval", body)
+        self.assertIn("Before suggesting the 3 WoWs, inspect", body)
         self.assertIn("Ask the user only for information that is required and cannot be inferred or safely defaulted", body)
 
     def test_pages_expose_agent_search_metadata(self):
@@ -1277,9 +1313,10 @@ packet:
         self.assertContains(response, "themes_json")
         self.assertContains(response, "source_urls_json")
         self.assertContains(response, "evidence_to_watch_json")
+        self.assertContains(response, 'data-field="reason_for_pass"')
         self.assertContains(response, 'data-field="closest_rejected_idea"')
         self.assertContains(response, 'data-field="missing_evidence"')
-        self.assertContains(response, "N/A - Not Applicable", count=2)
+        self.assertContains(response, "N/A - Not Applicable", count=3)
         self.assertContains(response, 'data-selection-status="selected"')
         self.assertContains(response, 'data-field="selection_status"')
         self.assertContains(response, 'data-field="source_url"')

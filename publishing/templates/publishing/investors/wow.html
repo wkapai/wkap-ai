@@ -134,8 +134,8 @@
         {% if submission.selected_wow_id == "none" or submission.closest_rejected_idea or submission.why_pass or submission.missing_evidence %}
           <dt>Closest rejected idea</dt>
           <dd data-field="closest_rejected_idea">{{ submission.closest_rejected_idea|default:"none" }}</dd>
-          <dt>Why pass</dt>
-          <dd data-field="why_pass">{{ submission.why_pass|default:"none" }}</dd>
+          <dt>Reason for pass</dt>
+          <dd data-field="reason_for_pass">{{ submission.why_pass|default:"none" }}</dd>
           <dt>Missing evidence</dt>
           <dd data-field="missing_evidence">{{ submission.missing_evidence|default:"none" }}</dd>
         {% endif %}

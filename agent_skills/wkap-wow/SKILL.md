@@ -21,11 +21,13 @@ Use the latest public spec when it conflicts with bundled references.
 3. Save every prepared Daily WoW Packet privately, including no-reply, rejected, pass, draft, and submitted days.
 4. Classify every WoW item with `wow_type`: `candidate_wow`, `trackable_wow`, `scoreable_signal`, `thesis_wow`, `context_note`, or `status_update`.
 5. Track private lifecycle state: candidates, active trackables, pending scoreable signals, thesis children, due reviews, and status updates.
-6. Prepare a full v0.1 Daily WoW Packet with `reading_log`, `wow_items`, `wow_type`, `selection`, `agent_facts`, and `validation_notes`.
-7. Save the full structured packet privately.
-8. Show the packet to the user and ask the user to choose: approve for WKAP Ledger submission, edit, pass, or request more research.
-9. Submit publicly only after approval.
-10. After submission, reconcile both WKAP receipt email and WKAP public site / ledger.
+6. Select up to 10 reading items most worth preserving for the current US market day.
+7. Suggest exactly 3 WoW signals with `wow_type`, source refs, and lineage/status fields where applicable.
+8. Ask the user to choose exactly one: select 1, select 2, select 3, or pass.
+9. Ask for the required reason: `reason_for_selection` when selecting, or `reason_for_pass` when passing.
+10. If the choice or reason is missing, ask only for the missing field.
+11. Once choice plus reason exists, generate the final v0.1 Daily WoW Packet, save it privately, and submit it to WKAP Ledger.
+12. After submission, reconcile both WKAP receipt email and WKAP public site / ledger, then update private lifecycle state.
 
 ## Low-Friction Setup Defaults
 
@@ -37,7 +39,7 @@ When installing this skill or setting up a recurring WKAP task, use defaults and
 - `author_id`: use the known WKAP investor ID if available. If unknown, use a stable local draft identity and do not block setup. Update the mapping after WKAP assigns or confirms a public investor ID.
 - Send time: infer the daily send time from the user's behavior pattern after their usual investment research window. Ask only if it cannot be inferred.
 - Research sources: default to agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and useful agent-found market items.
-- Approval: default to preparing the packet, showing it to the user, and waiting for approval. If the user does not reply, save privately as no-reply and submit nothing publicly.
+- Approval: default to collecting the user's selection/pass plus required reason. That daily choice is submission approval. If the user does not reply, save privately as no-reply and submit nothing publicly.
 
 Ask the user only for information that is required and cannot be inferred or safely defaulted.
 
@@ -47,8 +49,24 @@ Ask the user only for information that is required and cannot be inferred or saf
 - Do not produce a past-7-day summary, weekly review, or general private research memo unless the user explicitly asks for that.
 - Recent history may be used as context, but the output must be today's structured Daily WoW Packet.
 - A prose list of top private WoWs is not enough. Save and show the full v0.1 packet structure.
-- Do not decide to keep the packet private on the user's behalf. Present the packet and ask the user to approve, edit, pass, or request more research.
-- No public submission happens without approval.
+- Do not decide to keep a completed daily choice private on the user's behalf.
+- No public submission happens without selection/pass plus reason or an explicit standing instruction.
+
+## Strict Daily Workout
+
+- Show exactly 3 WoW signal options, numbered 1-3.
+- Require `selected_wow_id` and `reason_for_selection` when the user selects an option.
+- Require `selected_wow_id: none`, `reason_for_pass`, `closest_rejected_idea`, and `missing_evidence` when the user passes.
+- Do not run a default edit/research/approval loop. If the user asks for edits or more research, complete that request, then return to selection/pass plus reason.
+- Selection/pass plus reason is approval to send the Daily WoW Packet to WKAP Ledger.
+
+## Tracking Review
+
+Before suggesting the 3 WoWs, inspect `active-trackables.md`, `pending-scoreables.md`, `thesis-map.md`, `receipts.md`, `public-verification.md`, and prior daily packets.
+
+Use the tracking review to decide whether each daily option is a new `candidate_wow`, `trackable_wow`, `scoreable_signal`, `thesis_wow`, `context_note`, or append-only `status_update`.
+
+After public submission, update the private tracking files. Never mutate old public artifacts.
 
 ## Codex Local Journal Layout
 
@@ -71,6 +89,7 @@ After setup, tell the user the journal path and whether the local files were cre
 ## Private Engine Rules
 
 - Treat the Private WoW Journal as the working memory and training record.
+- Treat WKAP Ledger as the visible workout record. The normal successful daily outcome is public ledger submission.
 - Preserve private lineage, but never count private lineage as public timing proof.
 - Public proof starts at the earliest publicly ledgered ancestor.
 - Prepare `status_update` items for resolution, promotion, killed, stale, voided, invalid_test, or other maintenance events.

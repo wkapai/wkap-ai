@@ -737,6 +737,7 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         {"name": "wow_items_json", "value": json.dumps(submission.wow_items_json, ensure_ascii=False, sort_keys=True)},
         {"name": "disclaimer", "value": WOW_DISCLAIMER},
     ]
+    facts.append({"name": "reason_for_pass", "value": _wow_pass_fact_value(submission, selection_status, submission.why_pass)})
     facts.append({"name": "closest_rejected_idea", "value": _wow_pass_fact_value(submission, selection_status, submission.closest_rejected_idea)})
     facts.append({"name": "missing_evidence", "value": _wow_pass_fact_value(submission, selection_status, submission.missing_evidence)})
     return facts

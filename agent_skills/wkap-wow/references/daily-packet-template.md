@@ -36,8 +36,8 @@ packet:
   selection:
     selected_wow_id: none
     reason_for_selection:
+    reason_for_pass:
     closest_rejected_idea:
-    why_pass:
     missing_evidence:
   validation_notes:
     schema_valid: true
@@ -50,8 +50,11 @@ Rules:
 
 - Keep the fenced YAML syntactically valid.
 - Include every public item under `wow_items`.
+- Include exactly 3 `wow_items` for the daily user choice.
+- Include up to 10 top reading items in `reading_log`.
 - A prose list of top private WoWs is not enough; preserve this full packet structure even when the packet stays private.
 - Default scope is one Daily WoW Packet for the current US market day, not a weekly review.
 - Use `status_update` only for append-only updates to existing WoWs.
+- User selection/pass plus required reason is approval to submit.
 - If `selected_wow_id` is not `none`, leave pass-only fields blank.
-- If `selected_wow_id` is `none`, fill pass-only fields.
+- If `selected_wow_id` is `none`, fill `reason_for_pass`, `closest_rejected_idea`, and `missing_evidence`.

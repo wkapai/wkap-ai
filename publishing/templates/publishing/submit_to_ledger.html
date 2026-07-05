@@ -9,7 +9,7 @@
 
 <article class="setup-page" data-agent-readable="true" data-page-type="investor_log_setup">
   <section class="panel setup-intro">
-    <p>WKAP turns daily investment research into a repeatable WoW routine. Your agent keeps the private loop, asks for your input, and only publishes to the WKAP Ledger after approval.</p>
+    <p>WKAP turns daily investment research into a repeatable WoW routine. Your agent keeps the private loop, asks you to select one of three WoW signals or pass, then publishes the completed Daily WoW Packet to the WKAP Ledger.</p>
     <p>There are two records:</p>
     <ul>
       <li>Private WoW Loop: drafts, no-reply days, skipped ideas, selected WoWs, revisits</li>
@@ -46,7 +46,11 @@ When I do daily investor research in an agent-accessible browser, maintain my pr
 
 Based on my behavior pattern, infer when I usually finish most of my daily market investment research, then set the Daily WoW Packet send time after that. If you cannot infer it, ask me.
 
-Once per US market day, prepare one Daily WoW Packet, ask for my input, and only submit to WKAP Ledger after I approve.</code></pre>
+Once per US market day, suggest exactly 3 WoW signals from my top daily reading items. Ask me to select 1, 2, 3, or pass.
+
+If I select one, ask for my reason_for_selection. If I pass, ask for reason_for_pass, closest_rejected_idea, and missing_evidence.
+
+After I provide selection/pass plus the required reason, generate the final Daily WoW Packet, save it to my Private WoW Journal, and submit it to WKAP Ledger. Do not ask for a second approval.</code></pre>
   </section>
 </article>
 <script>

@@ -232,6 +232,8 @@ def submit_to_ledger(request):
                 {"name": "wkap_wow_codex_skill_url", "value": codex_skill_url},
                 {"name": "private_journal_required", "value": "true"},
                 {"name": "public_submission_requires_user_approval", "value": "true"},
+                {"name": "user_decision_is_submission_approval", "value": "true"},
+                {"name": "required_wow_options", "value": str(spec.get("schema_data", {}).get("suggested_wow_rules", {}).get("required_count", 3))},
                 {"name": "current_submission_format", "value": spec["format_version"]},
                 {"name": "protocol_reference_version", "value": "v0.1"},
                 {"name": "canonical_url", "value": canonical_url},
@@ -251,7 +253,7 @@ def submit_to_ledger(request):
                     {"@type": "HowToStep", "name": "Copy the WKAP WoW setup message"},
                     {"@type": "HowToStep", "name": "Paste it into your agent"},
                     {"@type": "HowToStep", "name": "Let the agent install or adapt the WKAP WoW Skill"},
-                    {"@type": "HowToStep", "name": "Approve before the agent submits a Daily WoW Packet to WKAP Ledger"},
+                    {"@type": "HowToStep", "name": "Select WoW 1, 2, 3, or pass with the required reason"},
                 ],
             },
         ),
@@ -489,6 +491,7 @@ def wow_submission(request, investor_id, market_date):
             ]
             + _optional_facts(
                 [
+                    ("reason_for_pass", _wow_pass_fact_value(submission, submission.why_pass)),
                     ("closest_rejected_idea", _wow_pass_fact_value(submission, submission.closest_rejected_idea)),
                     ("missing_evidence", _wow_pass_fact_value(submission, submission.missing_evidence)),
                 ]
