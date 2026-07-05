@@ -354,19 +354,31 @@ def _validate_structured_wow_items(items: list[dict]) -> None:
         if wow_type == "status_update":
             missing = [
                 field
-                for field in ("target_wow_type", "target_wow_id", "target_root_wow_id", "update_type", "previous_status")
+                for field in (
+                    "target_wow_type",
+                    "target_wow_id",
+                    "target_root_wow_id",
+                    "update_type",
+                    "previous_status",
+                    "update_summary",
+                    "evidence_summary",
+                )
                 if not str(item.get(field) or "").strip()
             ]
             new_status = str(item.get("new_status") or item.get("signal_status") or item.get("trackable_status") or "").strip()
             if not new_status:
                 missing.append("new_status")
+            update_type = str(item.get("update_type") or "").strip()
+            if update_type == "resolution" and new_status in {"resolved_correct", "resolved_incorrect"}:
+                if not str(item.get("resolution_source_used") or "").strip():
+                    missing.append("resolution_source_used")
             if missing:
                 raise ParseError(f"status_update {wow_id} missing required fields: {', '.join(missing)}")
             transition_error = validate_status_transition(
                 target_wow_type=str(item.get("target_wow_type") or "").strip(),
                 previous_status=str(item.get("previous_status") or "").strip(),
                 new_status=new_status,
-                update_type=str(item.get("update_type") or "").strip(),
+                update_type=update_type,
             )
             if transition_error:
                 raise ParseError(f"status_update {wow_id} invalid transition: {transition_error}")

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import base64
+import re
+from html import unescape
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone as datetime_timezone
 from io import StringIO
@@ -369,6 +371,11 @@ packet:
             "thesis_wow": "CME",
             "context_note": "BABA",
         }.get(target_wow_type, "NVDA")
+        follow_up_item = self._lifecycle_follow_up_item(
+            market_date=market_date,
+            target_id=target_id,
+            new_status=new_status,
+        )
         return f"""# WKAP Daily WoW Packet
 
 ```yaml
@@ -412,6 +419,7 @@ packet:
       new_status: {new_status}
       update_summary: {target_wow_type} moved from {previous_status} to {new_status}.
       evidence_summary: Evidence from today's public market source supports the lifecycle update.
+      resolution_source_used: {source_url}
       scoreable: false
       accuracy_endpoint_eligible: false
       lineage_node: false
@@ -426,23 +434,7 @@ packet:
         update_type: {update_type}
         previous_status: {previous_status}
         new_status: {new_status}
-    - wow_id: WOW-w0202-{market_date}-002
-      wow_type: scoreable_signal
-      scoreable: true
-      accuracy_endpoint_eligible: true
-      parent_wow_id: null
-      root_wow_id: WOW-w0202-{market_date}-002
-      claim: At least one public-market source will mention AI power constraints before 2026-09-30.
-      invalidate_test: No qualifying source mentions AI power constraints by resolve_by.
-      resolve_by: 2026-09-30
-      resolution_source: public filings or earnings transcripts
-      signal_status: pending_scoreable
-      source_refs:
-        - Reading Item 1
-      agent_facts:
-        wow_type: scoreable_signal
-        scoreable: true
-        accuracy_endpoint_eligible: true
+{follow_up_item}
     - wow_id: WOW-w0202-{market_date}-003
       wow_type: context_note
       scoreable: false
@@ -459,6 +451,278 @@ packet:
   selection:
     selected_wow_id: {wow_id}
     reason_for_selection: This lifecycle update is the most important CRM maintenance item today.
+    reason_for_pass:
+    closest_rejected_wow:
+    missing_evidence:
+  validation_notes:
+    schema_valid: true
+    missing_fields: []
+    warnings: []
+```
+"""
+
+    def _lifecycle_follow_up_item(self, *, market_date: str, target_id: str, new_status: str) -> str:
+        if new_status == "promoted_trackable":
+            return f"""    - wow_id: WOW-w0202-{market_date}-002
+      wow_type: trackable_wow
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      parent_wow_id: {target_id}
+      root_wow_id: {target_id}
+      claim: The promoted idea now has a concrete evidence watchlist and review cadence.
+      evidence_to_watch:
+        - public company commentary
+        - pricing or demand data
+      review_cadence: weekly
+      next_review_at: 2026-09-01
+      trackable_status: active_trackable
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: trackable_wow
+        scoreable: false
+        accuracy_endpoint_eligible: false"""
+        if new_status == "promoted_scoreable":
+            return f"""    - wow_id: WOW-w0202-{market_date}-002
+      wow_type: scoreable_signal
+      scoreable: true
+      accuracy_endpoint_eligible: true
+      parent_wow_id: {target_id}
+      root_wow_id: {target_id}
+      claim: The promoted idea will produce confirmable public evidence before 2026-09-30.
+      invalidate_test: No qualifying public evidence appears by resolve_by.
+      resolve_by: 2026-09-30
+      resolution_source: public filings or earnings transcripts
+      signal_status: pending_scoreable
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: scoreable_signal
+        scoreable: true
+        accuracy_endpoint_eligible: true"""
+        return f"""    - wow_id: WOW-w0202-{market_date}-002
+      wow_type: scoreable_signal
+      scoreable: true
+      accuracy_endpoint_eligible: true
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-{market_date}-002
+      claim: At least one public-market source will mention AI power constraints before 2026-09-30.
+      invalidate_test: No qualifying source mentions AI power constraints by resolve_by.
+      resolve_by: 2026-09-30
+      resolution_source: public filings or earnings transcripts
+      signal_status: pending_scoreable
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: scoreable_signal
+        scoreable: true
+        accuracy_endpoint_eligible: true"""
+
+    def structured_thesis_context_packet_body(self):
+        return """# WKAP Daily WoW Packet
+
+```yaml
+packet:
+  packet_id: WKAP-w0202-2026-06-30
+  author_id: w0202
+  market_date: 2026-06-30
+  created_at: 2026-06-30T21:00:00Z
+  packet_spec_version: v0.1
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
+  skill_version: v0.1
+  skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
+  human_view:
+    title: Market structure and China AI context
+    summary: Preserve one thesis, one context note, and one candidate from real market reading.
+  agent_facts:
+    packet_id: WKAP-w0202-2026-06-30
+    author_id: w0202
+    packet_spec_version: v0.1
+  reading_log:
+    - item_number: 1
+      source_title: Why established exchanges are harder to displace than the market believes
+      source_url: https://substack.com/home/post/p-204294860
+      source_type: article
+      published_time: 2026-06-30T13:00:00Z
+      tickers:
+        - CME
+        - ICE
+      themes:
+        - market structure
+        - regulated exchanges
+      reading_origin: user_browsed
+      agent_summary: Exchange moats may be institutional and regulatory rather than purely technical.
+    - item_number: 2
+      source_title: China AI deployment discussion
+      source_url: https://mp.weixin.qq.com/s/HdZmqCHfzRBUyFT1QjAlzw
+      source_type: article
+      published_time: 2026-06-30T14:00:00Z
+      tickers:
+        - BABA
+      themes:
+        - China AI
+        - industrial AI
+      reading_origin: agent_suggested
+      agent_summary: China AI may compound through low-cost deployment and manufacturing integration.
+  wow_items:
+    - wow_id: WOW-w0202-2026-06-30-001
+      wow_type: thesis_wow
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-2026-06-30-001
+      thesis_claim: Regulated exchange moats may absorb crypto market-structure innovation instead of being displaced by it.
+      thesis_status: active_thesis
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: thesis_wow
+        scoreable: false
+        accuracy_endpoint_eligible: false
+    - wow_id: WOW-w0202-2026-06-30-002
+      wow_type: context_note
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-2026-06-30-002
+      observation: China AI edge may show up in deployment cost and hardware integration before frontier benchmark leadership.
+      context_status: active_context
+      source_refs:
+        - Reading Item 2
+      agent_facts:
+        wow_type: context_note
+        scoreable: false
+        accuracy_endpoint_eligible: false
+    - wow_id: WOW-w0202-2026-06-30-003
+      wow_type: candidate_wow
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-2026-06-30-003
+      observation: Stablecoin reserve-income sharing may become a repeated fintech valuation debate.
+      why_worth_watching: It links Circle, Coinbase, exchanges, and payment infrastructure into one revenue-architecture question.
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: candidate_wow
+        scoreable: false
+        accuracy_endpoint_eligible: false
+  selection:
+    selected_wow_id: WOW-w0202-2026-06-30-001
+    reason_for_selection: The thesis is a useful root for future exchange and stablecoin market-structure evidence.
+    reason_for_pass:
+    closest_rejected_wow:
+    missing_evidence:
+  validation_notes:
+    schema_valid: true
+    missing_fields: []
+    warnings: []
+```
+"""
+
+    def structured_target_update_packet_body(
+        self,
+        *,
+        market_date: str,
+        target_wow_id: str,
+        target_wow_type: str,
+        previous_status: str,
+        new_status: str,
+        update_type: str,
+        selected_suffix: str = "001",
+    ):
+        source_url = "https://www.reuters.com/technology/"
+        resolution_source = f"      resolution_source_used: {source_url}\n" if new_status in {"resolved_correct", "resolved_incorrect"} else ""
+        return f"""# WKAP Daily WoW Packet
+
+```yaml
+packet:
+  packet_id: WKAP-w0202-{market_date}
+  author_id: w0202
+  market_date: {market_date}
+  created_at: {market_date}T21:00:00Z
+  packet_spec_version: v0.1
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
+  skill_version: v0.1
+  skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
+  human_view:
+    title: Existing WoW Signal Status Update
+    summary: Append-only lifecycle update for an existing public WoW signal.
+  agent_facts:
+    packet_id: WKAP-w0202-{market_date}
+    author_id: w0202
+    packet_spec_version: v0.1
+  reading_log:
+    - item_number: 1
+      source_title: Public investment source updates prior WoW lifecycle
+      source_url: {source_url}
+      source_type: article
+      published_time: {market_date}T13:00:00Z
+      tickers:
+        - NVDA
+        - CRCL
+      themes:
+        - AI infrastructure
+        - market structure
+      reading_origin: agent_suggested
+      agent_summary: The new source changes the public lifecycle state for an existing WoW.
+  wow_items:
+    - wow_id: WOW-w0202-{market_date}-{selected_suffix}
+      wow_type: status_update
+      author_id: w0202
+      target_wow_type: {target_wow_type}
+      target_wow_id: {target_wow_id}
+      target_root_wow_id: {target_wow_id}
+      update_type: {update_type}
+      previous_status: {previous_status}
+      new_status: {new_status}
+      update_summary: {target_wow_id} moved from {previous_status} to {new_status}.
+      evidence_summary: Today's public source provides enough evidence for this append-only CRM status change.
+{resolution_source}      scoreable: false
+      accuracy_endpoint_eligible: false
+      lineage_node: false
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: status_update
+        lineage_node: false
+        target_wow_type: {target_wow_type}
+        target_wow_id: {target_wow_id}
+        target_root_wow_id: {target_wow_id}
+        update_type: {update_type}
+        previous_status: {previous_status}
+        new_status: {new_status}
+    - wow_id: WOW-w0202-{market_date}-002
+      wow_type: context_note
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-{market_date}-002
+      observation: The source is useful context for ongoing investor research but is not selected today.
+      context_status: active_context
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: context_note
+        scoreable: false
+        accuracy_endpoint_eligible: false
+    - wow_id: WOW-w0202-{market_date}-003
+      wow_type: candidate_wow
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-{market_date}-003
+      observation: A related but weaker market observation remains below selection bar.
+      why_worth_watching: It may matter later but has less direct evidence today.
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: candidate_wow
+        scoreable: false
+        accuracy_endpoint_eligible: false
+  selection:
+    selected_wow_id: WOW-w0202-{market_date}-{selected_suffix}
+    reason_for_selection: This existing WoW status change is the most important investor CRM update today.
     reason_for_pass:
     closest_rejected_wow:
     missing_evidence:
@@ -1706,6 +1970,23 @@ packet:
 
         self.assertIn("status_update WOW-w0202-2026-07-01-001 missing required fields: target_root_wow_id", str(exc.exception))
 
+    def test_status_update_requires_evidence_summary_before_publish(self):
+        body = self.structured_status_update_packet_body().replace(
+            "      evidence_summary: A named utility backlog item can now be checked against future earnings commentary.\n",
+            "",
+            1,
+        )
+        raw = self.raw_email(
+            sender="missing-evidence-summary@example.com",
+            subject="Daily WoW Packet - 2026-07-01 - Bad Lifecycle Agent",
+            body=body,
+        )
+
+        with self.assertRaises(ParseError) as exc:
+            parse_wow(raw)
+
+        self.assertIn("status_update WOW-w0202-2026-07-01-001 missing required fields: evidence_summary", str(exc.exception))
+
     def test_invalid_status_transition_is_rejected_before_publish(self):
         body = self.structured_status_update_packet_body().replace(
             "      new_status: promoted_scoreable",
@@ -1745,6 +2026,14 @@ packet:
                         body=body,
                     )
                     packet = create_wow_submission(raw, run_id=f"00000000-0000-0000-0000-{update_index:012d}")
+                    packet._expected_transition = {
+                        "target_wow_type": target_wow_type,
+                        "target_wow_id": f"WOW-w0202-2026-06-29-{update_index:03d}",
+                        "target_root_wow_id": f"WOW-w0202-2026-06-29-{update_index:03d}",
+                        "update_type": self._update_type_for_new_status(new_status),
+                        "previous_status": previous_status,
+                        "new_status": new_status,
+                    }
                     created_packets.append(packet)
                     update_index += 1
 
@@ -1762,15 +2051,11 @@ packet:
         for event in status_events:
             self.assertIn(event.details["new_status"], ALLOWED_STATUS_TRANSITIONS[event.details["target_wow_type"]][event.details["previous_status"]])
 
-        sample = created_packets[0]
-        response = self.client.get(f"/investors/{sample.investor.investor_id}/wows/wow-{sample.investor.investor_id}-{sample.market_date}.html")
-        self.assertContains(response, 'data-agent-wow-type-fields="status_update"')
-        self.assertContains(response, 'data-field="target_wow_type"')
-        self.assertContains(response, 'data-field="previous_status"')
-        self.assertContains(response, 'data-field="new_status"')
-        self.assertContains(response, 'data-field="target_root_wow_id"')
-        self.assertContains(response, 'data-field="lifecycle_events_json"')
-        self.assertContains(response, 'data-field="current_wow_state_json"')
+        for packet in created_packets:
+            expected = packet._expected_transition
+            response = self.client.get(f"/investors/{packet.investor.investor_id}/wows/wow-{packet.investor.investor_id}-{packet.market_date}.html")
+            self.assertEqual(response.status_code, 200)
+            self._assert_outside_agent_can_reconstruct_transition(response, expected)
 
     def _update_type_for_new_status(self, new_status: str) -> str:
         if new_status in {"promoted_trackable", "promoted_scoreable", "pending_scoreable"}:
@@ -1790,6 +2075,187 @@ packet:
         if new_status == "superseded":
             return "context_update"
         return "other"
+
+    def _assert_outside_agent_can_reconstruct_transition(self, response, expected: dict[str, str]) -> None:
+        content = response.content.decode()
+        self.assertContains(response, 'data-agent-wow-type-fields="status_update"')
+        self.assertContains(response, 'data-agent-lifecycle="status_updates"')
+        self.assertContains(response, 'data-field="target_wow_type"')
+        self.assertContains(response, 'data-field="target_wow_id"')
+        self.assertContains(response, 'data-field="target_root_wow_id"')
+        self.assertContains(response, 'data-field="update_type"')
+        self.assertContains(response, 'data-field="previous_status"')
+        self.assertContains(response, 'data-field="new_status"')
+        self.assertContains(response, 'data-field="update_summary"')
+        self.assertContains(response, 'data-field="evidence_summary"')
+        self.assertContains(response, 'data-field="lifecycle_events_json"')
+        self.assertContains(response, 'data-field="current_wow_state_json"')
+        self.assertContains(response, 'data-field="status_updates_json"')
+        for field, value in expected.items():
+            self.assertIn(value, content)
+        self.assertIn(f'data-target-wow-type="{expected["target_wow_type"]}"', content)
+        self.assertIn(f'data-target-wow-id="{expected["target_wow_id"]}"', content)
+        self.assertIn(f'data-target-root-wow-id="{expected["target_root_wow_id"]}"', content)
+        self.assertIn(f'data-update-type="{expected["update_type"]}"', content)
+        self.assertIn(f'data-previous-status="{expected["previous_status"]}"', content)
+        self.assertIn(f'data-new-status="{expected["new_status"]}"', content)
+        self.assertContains(response, 'data-field="resolution_source_used"')
+        if expected["new_status"] == "promoted_scoreable":
+            self.assertContains(response, 'data-agent-wow-type-fields="scoreable_signal"')
+            self.assertIn(f'<dd data-field="parent_wow_id">{expected["target_wow_id"]}</dd>', content)
+            self.assertIn(f'<dd data-field="root_wow_id">{expected["target_root_wow_id"]}</dd>', content)
+            self.assertIn('<dd data-field="signal_status">pending_scoreable</dd>', content)
+        if expected["new_status"] == "promoted_trackable":
+            self.assertContains(response, 'data-agent-wow-type-fields="trackable_wow"')
+            self.assertIn(f'<dd data-field="parent_wow_id">{expected["target_wow_id"]}</dd>', content)
+            self.assertIn(f'<dd data-field="root_wow_id">{expected["target_root_wow_id"]}</dd>', content)
+            self.assertIn('<dd data-field="trackable_status">active_trackable</dd>', content)
+
+    def test_outside_agent_reconstructs_one_investor_wow_lifecycle_from_public_pages(self):
+        sender = "graph-crm-investor@example.com"
+        scenarios = [
+            ("2026-06-29", self.structured_wow_packet_body()),
+            ("2026-06-30", self.structured_thesis_context_packet_body()),
+            (
+                "2026-07-01",
+                self.structured_target_update_packet_body(
+                    market_date="2026-07-01",
+                    target_wow_id="WOW-w0202-2026-06-29-003",
+                    target_wow_type="candidate_wow",
+                    previous_status="active_candidate",
+                    new_status="promoted_trackable",
+                    update_type="promotion",
+                ),
+            ),
+            (
+                "2026-07-02",
+                self.structured_target_update_packet_body(
+                    market_date="2026-07-02",
+                    target_wow_id="WOW-w0202-2026-06-29-001",
+                    target_wow_type="trackable_wow",
+                    previous_status="active_trackable",
+                    new_status="promoted_scoreable",
+                    update_type="promotion",
+                ),
+            ),
+            (
+                "2026-07-03",
+                self.structured_target_update_packet_body(
+                    market_date="2026-07-03",
+                    target_wow_id="WOW-w0202-2026-06-29-002",
+                    target_wow_type="scoreable_signal",
+                    previous_status="pending_scoreable",
+                    new_status="resolved_correct",
+                    update_type="resolution",
+                ),
+            ),
+            (
+                "2026-07-04",
+                self.structured_target_update_packet_body(
+                    market_date="2026-07-04",
+                    target_wow_id="WOW-w0202-2026-06-30-001",
+                    target_wow_type="thesis_wow",
+                    previous_status="active_thesis",
+                    new_status="supported",
+                    update_type="thesis_update",
+                ),
+            ),
+            (
+                "2026-07-05",
+                self.structured_target_update_packet_body(
+                    market_date="2026-07-05",
+                    target_wow_id="WOW-w0202-2026-06-30-002",
+                    target_wow_type="context_note",
+                    previous_status="active_context",
+                    new_status="superseded",
+                    update_type="context_update",
+                ),
+            ),
+        ]
+        packets = []
+        for index, (market_date, body) in enumerate(scenarios, start=1):
+            raw = self.raw_email(
+                sender=sender,
+                subject=f"Daily WoW Packet - {market_date} - Graph CRM Agent",
+                body=body,
+            )
+            packets.append(create_wow_submission(raw, run_id=f"00000000-0000-0000-0000-99{index:010d}"))
+
+        investor_ids = {packet.investor.investor_id for packet in packets}
+        self.assertEqual(investor_ids, {"w0202"})
+
+        reconstructed: dict[str, dict[str, str]] = {}
+        transitions = []
+        for packet in sorted(packets, key=lambda item: item.market_date):
+            response = self.client.get(f"/investors/{packet.investor.investor_id}/wows/wow-{packet.investor.investor_id}-{packet.market_date}.html")
+            self.assertEqual(response.status_code, 200)
+            wow_items = self._agent_fact_json(response, "wow_items_json")
+            status_updates = self._agent_fact_json(response, "status_updates_json")
+
+            for item in wow_items:
+                wow_type = item.get("wow_type")
+                if wow_type == "status_update":
+                    continue
+                wow_id = item["wow_id"]
+                reconstructed[wow_id] = {
+                    "wow_type": wow_type,
+                    "root_wow_id": item.get("root_wow_id") or wow_id,
+                    "current_status": self._initial_status(item),
+                    "last_public_packet": packet.canonical_url,
+                }
+
+            for update in status_updates:
+                target_id = update["target_wow_id"]
+                self.assertIn(target_id, reconstructed, f"outside agent cannot find target {target_id}")
+                self.assertEqual(update["target_wow_type"], reconstructed[target_id]["wow_type"])
+                self.assertEqual(update["target_root_wow_id"], reconstructed[target_id]["root_wow_id"])
+                self.assertEqual(update["previous_status"], reconstructed[target_id]["current_status"])
+                self.assertTrue(update["update_summary"])
+                self.assertTrue(update["evidence_summary"])
+                reconstructed[target_id]["current_status"] = update["new_status"]
+                reconstructed[target_id]["last_public_packet"] = packet.canonical_url
+                transitions.append(update)
+
+        self.assertEqual(reconstructed["WOW-w0202-2026-06-29-003"]["current_status"], "promoted_trackable")
+        self.assertEqual(reconstructed["WOW-w0202-2026-06-29-001"]["current_status"], "promoted_scoreable")
+        self.assertEqual(reconstructed["WOW-w0202-2026-06-29-002"]["current_status"], "resolved_correct")
+        self.assertEqual(reconstructed["WOW-w0202-2026-06-30-001"]["current_status"], "supported")
+        self.assertEqual(reconstructed["WOW-w0202-2026-06-30-002"]["current_status"], "superseded")
+        self.assertEqual(len(transitions), 5)
+
+        lifecycle_events = LedgerEvent.objects.filter(
+            event_name="wow_lifecycle_status_update_logged",
+            entity_type="wow",
+        )
+        self.assertEqual(lifecycle_events.count(), len(transitions))
+        for transition in transitions:
+            self.assertTrue(
+                lifecycle_events.filter(details__wow_id=transition["wow_id"], details__target_wow_id=transition["target_wow_id"]).exists()
+            )
+
+    def _agent_fact_json(self, response, field_name: str):
+        content = response.content.decode()
+        match = re.search(
+            rf'<dd data-field="{re.escape(field_name)}">(.*?)</dd>',
+            content,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(match, f"missing agent fact {field_name}")
+        return json.loads(unescape(match.group(1)))
+
+    def _initial_status(self, item: dict) -> str:
+        wow_type = item.get("wow_type")
+        if wow_type == "candidate_wow":
+            return str(item.get("candidate_status") or "active_candidate")
+        if wow_type == "trackable_wow":
+            return str(item.get("trackable_status") or "active_trackable")
+        if wow_type == "scoreable_signal":
+            return str(item.get("signal_status") or "pending_scoreable")
+        if wow_type == "thesis_wow":
+            return str(item.get("thesis_status") or "active_thesis")
+        if wow_type == "context_note":
+            return str(item.get("context_status") or "active_context")
+        return "unknown"
 
     def test_robots_and_sitemap_are_agent_friendly(self):
         run_id = "00000000-0000-0000-0000-000000000011"

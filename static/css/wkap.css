@@ -686,6 +686,12 @@ p {
   font-size: 13px;
 }
 
+.lifecycle-target-type {
+  color: rgba(10, 13, 18, 0.54);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
 .lifecycle-status {
   color: #4f5a6c;
   font-family: var(--font-mono);

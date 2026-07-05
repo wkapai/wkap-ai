@@ -76,9 +76,10 @@
         <h2>Existing WoW Signal Status Update <span class="section-count">{{ status_update_records|length }}</span></h2>
         <div class="lifecycle-list" data-agent-lifecycle="status_updates">
           {% for update in status_update_records %}
-            <article class="lifecycle-update" data-wow-id="{{ update.wow_id }}" data-target-wow-id="{{ update.target_wow_id }}" data-target-root-wow-id="{{ update.target_root_wow_id }}" data-update-type="{{ update.update_type }}" data-previous-status="{{ update.previous_status }}" data-new-status="{{ update.new_status }}">
+            <article class="lifecycle-update" data-wow-id="{{ update.wow_id }}" data-target-wow-type="{{ update.target_wow_type }}" data-target-wow-id="{{ update.target_wow_id }}" data-target-root-wow-id="{{ update.target_root_wow_id }}" data-update-type="{{ update.update_type }}" data-previous-status="{{ update.previous_status }}" data-new-status="{{ update.new_status }}">
               <p class="lifecycle-line">
                 <strong data-field="update_type">{{ update.update_type }}</strong>
+                <span class="lifecycle-target-type" data-field="target_wow_type">{{ update.target_wow_type }}</span>
                 <span data-field="target_wow_id">{{ update.target_wow_id }}</span>
                 {% if update.previous_status or update.new_status %}
                   <span class="lifecycle-status">
