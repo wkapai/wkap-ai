@@ -54,9 +54,19 @@ setup_defaults:
   daily_send_time: infer from the user's behavior pattern after daily investment research; ask only if it cannot be inferred
   research_sources: agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and high-quality agent-found market items
   approval_flow: prepare packet, show user, wait for approval; no reply means save privately and submit nothing publicly
+  default_packet_scope: one Daily WoW Packet for the current US market day
+  weekly_review_requires_explicit_user_request: true
 ```
 
 The agent may briefly confirm the setup after applying defaults, but it should not block installation on questions about journal location, author ID, schedule, source list, or approval flow unless those defaults are impossible to apply.
+
+## Default Run Scope
+
+The default WKAP WoW run is one Daily WoW Packet for the current US market day.
+
+Do not summarize the user's past 7 days, create a weekly review, or produce a general private research memo unless the user explicitly asks for a weekly or multi-day review.
+
+The agent may use recent context as background, but the output must be framed as today's Daily WoW Packet with today's `market_date`.
 
 ## Source of Truth
 
@@ -128,11 +138,41 @@ Private noticed is not public proof. Public submitted is not the same as receipt
 4. Generate candidate WoWs.
 5. Classify each item by wow_type.
 6. Rank candidates.
-7. Save the prepared packet to the Private WoW Journal.
-8. Show the prepared packet and ask the user to approve one, pass, edit, or request more research.
-9. If approved, build the final packet and submit to WKAP.
-10. If not approved or no reply, keep it private.
-11. Reconcile receipt and public site status after attempted submission.
+7. Prepare a full v0.1 Daily WoW Packet with reading_log, wow_items, wow_type fields, selection, agent_facts, and validation_notes.
+8. Save the full structured packet to the Private WoW Journal.
+9. Show the prepared packet to the user and ask the user to choose: approve for WKAP Ledger submission, edit, pass, or request more research.
+10. Do not decide to keep the packet private on the user's behalf.
+11. If approved, build the final packet and submit to WKAP.
+12. If not approved or no reply, keep it private.
+13. Reconcile receipt and public site status after attempted submission.
+```
+
+## Required Prepared Packet Shape
+
+Every prepared Daily WoW Packet must preserve the public-ready v0.1 structure even when it remains private.
+
+Minimum prepared packet sections:
+
+```yaml
+required_private_packet_sections:
+  - packet
+  - human_view
+  - agent_facts
+  - reading_log
+  - wow_items
+  - selection
+  - validation_notes
+```
+
+A prose list of "top private WoWs" is not a valid WKAP WoW output by itself. The agent may include a short human summary, but it must also save and show the structured packet.
+
+After preparing the packet, the agent must ask the user to choose exactly one of:
+
+```text
+1. approve for WKAP Ledger submission
+2. edit
+3. pass
+4. request more research
 ```
 
 ## WoW Type Handling
