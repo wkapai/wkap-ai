@@ -145,12 +145,13 @@ a:hover {
 .button-link.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
+  color: var(--text);
 }
 
 .button-link.primary:hover {
   background: var(--text);
   border-color: var(--text);
+  color: #ffffff;
 }
 
 main {
@@ -998,6 +999,50 @@ body:not([data-page-type="home"]) .setup-page h2 {
 .setup-prompt code {
   color: inherit;
   font: inherit;
+}
+
+.copy-prompt-button {
+  align-items: center;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(20, 35, 66, 0.16);
+  border-radius: 999px;
+  color: #111111;
+  cursor: pointer;
+  display: inline-flex;
+  font: 700 11px/1 var(--font-sans);
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
+  min-height: 30px;
+  padding: 7px 11px;
+  text-transform: uppercase;
+}
+
+.copy-prompt-button:hover {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 82, 0, 0.48);
+  color: var(--orange);
+}
+
+.copy-prompt-button svg {
+  fill: none;
+  height: 14px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  width: 14px;
+}
+
+.copy-prompt-button.is-copied {
+  border-color: rgba(35, 166, 89, 0.4);
+  color: #15803d;
+}
+
+.prompt-header .copy-prompt-button {
+  flex: 0 0 auto;
+  margin-top: 0;
 }
 
 .agent-facts {

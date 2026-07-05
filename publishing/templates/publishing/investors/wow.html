@@ -27,12 +27,43 @@
         <dt>Status</dt>
         <dd data-field="selection_status">{{ selection_status }}</dd>
       </div>
+      {% if submission.packet_id %}
+      <div>
+        <dt>Packet ID</dt>
+        <dd data-field="packet_id">{{ submission.packet_id }}</dd>
+      </div>
+      {% endif %}
+      {% if submission.packet_spec_version %}
+      <div>
+        <dt>Spec</dt>
+        <dd data-field="packet_spec_version">{{ submission.packet_spec_version }}</dd>
+      </div>
+      {% endif %}
       <div>
         <dt>Selected WoW</dt>
         <dd data-field="selected_wow_id" data-packet-wow-id="{{ submission.selected_wow_id|default:"none" }}">{{ submission.public_selected_wow_id|default:"none" }}</dd>
       </div>
+      {% if submission.wow_count %}
+      <div>
+        <dt>WoW Items</dt>
+        <dd data-field="wow_count">{{ submission.wow_count }}</dd>
+      </div>
+      {% endif %}
+      {% if submission.scoreable_count %}
+      <div>
+        <dt>Scoreable</dt>
+        <dd data-field="scoreable_count">{{ submission.scoreable_count }}</dd>
+      </div>
+      {% endif %}
     </dl>
     <section class="body-copy" data-agent-body="wow-packet">
+      {% if submission.human_summary %}
+        <section class="packet-section" data-field="human_summary">
+          <h2>Packet Summary</h2>
+          <p>{{ submission.human_summary }}</p>
+        </section>
+      {% endif %}
+
       <h2>Reading Log <span class="section-count">top {{ submission.reading_items.count }}</span></h2>
       <div class="packet-grid packet-reading-grid">
         {% for item in submission.reading_items.all %}
@@ -47,6 +78,36 @@
           <p>No reading log items were parsed.</p>
         {% endfor %}
       </div>
+
+      {% if submission.wow_items_json %}
+      <h2>Protocol WoW Items <span class="section-count">{{ submission.packet_spec_version|default:submission.format_version }}</span></h2>
+      <div class="packet-grid packet-wow-grid">
+        {% for item in submission.wow_items_json %}
+          <article class="packet-item" data-wow-id="{{ item.wow_id }}" data-wow-type="{{ item.wow_type }}" data-scoreable="{{ item.scoreable|yesno:'true,false' }}" data-root-wow-id="{{ item.root_wow_id }}" data-parent-wow-id="{{ item.parent_wow_id }}" data-target-wow-id="{{ item.target_wow_id }}">
+            <h3><span data-field="wow_id">{{ item.wow_id }}</span></h3>
+            <p class="packet-meta">
+              <span data-field="wow_type">{{ item.wow_type|default:"unknown" }}</span>
+              &middot; scoreable: <span data-field="scoreable">{{ item.scoreable|yesno:'true,false' }}</span>
+              {% if item.trackable_status %} &middot; <span data-field="trackable_status">{{ item.trackable_status }}</span>{% endif %}
+              {% if item.signal_status %} &middot; <span data-field="signal_status">{{ item.signal_status }}</span>{% endif %}
+              {% if item.update_type %} &middot; <span data-field="update_type">{{ item.update_type }}</span>{% endif %}
+            </p>
+            {% if item.claim %}<p data-field="claim">{{ item.claim }}</p>{% endif %}
+            {% if item.observation %}<p data-field="observation">{{ item.observation }}</p>{% endif %}
+            {% if item.thesis_claim %}<p data-field="thesis_claim">{{ item.thesis_claim }}</p>{% endif %}
+            {% if item.summary %}<p data-field="summary">{{ item.summary }}</p>{% endif %}
+            {% if item.update_summary %}<p data-field="update_summary">{{ item.update_summary }}</p>{% endif %}
+            {% if item.evidence_to_watch %}<p><strong>Evidence to watch:</strong> <span data-field="evidence_to_watch">{{ item.evidence_to_watch }}</span></p>{% endif %}
+            {% if item.invalidate_test %}<p><strong>Invalidate test:</strong> <span data-field="invalidate_test">{{ item.invalidate_test }}</span></p>{% endif %}
+            {% if item.resolve_by %}<p><strong>Resolve by:</strong> <span data-field="resolve_by">{{ item.resolve_by }}</span></p>{% endif %}
+            {% if item.resolution_source %}<p><strong>Resolution source:</strong> <span data-field="resolution_source">{{ item.resolution_source }}</span></p>{% endif %}
+            {% if item.parent_wow_id %}<p><strong>Parent:</strong> <span data-field="parent_wow_id">{{ item.parent_wow_id }}</span></p>{% endif %}
+            {% if item.root_wow_id %}<p><strong>Root:</strong> <span data-field="root_wow_id">{{ item.root_wow_id }}</span></p>{% endif %}
+            {% if item.target_wow_id %}<p><strong>Target:</strong> <span data-field="target_wow_id">{{ item.target_wow_id }}</span></p>{% endif %}
+          </article>
+        {% endfor %}
+      </div>
+      {% endif %}
 
       <h2>Agent Suggested WoW Signals</h2>
       <div class="packet-grid packet-wow-grid">

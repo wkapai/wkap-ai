@@ -1,40 +1,96 @@
 {% extends "publishing/base.html" %}
-{% block title %}{{ meta_title|default:"Setup My Investor Log" }}{% endblock %}
+{% block title %}{{ meta_title|default:"Start Daily WoW Training" }}{% endblock %}
 {% block content %}
 <section class="page-heading setup-heading">
-  <p class="eyebrow">Investor log setup</p>
-  <h1>Setup My Investor Log</h1>
-  <p>Turn your daily market reading into a structured investor trail.</p>
+  <p class="eyebrow">Daily WoW Training</p>
+  <h1>Start Daily WoW Training</h1>
+  <p>Set up the feedback loop for you and your agent.</p>
 </section>
 
 <article class="setup-page" data-agent-readable="true" data-page-type="investor_log_setup">
   <section class="panel setup-intro">
-    <p>WKAP is built to work with your own agent. Your agent reads what you read, adds what it finds, selects the top 10 reading items from your full day, suggests three possible Worth Watching Workout (WoW) signals, and sends a Daily WoW Packet to the WKAP Ledger.</p>
-    <p>This creates a durable record of:</p>
+    <p>WKAP turns daily investment research into a repeatable WoW routine. Your agent keeps the private loop, asks for your input, and only publishes to the WKAP Ledger after approval.</p>
+    <p>There are two records:</p>
     <ul>
-      <li>what entered your attention</li>
-      <li>what your agent thought was worth watching</li>
-      <li>what you selected or passed</li>
-      <li>how your investor judgment compounds over time</li>
+      <li>Private WoW Loop: drafts, no-reply days, skipped ideas, selected WoWs, revisits</li>
+      <li>Public WoW Ledger: published Daily WoW Packets, public and agent-readable</li>
     </ul>
-  </section>
-
-  <section class="panel setup-steps">
-    <h2>How It Works</h2>
-    <ol>
-      <li>Copy the setup prompt below.</li>
-      <li>Paste it into your agent: Codex, Hermes, Claude Cowork, OpenClaw, or any agent that can read sources and send email.</li>
-      <li>Connect the sources you want your agent to monitor: social feeds, Substack, email, filings, transcripts, watchlists, or WKAP Feed.</li>
-      <li>Your agent sends one Daily WoW Packet to the designated email in the prompt.</li>
-    </ol>
   </section>
 
   <section class="panel prompt-panel">
     <div class="prompt-header">
-      <h2>Copy This Agent Setup Prompt</h2>
-      <p class="prompt-version">{{ prompt_version }}</p>
+      <h2>Copy &amp; Paste This Agent Prompt</h2>
+      <button class="copy-prompt-button" type="button" data-copy-prompt aria-label="Copy WKAP agent setup prompt">
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span>Copy</span>
+      </button>
     </div>
-    <pre class="setup-prompt" data-agent-prompt="wkap-investor-log" data-format-version="{{ prompt_version }}"><code>{{ prompt_text }}</code></pre>
+    <pre class="setup-prompt" data-agent-install-prompt="wkap-wow"><code>Set up WKAP WoW for me.
+
+Read and follow:
+https://wkap.ai/skills/wkap-wow-skill-latest.md
+
+If you are Codex, use:
+https://wkap.ai/skills/wkap-wow-codex/SKILL.md
+
+If you use another skill format, adapt the universal WKAP WoW Skill to your native format.
+
+Store my private WoW Journal in agent memory or ask me for a local file path.
+
+When I do daily investor research in an agent-accessible browser, maintain my private WoW Journal.
+
+Based on my behavior pattern, infer when I usually finish most of my daily market investment research, then set the Daily WoW Packet send time after that. If you cannot infer it, ask me.
+
+Once per US market day, prepare one Daily WoW Packet, ask for my input, and only submit to WKAP Ledger after I approve.</code></pre>
   </section>
 </article>
+<script>
+  (function () {
+    var button = document.querySelector("[data-copy-prompt]");
+    var prompt = document.querySelector("[data-agent-install-prompt='wkap-wow'] code");
+    if (!button || !prompt) {
+      return;
+    }
+    var label = button.querySelector("span");
+    var originalLabel = label ? label.textContent : "Copy";
+    var setCopied = function () {
+      if (label) {
+        label.textContent = "Copied";
+      }
+      button.classList.add("is-copied");
+      window.setTimeout(function () {
+        if (label) {
+          label.textContent = originalLabel;
+        }
+        button.classList.remove("is-copied");
+      }, 1600);
+    };
+    var fallbackCopy = function (text) {
+      var textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    };
+    button.addEventListener("click", function () {
+      var text = prompt.textContent.trim();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(setCopied, function () {
+          fallbackCopy(text);
+          setCopied();
+        });
+      } else {
+        fallbackCopy(text);
+        setCopied();
+      }
+    });
+  })();
+</script>
 {% endblock %}

@@ -5,18 +5,24 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db.models import Max
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.utils.html import escape
 
 from ledger.models import Investor, RadarIssue, DailyWoWPacket
 from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, market_terms
-from ledger.wow_packet_spec import current_prompt, current_spec
+from ledger.wow_packet_spec import current_spec
 from publishing.services import WOW_DISCLAIMER
 from publishing.urls import investor_home_url, investor_wows_url, radar_archive_url, radar_issue_url, wow_url
 
 
 ET_ZONE = ZoneInfo("America/New_York")
+
+MARKDOWN_RESOURCES = {
+    "wow_packet_v0_1": "specs/public/wow-packet-v0.1.md",
+    "wkap_wow_skill_v0_1": "specs/public/wkap-wow-skill-v0.1.md",
+    "wkap_wow_codex_skill": "agent_skills/wkap-wow/SKILL.md",
+}
 
 
 def _json_ld(payload: dict) -> str:
@@ -182,13 +188,13 @@ def home(request):
         request,
         "publishing/home.html",
         _page_context(
-            title="WKAP.ai - Investor Attention Training System",
-            description="WKAP.ai publishes agent-friendly Radar Feed and WoW ledger pages with canonical URLs, content hashes, GitHub ledger evidence, manifests, and OpenTimestamp status.",
+            title="WKAP.ai - Build Your AI-Native Investor Loop",
+            description="WKAP turns daily investment research into a feedback loop for investors and their agents, with public Daily WoW Packet ledger records.",
             canonical_url=f"{settings.WKAP_BASE_URL}/",
             page_type="home",
             agent_facts=[
                 {"name": "site_name", "value": "WKAP.ai"},
-                {"name": "purpose", "value": "Investor Attention Training System"},
+                {"name": "purpose", "value": "Build Your AI-Native Investor Loop"},
                 {"name": "public_artifact_families", "value": "WKAP Radar Feed; WoW - Worth Watching Workout"},
                 {"name": "radar_archive_url", "value": radar_archive_url()},
                 {"name": "wow_ledger_url", "value": f"{settings.WKAP_BASE_URL}/investors/"},
@@ -204,39 +210,64 @@ def home(request):
 def submit_to_ledger(request):
     canonical_url = f"{settings.WKAP_BASE_URL}/submit-to-wkap-ledger.html"
     spec = current_spec()
+    packet_spec_url = "https://wkap.ai/specs/wow-packet-latest.md"
+    wow_skill_url = "https://wkap.ai/skills/wkap-wow-skill-latest.md"
+    codex_skill_url = "https://wkap.ai/skills/wkap-wow-codex/SKILL.md"
     return render(
         request,
         "publishing/submit_to_ledger.html",
         _page_context(
-            title="Setup My Investor Log - WKAP.ai",
-            description="Set up an agent to turn daily market reading into a Daily WoW Packet for the WKAP Ledger.",
+            title="Start Daily WoW Training - WKAP.ai",
+            description="Set up a Daily WoW Training feedback loop for you and your agent, with private WoW memory and public ledgered packets.",
             canonical_url=canonical_url,
             page_type="investor_log_setup",
             agent_facts=[
-                {"name": "page_purpose", "value": "Set up a personal investor log agent for WKAP Ledger submissions."},
+                {"name": "page_purpose", "value": "Set up Daily WoW Training for an investor and agent feedback loop."},
                 {"name": "submission_email", "value": settings.WKAP_INBOUND_EMAIL},
                 {"name": "recommended_cadence", "value": "once per market day"},
                 {"name": "packet_type", "value": "Daily WoW Packet"},
                 {"name": "max_reading_items", "value": str(spec.get("schema_data", {}).get("reading_log_rules", {}).get("max_items", 10))},
+                {"name": "wow_packet_spec_latest_url", "value": packet_spec_url},
+                {"name": "wkap_wow_skill_latest_url", "value": wow_skill_url},
+                {"name": "wkap_wow_codex_skill_url", "value": codex_skill_url},
+                {"name": "private_journal_required", "value": "true"},
+                {"name": "public_submission_requires_user_approval", "value": "true"},
+                {"name": "current_submission_format", "value": spec["format_version"]},
+                {"name": "protocol_reference_version", "value": "v0.1"},
                 {"name": "canonical_url", "value": canonical_url},
+            ],
+            crawl_links=[
+                {"rel": "protocol", "href": "/specs/wow-packet-latest.md", "label": "wow-packet-spec"},
+                {"rel": "help", "href": "/skills/wkap-wow-skill-latest.md", "label": "wkap-wow-skill"},
+                {"rel": "alternate", "href": "/skills/wkap-wow-codex/SKILL.md", "label": "wkap-wow-codex-skill"},
             ],
             json_ld={
                 "@context": "https://schema.org",
                 "@type": "HowTo",
-                "name": "Setup My Investor Log",
+                "name": "Start Daily WoW Training",
                 "url": canonical_url,
-                "description": "Turn daily market reading into a structured investor trail with a Daily WoW Packet.",
+                "description": "Set up the feedback loop for Daily WoW Training and public WKAP Ledger submission.",
                 "step": [
-                    {"@type": "HowToStep", "name": "Copy the setup prompt"},
+                    {"@type": "HowToStep", "name": "Copy the WKAP WoW setup message"},
                     {"@type": "HowToStep", "name": "Paste it into your agent"},
-                    {"@type": "HowToStep", "name": "Connect market sources"},
-                    {"@type": "HowToStep", "name": f"Send a Daily WoW Packet to {settings.WKAP_INBOUND_EMAIL}"},
+                    {"@type": "HowToStep", "name": "Let the agent install or adapt the WKAP WoW Skill"},
+                    {"@type": "HowToStep", "name": "Approve before the agent submits a Daily WoW Packet to WKAP Ledger"},
                 ],
             },
-            prompt_text=current_prompt(),
-            prompt_version=spec["format_version"],
         ),
     )
+
+
+def markdown_resource(request, resource_key: str):
+    relative_path = MARKDOWN_RESOURCES.get(resource_key)
+    if not relative_path:
+        raise Http404("Unknown Markdown resource.")
+    path = settings.BASE_DIR / relative_path
+    return HttpResponse(path.read_text(encoding="utf-8"), content_type="text/markdown; charset=utf-8")
+
+
+def markdown_latest_redirect(request, target_path: str):
+    return HttpResponseRedirect(target_path)
 
 
 def radar_archive(request):
@@ -425,6 +456,19 @@ def wow_submission(request, investor_id, market_date):
                 {"name": "submission_channel", "value": "email"},
                 {"name": "received_at_et", "value": received_at_et_display},
                 {"name": "format_version", "value": submission.format_version},
+                {"name": "packet_id", "value": submission.packet_id},
+                {"name": "author_id", "value": submission.author_id},
+                {"name": "packet_spec_version", "value": submission.packet_spec_version},
+                {"name": "packet_spec_url", "value": submission.packet_spec_url},
+                {"name": "skill_version", "value": submission.skill_version},
+                {"name": "skill_url", "value": submission.skill_url},
+                {"name": "public_status", "value": submission.public_status},
+                {"name": "wow_count", "value": str(submission.wow_count)},
+                {"name": "scoreable_count", "value": str(submission.scoreable_count)},
+                {"name": "trackable_count", "value": str(submission.trackable_count)},
+                {"name": "thesis_count", "value": str(submission.thesis_count)},
+                {"name": "candidate_count", "value": str(submission.candidate_count)},
+                {"name": "status_update_count", "value": str(submission.status_update_count)},
                 {"name": "selection_status", "value": agent_summary["selection_status"]},
                 {"name": "selected_wow_id", "value": submission.public_selected_wow_id},
                 {"name": "packet_selected_wow_id", "value": submission.selected_wow_id},
@@ -452,6 +496,8 @@ def wow_submission(request, investor_id, market_date):
             + [
                 {"name": "raw_email_sha256", "value": submission.raw_email_sha256},
                 {"name": "raw_email_github_url", "value": submission.raw_email_github_url},
+                {"name": "raw_packet_json", "value": json.dumps(submission.raw_packet_json, ensure_ascii=False, sort_keys=True)},
+                {"name": "wow_items_json", "value": json.dumps(submission.wow_items_json, ensure_ascii=False, sort_keys=True)},
                 {"name": "disclaimer", "value": WOW_DISCLAIMER},
             ],
             json_ld=_artifact_json_ld(

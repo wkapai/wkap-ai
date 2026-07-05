@@ -424,7 +424,24 @@ def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
         payload.update(
             {
                 "format_version": artifact.format_version,
+                "packet_id": artifact.packet_id,
+                "author_id": artifact.author_id,
+                "packet_spec_version": artifact.packet_spec_version,
+                "packet_spec_url": artifact.packet_spec_url,
+                "skill_version": artifact.skill_version,
+                "skill_url": artifact.skill_url,
                 "investor_id": artifact.investor.investor_id,
+                "public_status": artifact.public_status,
+                "wow_count": artifact.wow_count,
+                "scoreable_count": artifact.scoreable_count,
+                "trackable_count": artifact.trackable_count,
+                "thesis_count": artifact.thesis_count,
+                "candidate_count": artifact.candidate_count,
+                "status_update_count": artifact.status_update_count,
+                "raw_packet_json": artifact.raw_packet_json,
+                "agent_facts_json": artifact.agent_facts_json,
+                "validation_results_json": artifact.validation_results_json,
+                "wow_items_json": artifact.wow_items_json,
                 "raw_email_sha256": artifact.raw_email_sha256,
                 "raw_email_github_url": artifact.raw_email_github_url,
                 "raw_email_commit_sha": artifact.raw_email_commit_sha,
@@ -506,6 +523,9 @@ def _timestamp_target_payload(entity_type: str, artifact) -> dict[str, Any]:
         payload.update(
             {
                 "format_version": artifact.format_version,
+                "packet_id": artifact.packet_id,
+                "author_id": artifact.author_id,
+                "packet_spec_version": artifact.packet_spec_version,
                 "investor_id": artifact.investor.investor_id,
                 "raw_email_sha256": artifact.raw_email_sha256,
                 "raw_email_github_url": artifact.raw_email_github_url,
@@ -681,6 +701,19 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         {"name": "submission_channel", "value": "email"},
         {"name": "received_at_et", "value": received_at_et.strftime("%Y-%m-%d %H:%M ET")},
         {"name": "format_version", "value": submission.format_version},
+        {"name": "packet_id", "value": submission.packet_id},
+        {"name": "author_id", "value": submission.author_id},
+        {"name": "packet_spec_version", "value": submission.packet_spec_version},
+        {"name": "packet_spec_url", "value": submission.packet_spec_url},
+        {"name": "skill_version", "value": submission.skill_version},
+        {"name": "skill_url", "value": submission.skill_url},
+        {"name": "public_status", "value": submission.public_status},
+        {"name": "wow_count", "value": str(submission.wow_count)},
+        {"name": "scoreable_count", "value": str(submission.scoreable_count)},
+        {"name": "trackable_count", "value": str(submission.trackable_count)},
+        {"name": "thesis_count", "value": str(submission.thesis_count)},
+        {"name": "candidate_count", "value": str(submission.candidate_count)},
+        {"name": "status_update_count", "value": str(submission.status_update_count)},
         {"name": "selection_status", "value": selection_status},
         {"name": "selected_wow_id", "value": submission.public_selected_wow_id},
         {"name": "packet_selected_wow_id", "value": submission.selected_wow_id},
@@ -700,6 +733,8 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         {"name": "all_evidence_to_watch_json", "value": json_array(clean_packet_text(wow.evidence_to_watch_for) for wow in suggested_wows)},
         {"name": "raw_email_sha256", "value": submission.raw_email_sha256},
         {"name": "raw_email_github_url", "value": submission.raw_email_github_url},
+        {"name": "raw_packet_json", "value": json.dumps(submission.raw_packet_json, ensure_ascii=False, sort_keys=True)},
+        {"name": "wow_items_json", "value": json.dumps(submission.wow_items_json, ensure_ascii=False, sort_keys=True)},
         {"name": "disclaimer", "value": WOW_DISCLAIMER},
     ]
     facts.append({"name": "closest_rejected_idea", "value": _wow_pass_fact_value(submission, selection_status, submission.closest_rejected_idea)})
@@ -725,6 +760,8 @@ def _radar_content_hash(issue: RadarIssue) -> str:
 
 
 def _wow_content_hash(submission: DailyWoWPacket) -> str:
+    if submission.raw_packet_json:
+        return _sha256(json.dumps(submission.raw_packet_json, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     suggested = "\n".join(
         f"{wow.wow_id}\n{wow.ticker_or_theme}\n{wow.whats_worth_watching}\n{wow.why_now}\n{wow.evidence_to_watch_for}"
         for wow in submission.suggested_wows.all()

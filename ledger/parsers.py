@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from urllib.parse import urlparse
 
+import yaml
 from django.utils import timezone
 
 from ingestion.models import RawEmail
@@ -51,6 +52,24 @@ class ParsedWoWPacket:
     market_date: date
     format_version: str
     submitted_at: datetime
+    packet_id: str = ""
+    author_id: str = ""
+    packet_spec_version: str = ""
+    packet_spec_url: str = ""
+    skill_version: str = ""
+    skill_url: str = ""
+    human_title: str = ""
+    human_summary: str = ""
+    raw_packet_json: dict = field(default_factory=dict)
+    agent_facts_json: dict = field(default_factory=dict)
+    validation_results_json: dict = field(default_factory=dict)
+    wow_items_json: list[dict] = field(default_factory=list)
+    wow_count: int = 0
+    scoreable_count: int = 0
+    trackable_count: int = 0
+    thesis_count: int = 0
+    candidate_count: int = 0
+    status_update_count: int = 0
     reading_items: list[ParsedReadingLogItem] = field(default_factory=list)
     suggested_wows: list[ParsedAgentSuggestedWoW] = field(default_factory=list)
     selected_wow_id: str = ""
@@ -76,6 +95,9 @@ def parse_radar(raw_email: RawEmail) -> ParsedRadar:
 def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
     spec = current_spec()
     text = _normalize_wow_text(raw_email.raw_body)
+    structured = _parse_structured_wow(text, raw_email)
+    if structured:
+        return structured
     market_date = _date(_date_from_subject(raw_email.subject) or _standalone_date(text), default=raw_email.received_at.date())
     reading_section = _section_by_patterns(
         text,
@@ -141,6 +163,23 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
     return ParsedWoWPacket(
         market_date=market_date,
         format_version=spec["format_version"],
+        packet_id=f"WOW-PACKET-{market_date}",
+        packet_spec_version=spec["format_version"],
+        packet_spec_url="https://wkap.ai/specs/wow-packet-latest.md",
+        raw_packet_json={},
+        agent_facts_json={
+            "packet_spec_version": spec["format_version"],
+            "wow_count": len(suggested_wows),
+            "scoreable_count": 0,
+            "trackable_count": len(suggested_wows),
+            "thesis_count": 0,
+            "candidate_count": 0,
+            "status_update_count": 0,
+        },
+        validation_results_json={"schema_valid": True, "warnings": ["legacy_wow_packet_v1_parser"]},
+        wow_items_json=_legacy_wow_items(suggested_wows),
+        wow_count=len(suggested_wows),
+        trackable_count=len(suggested_wows),
         reading_items=reading_items,
         suggested_wows=suggested_wows,
         selected_wow_id=selected_wow_id,
@@ -150,6 +189,200 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
         missing_evidence=pass_fields["missing_evidence"],
         submitted_at=raw_email.received_at or timezone.now(),
     )
+
+
+def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | None:
+    block = _structured_block(text)
+    if not block:
+        return None
+    try:
+        payload = yaml.safe_load(block) or {}
+    except yaml.YAMLError as exc:
+        raise ParseError(f"Structured WoW Packet YAML is invalid: {exc}") from exc
+    if not isinstance(payload, dict) or "packet" not in payload:
+        raise ParseError("Structured WoW Packet must contain a top-level packet object.")
+    packet = payload["packet"]
+    if not isinstance(packet, dict):
+        raise ParseError("Structured WoW Packet packet field must be an object.")
+
+    market_date = _date(
+        str(packet.get("market_date") or _date_from_subject(raw_email.subject) or _standalone_date(text) or ""),
+        default=raw_email.received_at.date(),
+    )
+    packet_spec_version = str(packet.get("packet_spec_version") or packet.get("spec_version") or "v0.1")
+    author_id = str(packet.get("author_id") or "").strip()
+    if not author_id:
+        raise ParseError("Structured WoW Packet requires author_id.")
+    wow_items = packet.get("wow_items") or []
+    if not isinstance(wow_items, list) or not wow_items:
+        raise ParseError("Structured WoW Packet requires at least one wow_items entry.")
+
+    reading_items = _structured_reading_items(packet.get("reading_log") or packet.get("reading_items") or [])
+    suggested_wows = _structured_wow_items(wow_items)
+    selection = packet.get("selection") if isinstance(packet.get("selection"), dict) else {}
+    selected_wow_id = local_wow_id(str(selection.get("selected_wow_id") or packet.get("selected_wow_id") or "none").strip())
+    reason_for_selection = str(selection.get("reason_for_selection") or packet.get("reason_for_selection") or "").strip()
+    closest_rejected_idea = str(selection.get("closest_rejected_idea") or "").strip()
+    why_pass = str(selection.get("why_pass") or "").strip()
+    missing_evidence = str(selection.get("missing_evidence") or "").strip()
+
+    if selected_wow_id.lower() != "none":
+        known_ids = {wow.wow_id for wow in suggested_wows}
+        if selected_wow_id not in known_ids:
+            raise ParseError(f"selected_wow_id does not match a structured WoW item: {selected_wow_id}")
+
+    human_view = packet.get("human_view") if isinstance(packet.get("human_view"), dict) else {}
+    agent_facts = packet.get("agent_facts") if isinstance(packet.get("agent_facts"), dict) else {}
+    counts = _wow_type_counts(wow_items)
+    raw_packet_json = _json_safe(packet)
+    validation = _json_safe(packet.get("validation_notes") if isinstance(packet.get("validation_notes"), dict) else {})
+    validation.setdefault("schema_valid", True)
+    validation.setdefault("warnings", [])
+
+    return ParsedWoWPacket(
+        market_date=market_date,
+        format_version="wow_packet_v0.1",
+        submitted_at=raw_email.received_at or timezone.now(),
+        packet_id=str(packet.get("packet_id") or f"WKAP-{author_id}-{market_date}").strip(),
+        author_id=author_id,
+        packet_spec_version=packet_spec_version,
+        packet_spec_url=str(packet.get("packet_spec_url") or "https://wkap.ai/specs/wow-packet-latest.md"),
+        skill_version=str(packet.get("skill_version") or ""),
+        skill_url=str(packet.get("skill_url") or ""),
+        human_title=str(human_view.get("title") or packet.get("title") or "Daily WoW Packet"),
+        human_summary=str(human_view.get("summary") or packet.get("summary") or ""),
+        raw_packet_json=raw_packet_json,
+        agent_facts_json=_json_safe({**agent_facts, **counts, "packet_spec_version": packet_spec_version}),
+        validation_results_json=validation,
+        wow_items_json=_json_safe(wow_items),
+        wow_count=counts["wow_count"],
+        scoreable_count=counts["scoreable_count"],
+        trackable_count=counts["trackable_count"],
+        thesis_count=counts["thesis_count"],
+        candidate_count=counts["candidate_count"],
+        status_update_count=counts["status_update_count"],
+        reading_items=reading_items,
+        suggested_wows=suggested_wows,
+        selected_wow_id=selected_wow_id,
+        reason_for_selection=reason_for_selection,
+        closest_rejected_idea=closest_rejected_idea,
+        why_pass=why_pass,
+        missing_evidence=missing_evidence,
+    )
+
+
+def _structured_block(text: str) -> str:
+    for match in re.finditer(r"```(?:yaml|yml|json)\s*\n(.*?)\n```", text, flags=re.IGNORECASE | re.DOTALL):
+        block = match.group(1).strip()
+        if re.search(r"^\s*packet\s*:", block, flags=re.MULTILINE) or '"packet"' in block:
+            return block
+    return ""
+
+
+def _structured_reading_items(items) -> list[ParsedReadingLogItem]:
+    if not isinstance(items, list):
+        return []
+    parsed = []
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            continue
+        parsed.append(
+            ParsedReadingLogItem(
+                item_number=int(item.get("item_number") or item.get("reading_item") or index),
+                source_title=str(item.get("source_title") or item.get("title") or ""),
+                source_url=str(item.get("source_url") or item.get("url") or ""),
+                source_type=str(item.get("source_type") or ""),
+                published_time=str(item.get("published_time") or ""),
+                tickers_or_themes=_join_list(item.get("tickers") or item.get("themes") or item.get("tickers_or_themes") or ""),
+                reading_origin=str(item.get("reading_origin") or ""),
+                agent_summary=str(item.get("agent_summary") or item.get("summary") or ""),
+            )
+        )
+    return parsed
+
+
+def _structured_wow_items(items: list[dict]) -> list[ParsedAgentSuggestedWoW]:
+    parsed = []
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            continue
+        wow_id = local_wow_id(str(item.get("wow_id") or f"WOW-ITEM-{index:03d}").strip())
+        wow_type = str(item.get("wow_type") or "candidate_wow")
+        source_refs = _join_list(item.get("source_refs") or [])
+        title = (
+            item.get("ticker_or_theme")
+            or item.get("theme")
+            or item.get("claim")
+            or item.get("observation")
+            or item.get("thesis_claim")
+            or item.get("summary")
+            or wow_type
+        )
+        watch = (
+            item.get("what_s_worth_watching")
+            or item.get("whats_worth_watching")
+            or item.get("why_worth_watching")
+            or item.get("claim")
+            or item.get("observation")
+            or item.get("update_summary")
+            or ""
+        )
+        evidence = item.get("evidence_to_watch") or item.get("what_evidence_should_ai_watch_for") or item.get("invalidate_test") or item.get("evidence_summary") or ""
+        parsed.append(
+            ParsedAgentSuggestedWoW(
+                item_number=index,
+                wow_id=wow_id,
+                source_refs=source_refs,
+                ticker_or_theme=str(title),
+                whats_worth_watching=str(watch),
+                why_now=str(item.get("why_now") or item.get("review_cadence") or item.get("update_type") or ""),
+                evidence_to_watch_for=_join_list(evidence),
+            )
+        )
+    return parsed
+
+
+def _wow_type_counts(items: list[dict]) -> dict[str, int]:
+    values = [str(item.get("wow_type") or "") for item in items if isinstance(item, dict)]
+    return {
+        "wow_count": len(values),
+        "scoreable_count": values.count("scoreable_signal"),
+        "trackable_count": values.count("trackable_wow"),
+        "thesis_count": values.count("thesis_wow"),
+        "candidate_count": values.count("candidate_wow"),
+        "status_update_count": values.count("status_update"),
+    }
+
+
+def _legacy_wow_items(suggested_wows: list[ParsedAgentSuggestedWoW]) -> list[dict]:
+    return [
+        {
+            "wow_id": wow.wow_id,
+            "wow_type": "trackable_wow",
+            "scoreable": False,
+            "source_refs": wow.source_refs,
+            "claim": wow.whats_worth_watching,
+            "evidence_to_watch": wow.evidence_to_watch_for,
+            "agent_facts": {"accuracy_endpoint_eligible": False},
+        }
+        for wow in suggested_wows
+    ]
+
+
+def _join_list(value) -> str:
+    if isinstance(value, list):
+        return "; ".join(str(item) for item in value if item is not None)
+    return str(value or "")
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return value
 
 
 def _fields(text: str) -> dict[str, str]:

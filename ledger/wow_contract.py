@@ -10,10 +10,8 @@ RADAR_CONTENT_SHA256_COVERS = (
     "It does not cover rendered HTML, proof panels, manifests, or OpenTimestamp status."
 )
 WOW_CONTENT_SHA256_COVERS = (
-    "sha256 over UTF-8 text: wow_packet\\n{format_version}\\n{market_date}\\n{investor_id}\\n"
-    "{selected_wow_id}\\n{reason_for_selection}\\n{closest_rejected_idea}\\n{why_pass}\\n"
-    "{missing_evidence}\\nreading_items(item_number,source_title,source_url,reading_origin,agent_summary)\\n"
-    "suggested_wows(wow_id,ticker_or_theme,whats_worth_watching,why_now,evidence_to_watch_for). "
+    "For wow_packet_v0.1, sha256 over canonical JSON raw_packet_json with sorted keys. "
+    "For legacy wow_packet_v1, sha256 over UTF-8 text fields used by the v1 parser. "
     "It does not cover rendered HTML, proof panels, manifests, raw email text, or OpenTimestamp status."
 )
 

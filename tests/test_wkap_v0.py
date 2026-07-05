@@ -115,6 +115,115 @@ class WKAPV0Tests(TestCase):
             )
         return "\n".join(lines)
 
+    def structured_wow_packet_body(self):
+        return """# WKAP Daily WoW Packet
+
+Human summary:
+AI infrastructure is moving from broad narrative into testable supply-chain bottlenecks.
+
+```yaml
+packet:
+  packet_id: WKAP-w0202-2026-06-29
+  author_id: w0202
+  market_date: 2026-06-29
+  created_at: 2026-06-29T21:00:00Z
+  packet_spec_version: v0.1
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
+  packet_spec_latest_url: https://wkap.ai/specs/wow-packet-latest.md
+  skill_version: v0.1
+  skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
+  human_view:
+    title: AI infrastructure bottleneck
+    summary: Watch whether AI compute demand is shifting bottlenecks into power and advanced packaging.
+    top_wows:
+      - WOW-w0202-2026-06-29-001
+  agent_facts:
+    packet_id: WKAP-w0202-2026-06-29
+    author_id: w0202
+    packet_spec_version: v0.1
+    wow_count: 3
+    scoreable_count: 1
+    trackable_count: 1
+    thesis_count: 0
+    candidate_count: 1
+    status_update_count: 0
+  reading_log:
+    - item_number: 1
+      source_title: AI data center supply chain checks
+      source_url: https://example.com/ai-supply
+      source_type: article
+      published_time: 2026-06-29T13:00:00Z
+      tickers:
+        - NVDA
+        - TSM
+      themes:
+        - AI infrastructure
+        - advanced packaging
+      reading_origin: user_browsed
+      agent_summary: Packaging and power constraints are becoming repeated evidence points.
+  wow_items:
+    - wow_id: WOW-w0202-2026-06-29-001
+      wow_type: trackable_wow
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-2026-06-29-001
+      claim: AI infrastructure bottlenecks are moving toward power and packaging.
+      evidence_to_watch:
+        - advanced packaging lead times
+        - utility interconnection queues
+      review_cadence: daily
+      next_review_at: 2026-06-30
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: trackable_wow
+        scoreable: false
+        accuracy_endpoint_eligible: false
+    - wow_id: WOW-w0202-2026-06-29-002
+      wow_type: scoreable_signal
+      scoreable: true
+      accuracy_endpoint_eligible: true
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-2026-06-29-002
+      claim: At least one hyperscaler will cite power availability as an AI capex bottleneck by 2026-09-30.
+      invalidate_test: No hyperscaler cites power availability as an AI capex bottleneck by resolve_by.
+      resolve_by: 2026-09-30
+      resolution_source: hyperscaler earnings transcripts
+      signal_status: pending
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: scoreable_signal
+        scoreable: true
+        accuracy_endpoint_eligible: true
+    - wow_id: WOW-w0202-2026-06-29-003
+      wow_type: candidate_wow
+      scoreable: false
+      accuracy_endpoint_eligible: false
+      parent_wow_id: null
+      root_wow_id: WOW-w0202-2026-06-29-003
+      observation: AI hardware discussions increasingly mention grid equipment.
+      why_worth_watching: It may broaden the AI supply-chain basket.
+      source_refs:
+        - Reading Item 1
+      agent_facts:
+        wow_type: candidate_wow
+        scoreable: false
+        accuracy_endpoint_eligible: false
+  selection:
+    selected_wow_id: WOW-w0202-2026-06-29-001
+    reason_for_selection: Best daily watch item with clear follow-up evidence.
+    closest_rejected_idea:
+    why_pass:
+    missing_evidence:
+  validation_notes:
+    schema_valid: true
+    missing_fields: []
+    warnings: []
+```
+"""
+
     def cloudflare_payload(self, *, sender="investor@example.com", subject="Daily WoW Packet - 2026-06-29 - Cloud Agent", body=None):
         body = body or self.wow_packet_body()
         raw_mime = (
@@ -415,6 +524,38 @@ class WKAPV0Tests(TestCase):
         parsed = parse_wow(raw)
 
         self.assertEqual(parsed.reason_for_selection, "Focus on the supplier evidence.")
+
+    def test_structured_wow_packet_v01_parses_and_stores_lifecycle_payload(self):
+        run_id = "00000000-0000-0000-0000-000000000040"
+        raw = self.raw_email(sender="structured@example.com", subject="Daily WoW Packet - 2026-06-29 - Structured Agent", body=self.structured_wow_packet_body())
+
+        parsed = parse_wow(raw)
+        packet = create_wow_submission(raw, run_id=run_id)
+
+        self.assertEqual(parsed.format_version, "wow_packet_v0.1")
+        self.assertEqual(parsed.packet_spec_version, "v0.1")
+        self.assertEqual(parsed.author_id, "w0202")
+        self.assertEqual(parsed.scoreable_count, 1)
+        self.assertEqual(parsed.trackable_count, 1)
+        self.assertEqual(parsed.candidate_count, 1)
+        self.assertEqual(parsed.selected_wow_id, "WOW-2026-06-29-001")
+        self.assertEqual(packet.format_version, "wow_packet_v0.1")
+        self.assertEqual(packet.author_id, "w0202")
+        self.assertEqual(packet.packet_spec_version, "v0.1")
+        self.assertEqual(packet.wow_count, 3)
+        self.assertEqual(packet.scoreable_count, 1)
+        self.assertEqual(packet.trackable_count, 1)
+        self.assertEqual(packet.candidate_count, 1)
+        self.assertEqual(packet.raw_packet_json["author_id"], "w0202")
+        self.assertEqual(packet.wow_items_json[1]["wow_type"], "scoreable_signal")
+
+        response = self.client.get("/investors/w0202/wows/wow-w0202-2026-06-29.html")
+        self.assertContains(response, "Protocol WoW Items")
+        self.assertContains(response, "scoreable_signal")
+        self.assertContains(response, "trackable_wow")
+        self.assertContains(response, "candidate_wow")
+        self.assertContains(response, "packet_spec_version")
+        self.assertContains(response, "scoreable_count")
 
     def test_repaired_wow_publishes_and_receipt_reminds_setup_format(self):
         run_id = "00000000-0000-0000-0000-000000000028"
@@ -876,11 +1017,141 @@ class WKAPV0Tests(TestCase):
         setup_response = self.client.get("/submit-to-wkap-ledger.html")
 
         self.assertContains(home_response, 'href="/submit-to-wkap-ledger.html"')
-        self.assertContains(home_response, "Setup My Investor Log")
-        self.assertContains(setup_response, "Setup My Investor Log")
+        self.assertContains(home_response, "Build Your AI-Native")
+        self.assertContains(home_response, "Investor Loop")
+        self.assertContains(home_response, "daily investment research")
+        self.assertContains(home_response, "feedback loop for you and your agent")
+        self.assertContains(home_response, "WoW = Worth Watching Workout")
+        self.assertContains(home_response, "Your agent logs what you read, skip, select, publish, and revisit")
+        self.assertContains(home_response, "turning daily research into memory it can use")
+        self.assertContains(home_response, "Your public WoW Ledger builds your investor record")
+        self.assertContains(home_response, "Your private WoW loop sharpens your judgment over time")
+        self.assertContains(home_response, "Start Daily WoW Training")
+        self.assertContains(setup_response, "Start Daily WoW Training")
+        self.assertContains(setup_response, "Set up the feedback loop for you and your agent")
+        self.assertContains(setup_response, "WKAP turns daily investment research into a repeatable WoW routine")
+        self.assertContains(setup_response, "only publishes to the WKAP Ledger after approval")
         self.assertContains(setup_response, "Daily WoW Packet")
         self.assertContains(setup_response, "ledger@wkap.ai")
-        self.assertContains(setup_response, 'data-agent-prompt="wkap-investor-log"')
+        self.assertContains(setup_response, "Private WoW Loop")
+        self.assertContains(setup_response, "drafts, no-reply days, skipped ideas, selected WoWs, revisits")
+        self.assertContains(setup_response, "Public WoW Ledger")
+        self.assertContains(setup_response, "published Daily WoW Packets, public and agent-readable")
+        self.assertContains(setup_response, "Copy &amp; Paste This Agent Prompt")
+        self.assertContains(setup_response, "Set up WKAP WoW for me.")
+        self.assertContains(setup_response, "Read and follow:")
+        self.assertContains(setup_response, "If you are Codex, use:")
+        self.assertContains(setup_response, "adapt the universal WKAP WoW Skill to your native format")
+        self.assertContains(setup_response, "Store my private WoW Journal in agent memory or ask me for a local file path")
+        self.assertContains(setup_response, "When I do daily investor research in an agent-accessible browser")
+        self.assertNotContains(setup_response, "Connect your sources")
+        self.assertContains(setup_response, "Based on my behavior pattern, infer when I usually finish most of my daily market investment research")
+        self.assertContains(setup_response, "set the Daily WoW Packet send time after that")
+        self.assertContains(setup_response, "If you cannot infer it, ask me")
+        self.assertContains(setup_response, "Once per US market day, prepare one Daily WoW Packet")
+        self.assertContains(setup_response, "only submit to WKAP Ledger after I approve")
+        self.assertNotContains(setup_response, "Schedule it once per market day")
+        self.assertContains(setup_response, "/skills/wkap-wow-codex/SKILL.md")
+        self.assertNotContains(setup_response, "Fallback Agent Setup Prompt")
+        self.assertNotContains(setup_response, 'data-agent-prompt="wkap-investor-log"')
+        self.assertContains(setup_response, 'data-agent-install-prompt="wkap-wow"')
+        self.assertContains(setup_response, 'data-copy-prompt')
+        self.assertContains(setup_response, 'aria-label="Copy WKAP agent setup prompt"')
+        self.assertContains(setup_response, "<span>Copy</span>")
+        self.assertNotContains(setup_response, "skill install")
+        self.assertContains(setup_response, "wow_packet_spec_latest_url")
+        self.assertContains(setup_response, "wkap_wow_skill_latest_url")
+        self.assertContains(setup_response, "https://wkap.ai/specs/wow-packet-latest.md")
+        self.assertContains(setup_response, "https://wkap.ai/skills/wkap-wow-skill-latest.md")
+        self.assertContains(setup_response, "wkap_wow_codex_skill_url")
+        self.assertContains(setup_response, "private_journal_required")
+        self.assertContains(setup_response, "public_submission_requires_user_approval")
+        self.assertContains(setup_response, "current_submission_format")
+        self.assertContains(setup_response, "protocol_reference_version")
+        self.assertNotContains(setup_response, "Before preparing any Daily WoW Packet, read:")
+        self.assertNotContains(setup_response, "```yaml")
+        self.assertNotContains(setup_response, "wow_type: trackable_wow")
+
+    def test_wow_protocol_markdown_routes_are_public_and_redirect_latest(self):
+        packet = self.client.get("/specs/wow-packet-v0.1.md")
+        skill = self.client.get("/skills/wkap-wow-skill-v0.1.md")
+        codex_skill = self.client.get("/skills/wkap-wow-codex/SKILL.md")
+        packet_latest = self.client.get("/specs/wow-packet-latest.md")
+        skill_latest = self.client.get("/skills/wkap-wow-skill-latest.md")
+
+        self.assertEqual(packet.status_code, 200)
+        self.assertEqual(skill.status_code, 200)
+        self.assertEqual(codex_skill.status_code, 200)
+        self.assertEqual(packet.headers["Content-Type"], "text/markdown; charset=utf-8")
+        self.assertEqual(skill.headers["Content-Type"], "text/markdown; charset=utf-8")
+        self.assertEqual(codex_skill.headers["Content-Type"], "text/markdown; charset=utf-8")
+        self.assertContains(codex_skill, "name: wkap-wow")
+        self.assertContains(codex_skill, "Private WoW Journal")
+        self.assertContains(codex_skill, "status_update")
+        self.assertEqual(packet_latest.status_code, 302)
+        self.assertEqual(packet_latest.headers["Location"], "/specs/wow-packet-v0.1.md")
+        self.assertEqual(skill_latest.status_code, 302)
+        self.assertEqual(skill_latest.headers["Location"], "/skills/wkap-wow-skill-v0.1.md")
+
+    def test_wow_packet_protocol_markdown_contains_agent_contract(self):
+        response = self.client.get("/specs/wow-packet-v0.1.md")
+        body = response.content.decode()
+
+        self.assertIn("# WKAP WoW Packet Spec v0.1", body)
+        self.assertNotIn("canonical_hash", body)
+        self.assertIn("author_id", body)
+        self.assertNotIn("contributor_id", body)
+        for wow_type in ["candidate_wow", "trackable_wow", "scoreable_signal", "thesis_wow", "context_note", "status_update"]:
+            self.assertIn(wow_type, body)
+        self.assertIn("status_update", body)
+        self.assertIn("scoreable: false", body)
+        self.assertIn("append-only", body)
+        self.assertIn("voided", body)
+        self.assertIn("invalid_test", body)
+        self.assertIn("unresolved", body)
+        self.assertIn("unresolved_grace_window_days: 30", body)
+        self.assertIn("signal_status_record_mapping", body)
+        self.assertIn("invalid_test` is a discipline penalty, not a mulligan", body)
+        self.assertIn("voided` is calibration-neutral but visible", body)
+        self.assertIn("unresolved` is pending-past-due, not accuracy-neutral", body)
+        self.assertIn("parent_wow_id", body)
+        self.assertIn("root_wow_id", body)
+        self.assertIn("root_wow_id must equal wow_id", body)
+        self.assertNotIn("lineage_depth:", body)
+        self.assertNotIn("transition_reason:", body)
+        self.assertIn("target_wow_id", body)
+        self.assertIn("target_root_wow_id", body)
+        self.assertIn("A `status_update` is not a lineage node.", body)
+        self.assertIn("private journal lineage is context, not public proof", body.lower())
+        self.assertIn("public lineage proof weight starts at the earliest publicly ledgered ancestor", body.lower())
+        self.assertIn("Receipt is useful confirmation, not the sole source of truth", body)
+        self.assertIn("Future packet formats will change", body)
+        self.assertIn("version-aware", body)
+        self.assertIn("https://wkap.ai/skills/wkap-wow-skill-latest.md", body)
+
+    def test_wkap_wow_skill_markdown_contains_private_journal_contract(self):
+        response = self.client.get("/skills/wkap-wow-skill-v0.1.md")
+        body = response.content.decode()
+
+        self.assertIn("# WKAP WoW Skill v0.1", body)
+        self.assertNotIn("canonical_hash", body)
+        self.assertIn("https://wkap.ai/specs/wow-packet-latest.md", body)
+        self.assertIn("fetch the latest WoW Packet Spec daily", body)
+        self.assertIn("refresh the spec at least every 30 days", body)
+        self.assertIn("Every prepared Daily WoW Packet must be saved to the Private WoW Journal", body)
+        self.assertIn("Private journal drafts may be saved without approval", body)
+        self.assertIn("Public submission requires user approval", body)
+        self.assertIn("save the prepared packet privately and must not submit publicly", body)
+        self.assertIn("private_status: user_no_reply", body)
+        self.assertIn("submission_status: not_submitted", body)
+        self.assertIn("Private lineage helps the agent", body)
+        self.assertIn("private lineage as context, not public timing proof", body.lower())
+        self.assertIn("prepare_status_update_items", body)
+        self.assertIn("move_unresolved_to_voided_after_grace_window", body)
+        self.assertIn("unresolved-to-voided", body)
+        self.assertIn("WKAP receipt email", body)
+        self.assertIn("WKAP public site / public ledger", body)
+        self.assertIn("If no receipt exists but the packet is published on WKAP", body)
 
     def test_pages_expose_agent_search_metadata(self):
         run_id = "00000000-0000-0000-0000-000000000009"
