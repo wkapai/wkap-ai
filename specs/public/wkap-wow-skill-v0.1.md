@@ -23,6 +23,8 @@ agent_facts:
   public_submission_requires_user_approval: true
   setup_mode: low_friction_defaults_first
   ask_user_only_when_blocked: true
+  durable_private_journal_required: true
+  agent_memory_cache_only: true
 ```
 
 ## Purpose
@@ -47,7 +49,7 @@ Default setup behavior:
 setup_defaults:
   setup_mode: defaults_first
   ask_user_only_when_blocked: true
-  private_journal_location: use a durable user-owned Markdown folder in the active workspace or documents area
+  private_journal_location: durable user-owned Markdown storage; local Markdown folder if filesystem access exists
   author_id: use known WKAP investor ID if available; otherwise use a stable local draft identity until public ledger identity is assigned or confirmed
   daily_send_time: infer from the user's behavior pattern after daily investment research; ask only if it cannot be inferred
   research_sources: agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and high-quality agent-found market items
@@ -78,22 +80,28 @@ The agent must maintain a Private WoW Journal for the user.
 
 Every prepared Daily WoW Packet must be saved to the Private WoW Journal, whether or not the user approves, rejects, edits, ignores, or submits it.
 
-Recommended v0.1 storage is user-owned Markdown storage.
+The Private WoW Journal must be stored in durable user-owned storage.
 
-Use a durable default location first. Prefer a `WKAP WoW Journal/` folder in the active workspace, project folder, or user documents area. Ask the user for a path only if no durable writable location is available or the user wants to change it.
+If the agent has local filesystem access, it must use a local Markdown folder by default. Prefer a `WKAP WoW Journal/` folder in the active workspace, project folder, or user documents area. Create the folder and files if missing.
+
+If the agent does not have local filesystem access, it must use an equivalent durable user-owned store such as Drive, Git-backed Markdown, Notion, or another user-controlled document store. Agent memory may be used as a cache, but it must not be the only Private WoW Journal.
+
+Ask the user for a path only if no durable writable default is available or the user wants to change it. After setup, tell the user where the Private WoW Journal is stored.
 
 Example:
 
 ```text
-/WKAP/WoW Journal/
-  2026-07-05.md
+/WKAP WoW Journal/
+  daily/
+    2026-07-05.md
   active-trackables.md
   pending-scoreables.md
+  thesis-map.md
   receipts.md
   public-verification.md
 ```
 
-Pure agent memory can be a cache, but it should not be the only durable journal if avoidable.
+Pure agent memory can be a cache, but it must not be the only durable journal.
 
 ## Author Identity Default
 

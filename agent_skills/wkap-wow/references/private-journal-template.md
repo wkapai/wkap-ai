@@ -2,7 +2,7 @@
 
 Recommended user-owned Markdown structure:
 
-Default first. Use `WKAP WoW Journal/` in the active workspace or user documents area unless the user asks for a different path. When running in this repo, use:
+Default first. Use local Markdown files in `WKAP WoW Journal/` in the active workspace or user documents area unless the user asks for a different path. Create the folder and required files if missing. When running in this repo, use:
 
 ```text
 C:\Users\ASUS\Documents\wkap\WKAP WoW Journal
@@ -11,12 +11,17 @@ C:\Users\ASUS\Documents\wkap\WKAP WoW Journal
 ```text
 WKAP WoW Journal/
   daily/
-    2026-07-05.md
   active-trackables.md
   pending-scoreables.md
   thesis-map.md
   receipts.md
   public-verification.md
+```
+
+Daily packets go in:
+
+```text
+WKAP WoW Journal/daily/YYYY-MM-DD.md
 ```
 
 Each daily entry should preserve:

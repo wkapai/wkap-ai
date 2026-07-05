@@ -29,14 +29,33 @@ Use the latest public spec when it conflicts with bundled references.
 
 When installing this skill or setting up a recurring WKAP task, use defaults and infer behavior before asking questions.
 
-- Private journal: create or use `WKAP WoW Journal/` in the active workspace by default. In this repo, that is `C:\Users\ASUS\Documents\wkap\WKAP WoW Journal`.
-- Agent memory: may be used as a cache, but do not make it the only durable journal when local files are available.
+- Private journal: create or use local Markdown files in `WKAP WoW Journal/` in the active workspace by default. In this repo, that is `C:\Users\ASUS\Documents\wkap\WKAP WoW Journal`.
+- If the journal folder or required files are missing, create them before the first prepared packet.
+- Agent memory: may be used as a cache, but must not be the only durable journal when local files are available.
 - `author_id`: use the known WKAP investor ID if available. If unknown, use a stable local draft identity and do not block setup. Update the mapping after WKAP assigns or confirms a public investor ID.
 - Send time: infer the daily send time from the user's behavior pattern after their usual investment research window. Ask only if it cannot be inferred.
 - Research sources: default to agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and useful agent-found market items.
 - Approval: default to preparing the packet, showing it to the user, and waiting for approval. If the user does not reply, save privately as no-reply and submit nothing publicly.
 
 Ask the user only for information that is required and cannot be inferred or safely defaulted.
+
+## Codex Local Journal Layout
+
+For this repo, create/use:
+
+```text
+C:\Users\ASUS\Documents\wkap\WKAP WoW Journal\
+  daily\
+  active-trackables.md
+  pending-scoreables.md
+  thesis-map.md
+  receipts.md
+  public-verification.md
+```
+
+Daily packets go in `daily\YYYY-MM-DD.md`.
+
+After setup, tell the user the journal path and whether the local files were created or already existed.
 
 ## Private Engine Rules
 
