@@ -16,7 +16,7 @@ Use the latest public spec when it conflicts with bundled references.
 
 ## Core Workflow
 
-1. Ask the user where to keep the Private WoW Journal if no durable location is known.
+1. Apply setup defaults first; do not start with a long interview.
 2. Maintain the user's private reading log throughout the day.
 3. Save every prepared Daily WoW Packet privately, including no-reply, rejected, pass, draft, and submitted days.
 4. Classify every WoW item with `wow_type`: `candidate_wow`, `trackable_wow`, `scoreable_signal`, `thesis_wow`, `context_note`, or `status_update`.
@@ -24,6 +24,19 @@ Use the latest public spec when it conflicts with bundled references.
 6. Ask the user to select one, pass, edit, watch later, or request more research.
 7. Submit publicly only after approval.
 8. After submission, reconcile both WKAP receipt email and WKAP public site / ledger.
+
+## Low-Friction Setup Defaults
+
+When installing this skill or setting up a recurring WKAP task, use defaults and infer behavior before asking questions.
+
+- Private journal: create or use `WKAP WoW Journal/` in the active workspace by default. In this repo, that is `C:\Users\ASUS\Documents\wkap\WKAP WoW Journal`.
+- Agent memory: may be used as a cache, but do not make it the only durable journal when local files are available.
+- `author_id`: use the known WKAP investor ID if available. If unknown, use a stable local draft identity and do not block setup. Update the mapping after WKAP assigns or confirms a public investor ID.
+- Send time: infer the daily send time from the user's behavior pattern after their usual investment research window. Ask only if it cannot be inferred.
+- Research sources: default to agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and useful agent-found market items.
+- Approval: default to preparing the packet, showing it to the user, and waiting for approval. If the user does not reply, save privately as no-reply and submit nothing publicly.
+
+Ask the user only for information that is required and cannot be inferred or safely defaulted.
 
 ## Private Engine Rules
 

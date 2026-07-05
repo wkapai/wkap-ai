@@ -2,6 +2,12 @@
 
 Recommended user-owned Markdown structure:
 
+Default first. Use `WKAP WoW Journal/` in the active workspace or user documents area unless the user asks for a different path. When running in this repo, use:
+
+```text
+C:\Users\ASUS\Documents\wkap\WKAP WoW Journal
+```
+
 ```text
 WKAP WoW Journal/
   daily/

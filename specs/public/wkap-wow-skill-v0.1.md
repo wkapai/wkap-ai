@@ -21,6 +21,8 @@ agent_facts:
   minimum_fallback_refresh_days: 30
   private_journal_required: true
   public_submission_requires_user_approval: true
+  setup_mode: low_friction_defaults_first
+  ask_user_only_when_blocked: true
 ```
 
 ## Purpose
@@ -34,6 +36,25 @@ It is not a newsletter-writing skill. It is an investor judgment training skill.
 Agent prepares. User judges. Private Journal preserves the workout trail. WKAP Ledger records what became public.
 
 Private WoW Journal builds skill. WKAP Public Ledger builds reputation.
+
+## Setup Behavior
+
+The agent should not start with a long interview.
+
+Default setup behavior:
+
+```yaml
+setup_defaults:
+  setup_mode: defaults_first
+  ask_user_only_when_blocked: true
+  private_journal_location: use a durable user-owned Markdown folder in the active workspace or documents area
+  author_id: use known WKAP investor ID if available; otherwise use a stable local draft identity until public ledger identity is assigned or confirmed
+  daily_send_time: infer from the user's behavior pattern after daily investment research; ask only if it cannot be inferred
+  research_sources: agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and high-quality agent-found market items
+  approval_flow: prepare packet, show user, wait for approval; no reply means save privately and submit nothing publicly
+```
+
+The agent may briefly confirm the setup after applying defaults, but it should not block installation on questions about journal location, author ID, schedule, source list, or approval flow unless those defaults are impossible to apply.
 
 ## Source of Truth
 
@@ -59,6 +80,8 @@ Every prepared Daily WoW Packet must be saved to the Private WoW Journal, whethe
 
 Recommended v0.1 storage is user-owned Markdown storage.
 
+Use a durable default location first. Prefer a `WKAP WoW Journal/` folder in the active workspace, project folder, or user documents area. Ask the user for a path only if no durable writable location is available or the user wants to change it.
+
 Example:
 
 ```text
@@ -71,6 +94,12 @@ Example:
 ```
 
 Pure agent memory can be a cache, but it should not be the only durable journal if avoidable.
+
+## Author Identity Default
+
+Do not block private setup on WKAP `author_id`.
+
+If the user's WKAP investor ID is known, use it as `author_id`. If not, use a stable local draft identity such as a user or agent slug for private records. When the first public WKAP Ledger submission assigns or confirms the public investor ID, update future packets and preserve the mapping in the Private WoW Journal.
 
 ## Private vs Public Lineage
 
@@ -86,13 +115,13 @@ Private noticed is not public proof. Public submitted is not the same as receipt
 
 ```text
 1. Fetch latest packet spec.
-2. Read the user's market context and market sources.
+2. Read the user's investment context from agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and high-quality agent-found market items.
 3. Build or update the private reading log.
 4. Generate candidate WoWs.
 5. Classify each item by wow_type.
 6. Rank candidates.
 7. Save the prepared packet to the Private WoW Journal.
-8. Ask the user to approve one, pass, edit, or request more research.
+8. Show the prepared packet and ask the user to approve one, pass, edit, or request more research.
 9. If approved, build the final packet and submit to WKAP.
 10. If not approved or no reply, keep it private.
 11. Reconcile receipt and public site status after attempted submission.
@@ -123,6 +152,8 @@ Private journal drafts may be saved without approval.
 Public submission requires user approval.
 
 The agent must not submit a packet publicly to WKAP unless the user approved submission or gave an explicit standing instruction to submit.
+
+Default approval flow is assumed: prepare privately, present the packet to the user, wait for approval, and submit only after approval. Do not ask the user how approval should work unless the current agent environment cannot support this flow.
 
 ## User No-Reply Rule
 

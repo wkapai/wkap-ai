@@ -1138,6 +1138,14 @@ packet:
         self.assertIn("https://wkap.ai/specs/wow-packet-latest.md", body)
         self.assertIn("fetch the latest WoW Packet Spec daily", body)
         self.assertIn("refresh the spec at least every 30 days", body)
+        self.assertIn("setup_mode: low_friction_defaults_first", body)
+        self.assertIn("ask_user_only_when_blocked: true", body)
+        self.assertIn("The agent should not start with a long interview", body)
+        self.assertIn("use a stable local draft identity", body)
+        self.assertIn("infer from the user's behavior pattern", body)
+        self.assertIn("agent-accessible browser activity", body)
+        self.assertIn("Do not block private setup on WKAP `author_id`", body)
+        self.assertIn("Default approval flow is assumed", body)
         self.assertIn("Every prepared Daily WoW Packet must be saved to the Private WoW Journal", body)
         self.assertIn("Private journal drafts may be saved without approval", body)
         self.assertIn("Public submission requires user approval", body)
@@ -1152,6 +1160,18 @@ packet:
         self.assertIn("WKAP receipt email", body)
         self.assertIn("WKAP public site / public ledger", body)
         self.assertIn("If no receipt exists but the packet is published on WKAP", body)
+
+    def test_codex_wkap_wow_skill_uses_low_friction_defaults(self):
+        response = self.client.get("/skills/wkap-wow-codex/SKILL.md")
+        body = response.content.decode()
+
+        self.assertIn("Apply setup defaults first; do not start with a long interview", body)
+        self.assertIn("C:\\Users\\ASUS\\Documents\\wkap\\WKAP WoW Journal", body)
+        self.assertIn("use a stable local draft identity and do not block setup", body)
+        self.assertIn("infer the daily send time from the user's behavior pattern", body)
+        self.assertIn("agent-accessible browser activity", body)
+        self.assertIn("default to preparing the packet, showing it to the user, and waiting for approval", body)
+        self.assertIn("Ask the user only for information that is required and cannot be inferred or safely defaulted", body)
 
     def test_pages_expose_agent_search_metadata(self):
         run_id = "00000000-0000-0000-0000-000000000009"
