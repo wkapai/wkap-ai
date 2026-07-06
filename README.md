@@ -223,7 +223,7 @@ Cloudflare:
   - `WKAP_FORWARD_TO=playinc@gmail.com`
 - Gmail remains the backup mailbox and receipt sender for V0. If Worker ingest fails, the forwarded Gmail copy can still be processed manually or by a fallback poller.
 - `wkap.ai` must be proxied through Cloudflare for cache rules to apply.
-- Cache dated Radar Feed pages only with a Cache Rule matching `(http.host eq "wkap.ai" and http.request.uri.path matches "^/radar/wkap-radar-feed-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.html$")`: Eligible for cache, Edge TTL 1 month, Browser TTL 5 minutes, Ignore query string.
+- Cache dated Radar Feed pages only with a Cache Rule matching `(http.host eq "wkap.ai" and starts_with(http.request.uri.path, "/radar/wkap-radar-feed-") and ends_with(http.request.uri.path, ".html"))`: Eligible for cache, Edge TTL 1 month, Ignore query string. This expression works on the Cloudflare Free plan without the plan-gated regex `matches` operator.
 - Do not edge-cache the live archive `/radar/`. Keep a higher-priority bypass/no-cache rule for `(http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/"))`.
 - After changing Cloudflare from the old broad `/radar/*` rule, purge stale archive URLs once: `https://wkap.ai/radar/`.
 - Production defaults `WKAP_CACHE_WARMUP_ENABLED=true`, so successful Radar publishes warm the dated feed page with a full GET request. Manual warm/verify: `python manage.py wkap --json warm-radar-cache --market-date 2026-07-03`; run it twice and confirm the dated feed page `cf_cache_status` moves from `MISS` to `HIT`.

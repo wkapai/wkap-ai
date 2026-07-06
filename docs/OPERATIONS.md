@@ -100,10 +100,10 @@ Render runs `scripts/render_release.sh`, which clones or fast-forwards the ledge
 Use one cache rule for dated Radar Feed pages only:
 
 ```txt
-(http.host eq "wkap.ai" and http.request.uri.path matches "^/radar/wkap-radar-feed-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.html$")
+(http.host eq "wkap.ai" and starts_with(http.request.uri.path, "/radar/wkap-radar-feed-") and ends_with(http.request.uri.path, ".html"))
 ```
 
-Settings: Eligible for cache, Edge TTL 1 month, Browser TTL 5 minutes, Ignore query string. If dated Radar pages return `cf-cache-status: DYNAMIC`, Cloudflare is not treating them as cache-eligible yet.
+Settings: Eligible for cache, Edge TTL 1 month, Ignore query string. This expression is Cloudflare Free-plan-safe; avoid the regex `matches` operator unless the zone plan supports it. If dated Radar pages return `cf-cache-status: DYNAMIC`, Cloudflare is not treating them as cache-eligible yet.
 
 Add or keep a higher-priority bypass/no-cache rule for the archive:
 
