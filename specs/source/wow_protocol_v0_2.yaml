@@ -99,6 +99,10 @@ intake_flow:
     draft_options:
       required_action: generate exactly 3 WoW choices from today's readings and existing CRM state
       allowed_option_kinds: [new_wow_signal, existing_wow_status_update]
+      type_mix_rule:
+        force_one_from_each_wow_type: false
+        repeated_wow_types_allowed: true
+        selection_basis: highest_value_for_today_evidence_and_crm_state
       display_contract:
         exact_visible_options: 3
         prompt_template: "Pick one WoW: 1, 2, 3, or pass."

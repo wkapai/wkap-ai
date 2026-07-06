@@ -1990,6 +1990,10 @@ packet:
         self.assertTrue(display_contract["wow_id_hidden_by_default"])
         self.assertTrue(display_contract["user_must_not_be_required_to_choose_by_wow_id"])
         self.assertIn("user_is_required_to_choose_by_wow_id", display_contract["invalid_if"])
+        type_mix_rule = intake["states"]["draft_options"]["type_mix_rule"]
+        self.assertFalse(type_mix_rule["force_one_from_each_wow_type"])
+        self.assertTrue(type_mix_rule["repeated_wow_types_allowed"])
+        self.assertEqual(type_mix_rule["selection_basis"], "highest_value_for_today_evidence_and_crm_state")
 
         required = daily_state["properties"]["wow_options"]["items"]["required"]
         for field in ["wow_id", "wow_type", "visible_type_label", "plain_english_title", "why_worth_watching"]:
@@ -2105,6 +2109,8 @@ packet:
         self.assertIn("DailyWoWChoiceSlate", body)
         self.assertIn("Do not build, print, or validate the full packet YAML before the user has made a selection/pass", body)
         self.assertIn("target under 10 seconds", body)
+        self.assertIn("MUST NOT be forced into a fixed type mix", body)
+        self.assertIn("multiple options to share the same `wow_type`", body)
         self.assertIn("Daily Suggestion Display Contract", body)
         self.assertIn("visible_type_label", body)
         self.assertIn("plain_english_title", body)

@@ -222,6 +222,8 @@ The agent must suggest exactly 3 WoW signals. The user must choose one of:
 
 Any of the 3 options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, a promotion, a resolution, or a maintenance event.
 
+The 3 options MUST NOT be forced into a fixed type mix. The agent must rank all candidate, trackable, scoreable, thesis, and status-update opportunities together and show the best three for today's evidence and CRM state. It is valid for multiple options to share the same `wow_type`; do not include one item from each type merely to make the slate look balanced.
+
 Required user fields:
 
 ```yaml
@@ -269,6 +271,8 @@ choice_slate:
 ```
 
 Do not build, print, or validate the full packet YAML before the user has made a selection/pass and provided the required reason. Keep reading-log selection, source refs, `wow_id`, lineage, and CRM state internally while showing only the slate. The first user-facing slate should be concise and should target under 10 seconds whenever recent reading context is already available.
+
+The slate is not a template slot exercise. Do not choose one Trackable, one Scoreable, and one Thesis just to make the surface look balanced.
 
 After choice plus reason exists, generate the final v0.2 Daily WoW Packet, save it privately, submit it publicly, and reconcile asynchronously.
 

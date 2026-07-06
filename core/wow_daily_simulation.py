@@ -358,19 +358,26 @@ def base_daily_options(
         with_visible_fields(
             {
                 "wow_id": third_id,
-                "wow_type": "thesis_wow",
+                "wow_type": "trackable_wow",
                 "scoreable": False,
                 "accuracy_endpoint_eligible": False,
                 "parent_wow_id": None,
                 "root_wow_id": third_id,
-                "thesis_claim": "Regulated market infrastructure can absorb tokenized cash and 24/7 settlement without surrendering the institutional clearing relationship to crypto-native venues.",
-                "thesis_status": "supported",
+                "claim": "Regulated tokenized-cash pilots are becoming monitorable infrastructure evidence rather than a broad crypto thesis.",
+                "evidence_to_watch": [
+                    "CME tokenized collateral or margin workflow updates",
+                    "bank deposit-token adoption beyond pilots",
+                    "Google Cloud or other infrastructure partner disclosures",
+                ],
+                "review_cadence": "monthly",
+                "next_review_at": (market_date + timedelta(days=30)).isoformat(),
+                "trackable_status": "active_trackable",
                 "source_refs": cme_refs,
-                "agent_facts": {"wow_type": "thesis_wow", "scoreable": False, "accuracy_endpoint_eligible": False},
+                "agent_facts": {"wow_type": "trackable_wow", "scoreable": False, "accuracy_endpoint_eligible": False},
             },
             option_number=3,
-            title="CME tokenized cash is thesis evidence for regulated 24/7 settlement",
-            why="BMO, CME Group, and Google Cloud make this a real thesis update, but it still needs future adoption evidence before becoming scoreable.",
+            title="CME tokenized cash becomes a monitorable settlement-rails signal",
+            why="BMO, CME Group, and Google Cloud make this worth tracking, but the investable question is adoption cadence rather than a finished thesis.",
         ),
     ]
 

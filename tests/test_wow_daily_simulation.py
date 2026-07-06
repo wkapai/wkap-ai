@@ -66,8 +66,9 @@ class DailyWoWSimulationTests(TestCase):
         self.assertEqual(options[0]["wow_type"], "trackable_wow")
         self.assertEqual(options[1]["wow_type"], "scoreable_signal")
         self.assertEqual(options[1]["source_refs"], ["Reading Item 3"])
-        self.assertEqual(options[2]["wow_type"], "thesis_wow")
+        self.assertEqual(options[2]["wow_type"], "trackable_wow")
         self.assertEqual(options[2]["source_refs"], ["Reading Item 4"])
+        self.assertEqual([option["wow_type"] for option in options].count("trackable_wow"), 2)
 
     def test_selection_flow_hides_wow_ids_and_generates_parseable_packet(self):
         state = self.daily_state()
