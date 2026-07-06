@@ -95,32 +95,38 @@ Render runs `scripts/render_release.sh`, which clones or fast-forwards the ledge
 
 ## Cloudflare Radar Cache
 
-`wkap.ai` must be proxied through Cloudflare while still pointing at Render.
+`wkap.ai` must be proxied through Cloudflare while still pointing at Render. Dated Radar Feed pages are cacheable artifacts. The `/radar/` archive is a live index and must not be cached with a long edge TTL.
 
-Dated Radar Feed HTML files are immutable and should be cached aggressively:
+Use one cache rule for dated Radar Feed pages only:
 
 ```txt
 (http.host eq "wkap.ai" and http.request.uri.path matches "^/radar/wkap-radar-feed-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.html$")
 ```
 
-Settings: Eligible for cache, Edge TTL 1 year, Browser TTL 5 minutes, Ignore query string.
+Settings: Eligible for cache, Edge TTL 1 month, Browser TTL 5 minutes, Ignore query string. If dated Radar pages return `cf-cache-status: DYNAMIC`, Cloudflare is not treating them as cache-eligible yet.
 
-The changing archive index is cached separately:
+Add or keep a higher-priority bypass/no-cache rule for the archive:
 
 ```txt
 (http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/"))
 ```
 
-Settings: Eligible for cache, Edge TTL 1 day, Browser TTL 5 minutes, Ignore query string.
+Do not include `/radar/` in a broad `starts_with("/radar/")` cache rule. The app also sends `Cache-Control: max-age=0, no-cache, must-revalidate` for the archive, but Cloudflare rules that override origin headers can still serve stale content if `/radar/` is included in an edge cache rule.
 
-Production defaults `WKAP_CACHE_WARMUP_ENABLED=true`, so successful Radar publishes warm the archive and dated feed URLs with normal GET requests. Manual warm/verify:
+After changing Cloudflare, purge these exact stale archive URLs once:
+
+```txt
+https://wkap.ai/radar/
+```
+
+Production defaults `WKAP_CACHE_WARMUP_ENABLED=true`, so successful Radar publishes warm the dated feed URL with a normal GET request. Manual warm/verify:
 
 ```powershell
 python manage.py wkap --json warm-radar-cache --market-date 2026-07-03
 python manage.py wkap --json warm-radar-cache --market-date 2026-07-03
 ```
 
-Check the second response for `cf_cache_status: HIT`. If a new feed has just been published and the archive is stale, purge only `https://wkap.ai/radar/`, then run the warm command again. Do not purge old dated feed pages.
+Expected result for the dated feed page: the first request reports `cf_cache_status: MISS`, and the second reports `cf_cache_status: HIT`. The archive should show fresh entries without manual purge after the one-time Cloudflare rule correction.
 
 ## OpenTimestamp
 

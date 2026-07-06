@@ -368,7 +368,7 @@ def publish_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
 
 
 def warm_radar_cache(market_date, *, run_id: uuid.UUID) -> list[dict[str, Any]]:
-    urls = [radar_archive_url(), radar_issue_url(market_date)]
+    urls = [radar_issue_url(market_date)]
     log_event(
         "radar_cache_warmup_started",
         run_id=run_id,

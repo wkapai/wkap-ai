@@ -873,6 +873,18 @@ packet:
         self.assertEqual(parsed.title, "Physical AI component supply chain, humanoid robotics BOM")
         self.assertEqual(parsed.body_text, body)
 
+    def test_radar_parser_uses_subject_date_before_body_date(self):
+        raw = self.raw_email(
+            subject="WKAP Radar Feed - 2026 - 06 - 30",
+            body="Market_date: 2026-07-06\nTitle: Historical Radar\nBody: Context from a historical resend",
+        )
+
+        parsed = parse_radar(raw)
+
+        self.assertEqual(str(parsed.market_date), "2026-06-30")
+        self.assertEqual(parsed.title, "Historical Radar")
+        self.assertEqual(parsed.body_text, raw.raw_body)
+
     def test_first_investor_gets_w0202_and_returning_sender_reuses_it(self):
         run_id = "00000000-0000-0000-0000-000000000003"
         first, created = find_or_create_investor("new@example.com", run_id=run_id)
@@ -1519,7 +1531,7 @@ packet:
 
         run_id = "00000000-0000-0000-0000-000000000030"
         with override_settings(WKAP_BASE_URL="https://wkap.ai"):
-            with patch("publishing.services.urllib.request.urlopen", side_effect=[WarmupResponse(), WarmupResponse()]) as urlopen:
+            with patch("publishing.services.urllib.request.urlopen", side_effect=[WarmupResponse()]) as urlopen:
                 results = warm_radar_cache("2026-07-03", run_id=run_id)
 
         requested_urls = [call.args[0].full_url for call in urlopen.call_args_list]
@@ -1527,18 +1539,16 @@ packet:
         self.assertEqual(
             requested_urls,
             [
-                "https://wkap.ai/radar/",
                 "https://wkap.ai/radar/wkap-radar-feed-2026-07-03.html",
             ],
         )
-        self.assertEqual(requested_methods, ["GET", "GET"])
-        self.assertEqual([result["cf_cache_status"] for result in results], ["MISS", "MISS"])
+        self.assertEqual(requested_methods, ["GET"])
+        self.assertEqual([result["cf_cache_status"] for result in results], ["MISS"])
         self.assertTrue(LedgerEvent.objects.filter(event_name="radar_cache_warmup_succeeded", entity_type="radar").exists())
 
     def test_warm_radar_cache_cli_returns_header_details(self):
         output = StringIO()
         fake_results = [
-            {"url": "https://wkap.ai/radar/", "method": "GET", "status_code": 200, "cf_cache_status": "HIT"},
             {
                 "url": "https://wkap.ai/radar/wkap-radar-feed-2026-07-03.html",
                 "method": "GET",
@@ -1606,6 +1616,9 @@ packet:
 
         self.assertContains(response, 'href="/radar/wkap-radar-feed-2026-06-29.html"')
         self.assertContains(response, "WKAP Radar Feed 2026-06-29")
+        self.assertIn("max-age=0", response.headers["Cache-Control"])
+        self.assertIn("no-cache", response.headers["Cache-Control"])
+        self.assertIn("must-revalidate", response.headers["Cache-Control"])
 
     def test_wow_indexes_use_iso_url_and_feed_label(self):
         run_id = "00000000-0000-0000-0000-000000000007"

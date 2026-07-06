@@ -8,6 +8,7 @@ from django.db.models import Max
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.utils.html import escape
+from django.views.decorators.cache import cache_control
 
 from ledger.models import Investor, RadarIssue, DailyWoWPacket
 from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, local_wow_id, market_terms
@@ -296,6 +297,7 @@ def markdown_latest_redirect(request, target_path: str):
     return HttpResponseRedirect(target_path)
 
 
+@cache_control(no_cache=True, must_revalidate=True, max_age=0)
 def radar_archive(request):
     issues = RadarIssue.objects.order_by("-market_date")
     return render(

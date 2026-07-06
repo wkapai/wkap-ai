@@ -132,7 +132,7 @@ The regression command creates or updates one sample Radar email and one sample 
 
 ### Long Artifact Contract
 
-Radar Feeds and Daily WoW Packets are expected to be long-form agent inputs. Ingestion must store the complete email body in `RawEmail.raw_body` before parsing, parsers must preserve long multiline sections, and publishers must render long bodies without truncation. Radar Feeds are human-curated artifacts and their body text must be published verbatim from the received email; WKAP may derive metadata such as market date, title, URL, hashes, and proof fields, but must not rewrite, condense, normalize, or reconstruct the Radar body. Do not pass email bodies through CLI arguments or shell command strings; use Gmail ingestion, files, stdin, or API payloads so line breaks and full body length survive intact.
+Radar Feeds and Daily WoW Packets are expected to be long-form agent inputs. Ingestion must store the complete email body in `RawEmail.raw_body` before parsing, parsers must preserve long multiline sections, and publishers must render long bodies without truncation. Radar Feeds are human-curated artifacts and their body text must be published verbatim from the received email; WKAP may derive metadata such as market date, title, URL, hashes, and proof fields, but must not rewrite, condense, normalize, or reconstruct the Radar body. For Radar backfills and resubmissions, the email subject date is the canonical `market_date` when present, including subjects like `WKAP Radar Feed - 2026 - 06 - 30`; body dates are fallback only. Do not pass email bodies through CLI arguments or shell command strings; use Gmail ingestion, files, stdin, or API payloads so line breaks and full body length survive intact.
 
 ### WoW Format Error Contract
 
@@ -223,9 +223,10 @@ Cloudflare:
   - `WKAP_FORWARD_TO=playinc@gmail.com`
 - Gmail remains the backup mailbox and receipt sender for V0. If Worker ingest fails, the forwarded Gmail copy can still be processed manually or by a fallback poller.
 - `wkap.ai` must be proxied through Cloudflare for cache rules to apply.
-- Cache dated Radar Feed pages with a Cache Rule matching `(http.host eq "wkap.ai" and http.request.uri.path matches "^/radar/wkap-radar-feed-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.html$")`: Eligible for cache, Edge TTL 1 year, Browser TTL 5 minutes, Ignore query string.
-- Cache the Radar archive index with a Cache Rule matching `(http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/"))`: Eligible for cache, Edge TTL 1 day, Browser TTL 5 minutes, Ignore query string.
-- Production defaults `WKAP_CACHE_WARMUP_ENABLED=true`, so successful Radar publishes warm `/radar/` and the dated feed page with full GET requests. Manual warm/verify: `python manage.py wkap --json warm-radar-cache --market-date 2026-07-03`; run it twice and confirm `cf_cache_status` becomes `HIT`.
+- Cache dated Radar Feed pages only with a Cache Rule matching `(http.host eq "wkap.ai" and http.request.uri.path matches "^/radar/wkap-radar-feed-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.html$")`: Eligible for cache, Edge TTL 1 month, Browser TTL 5 minutes, Ignore query string.
+- Do not edge-cache the live archive `/radar/`. Keep a higher-priority bypass/no-cache rule for `(http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/"))`.
+- After changing Cloudflare from the old broad `/radar/*` rule, purge stale archive URLs once: `https://wkap.ai/radar/`.
+- Production defaults `WKAP_CACHE_WARMUP_ENABLED=true`, so successful Radar publishes warm the dated feed page with a full GET request. Manual warm/verify: `python manage.py wkap --json warm-radar-cache --market-date 2026-07-03`; run it twice and confirm the dated feed page `cf_cache_status` moves from `MISS` to `HIT`.
 
 GitHub ledger:
 

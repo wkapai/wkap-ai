@@ -1,0 +1,1165 @@
+from __future__ import annotations
+
+import json
+import re
+import uuid
+from copy import deepcopy
+from dataclasses import dataclass, field
+from datetime import date, datetime, time, timedelta
+from pathlib import Path
+from typing import Any
+
+import yaml
+from django.conf import settings
+from django.utils import timezone
+
+from ingestion.models import RawEmail
+from ledger.models import Investor
+from ledger.parsers import ParseError, parse_wow
+from ledger.services import create_wow_submission
+from ledger.wow_lifecycle_rules import ALLOWED_STATUS_TRANSITIONS, validate_status_transition
+from publishing.services import publish_artifact, validate_ledger
+
+
+DAILY_PROMPT = "Pick one WoW: 1, 2, 3, or pass."
+SIM_INVESTOR_ID = "w0998"
+SIM_EMAIL = "wkap-daily-wow-sim@example.com"
+SIM_DISPLAY_NAME = "WKAP Daily WoW Simulation Agent"
+
+VISIBLE_TYPE_LABELS = {
+    "candidate_wow": "Candidate",
+    "trackable_wow": "Trackable",
+    "scoreable_signal": "Scoreable",
+    "thesis_wow": "Thesis",
+    "status_update": "Status Update",
+}
+
+NORMAL_WOW_REQUIRED_FIELDS = {
+    "candidate_wow": ("wow_id", "wow_type", "parent_wow_id", "root_wow_id", "observation", "why_worth_watching", "candidate_status", "source_refs"),
+    "trackable_wow": ("wow_id", "wow_type", "parent_wow_id", "root_wow_id", "claim", "evidence_to_watch", "review_cadence", "next_review_at", "trackable_status", "source_refs"),
+    "scoreable_signal": ("wow_id", "wow_type", "parent_wow_id", "root_wow_id", "claim", "invalidate_test", "resolve_by", "resolution_source", "signal_status", "source_refs"),
+    "thesis_wow": ("wow_id", "wow_type", "parent_wow_id", "root_wow_id", "thesis_claim", "thesis_status", "source_refs"),
+}
+
+STATUS_UPDATE_REQUIRED_FIELDS = (
+    "wow_id",
+    "wow_type",
+    "target_wow_type",
+    "target_wow_id",
+    "target_root_wow_id",
+    "update_type",
+    "previous_status",
+    "new_status",
+    "update_summary",
+    "evidence_summary",
+    "source_refs",
+)
+
+READING_SAMPLES = [
+    {
+        "source_title": "Cloud GPU rental price checks show early loosening",
+        "source_url": "https://www.coreweave.com/blog",
+        "source_type": "article",
+        "tickers": ["CRWV", "NVDA"],
+        "themes": ["AI infrastructure", "GPU rental pricing"],
+        "agent_summary": "GPU rental quotes and reservation terms are useful second-order checks on AI compute supply.",
+    },
+    {
+        "source_title": "Hyperscaler earnings commentary highlights AI power constraints",
+        "source_url": "https://www.microsoft.com/en-us/investor/earnings",
+        "source_type": "transcript",
+        "tickers": ["MSFT", "NVDA", "NEE"],
+        "themes": ["AI data centers", "power bottlenecks"],
+        "agent_summary": "Management language around power availability can turn broad AI capex narratives into checkable deployment bottlenecks.",
+    },
+    {
+        "source_title": "Advanced packaging capacity remains a supply-chain gating item",
+        "source_url": "https://www.tsmc.com/english/investorRelations",
+        "source_type": "filing",
+        "tickers": ["TSM", "NVDA", "AMD"],
+        "themes": ["advanced packaging", "AI accelerators"],
+        "agent_summary": "Packaging availability is still a concrete evidence stream for accelerator supply and AI capex quality.",
+    },
+    {
+        "source_title": "How Open USD Sent Circle Down 17%",
+        "source_url": "https://reports.tiger-research.com/p/how-open-usd-sent-circle-down-17-eng",
+        "source_type": "article",
+        "tickers": ["CRCL", "COIN"],
+        "themes": ["stablecoin reserve income", "market structure"],
+        "agent_summary": "Stablecoin reserve-sharing pressure is a useful real-world sample for scoreable revenue architecture claims.",
+    },
+    {
+        "source_title": "Why established exchanges are harder to displace than the market believes",
+        "source_url": "https://substack.com/home/post/p-204294860",
+        "source_type": "article",
+        "tickers": ["CME", "ICE"],
+        "themes": ["regulated exchanges", "crypto market structure"],
+        "agent_summary": "Exchange moat arguments are good thesis material because they collect regulation, clearing, settlement, and institutional-access evidence.",
+    },
+    {
+        "source_title": "Tesla investor relations autonomy update",
+        "source_url": "https://ir.tesla.com/",
+        "source_type": "website",
+        "tickers": ["TSLA"],
+        "themes": ["robotaxi utilization", "autonomy"],
+        "agent_summary": "Autonomy optionality needs utilization and service-area evidence rather than launch headlines alone.",
+    },
+]
+
+
+@dataclass
+class ConversationTurn:
+    actor: str
+    message: str
+    state: str
+    normalized: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class SimulationCase:
+    name: str
+    market_date: date
+    state: dict[str, Any]
+    turns: list[ConversationTurn]
+    validation_errors: list[str] = field(default_factory=list)
+    packet: dict[str, Any] | None = None
+    packet_markdown: str = ""
+    parse_error: str = ""
+    published_url: str = ""
+    ledger_errors: list[str] = field(default_factory=list)
+
+    @property
+    def completed(self) -> bool:
+        return self.state.get("state") in {"ready_to_submit", "submitted", "verified"}
+
+
+def default_journal_path() -> Path:
+    return settings.BASE_DIR / "WKAP WoW Journal"
+
+
+def ensure_private_journal(journal_path: Path) -> list[Path]:
+    created: list[Path] = []
+    required_files = {
+        "active-trackables.md": "# Active Trackables\n\nPrivate WKAP WoW Journal file. Append active `trackable_wow` items here.\n",
+        "pending-scoreables.md": "# Pending Scoreables\n\nPrivate WKAP WoW Journal file. Append pending `scoreable_signal` items here, including resolution source and resolve-by date.\n",
+        "thesis-map.md": "# Thesis Map\n\nPrivate WKAP WoW Journal file. Track `thesis_wow` items and child WoW relationships here.\n",
+        "receipts.md": "# Receipts\n\nPrivate WKAP WoW Journal file. Record WKAP submission receipts and receipt reconciliation here.\n",
+        "public-verification.md": "# Public Verification\n\nPrivate WKAP WoW Journal file. Record WKAP public ledger URLs and public site reconciliation here.\n",
+    }
+    for directory in (journal_path, journal_path / "daily", journal_path / "simulation"):
+        if not directory.exists():
+            directory.mkdir(parents=True, exist_ok=True)
+            created.append(directory)
+    for filename, body in required_files.items():
+        path = journal_path / filename
+        if not path.exists():
+            path.write_text(body, encoding="utf-8")
+            created.append(path)
+    return created
+
+
+def reading_log_for_day(market_date: date, *, offset: int = 0, count: int = 3) -> list[dict[str, Any]]:
+    readings = []
+    for index in range(count):
+        sample = READING_SAMPLES[(offset + index) % len(READING_SAMPLES)]
+        readings.append(
+            {
+                "item_number": index + 1,
+                "source_title": sample["source_title"],
+                "source_url": sample["source_url"],
+                "source_type": sample["source_type"],
+                "published_time": f"{market_date.isoformat()}T13:00:00Z",
+                "tickers": sample["tickers"],
+                "themes": sample["themes"],
+                "reading_origin": "agent_suggested" if index % 2 else "user_browsed",
+                "agent_summary": sample["agent_summary"],
+            }
+        )
+    return readings
+
+
+def base_daily_options(market_date: date, *, author_id: str = SIM_INVESTOR_ID) -> list[dict[str, Any]]:
+    first_id = wow_id(market_date, 1)
+    second_id = wow_id(market_date, 2)
+    third_id = wow_id(market_date, 3)
+    return [
+        with_visible_fields(
+            {
+                "wow_id": first_id,
+                "wow_type": "trackable_wow",
+                "scoreable": False,
+                "accuracy_endpoint_eligible": False,
+                "parent_wow_id": None,
+                "root_wow_id": first_id,
+                "claim": "AI infrastructure bottlenecks are shifting from GPU supply alone toward power and packaging constraints.",
+                "evidence_to_watch": ["utility interconnection queues", "advanced packaging lead times", "hyperscaler capex commentary"],
+                "review_cadence": "weekly",
+                "next_review_at": (market_date + timedelta(days=7)).isoformat(),
+                "trackable_status": "active_trackable",
+                "source_refs": ["Reading Item 1", "Reading Item 2"],
+                "agent_facts": {"wow_type": "trackable_wow", "scoreable": False, "accuracy_endpoint_eligible": False},
+            },
+            option_number=1,
+            title="AI bottleneck evidence is moving into power and packaging",
+            why="This is concrete enough to monitor without forcing a binary prediction today.",
+        ),
+        with_visible_fields(
+            {
+                "wow_id": second_id,
+                "wow_type": "scoreable_signal",
+                "scoreable": True,
+                "accuracy_endpoint_eligible": True,
+                "parent_wow_id": None,
+                "root_wow_id": second_id,
+                "claim": "At least one hyperscaler will cite power availability or interconnection timing as an AI deployment bottleneck by 2026-09-30.",
+                "invalidate_test": "No hyperscaler cites power availability or interconnection timing as an AI deployment bottleneck by resolve_by.",
+                "resolve_by": "2026-09-30",
+                "resolution_source": "hyperscaler earnings transcripts",
+                "signal_status": "pending_scoreable",
+                "source_refs": ["Reading Item 2"],
+                "agent_facts": {"wow_type": "scoreable_signal", "scoreable": True, "accuracy_endpoint_eligible": True},
+            },
+            option_number=2,
+            title="Power constraints become a scoreable hyperscaler bottleneck",
+            why="The claim has a deadline, an invalidate test, and a public resolution source.",
+        ),
+        with_visible_fields(
+            {
+                "wow_id": third_id,
+                "wow_type": "candidate_wow",
+                "scoreable": False,
+                "accuracy_endpoint_eligible": False,
+                "parent_wow_id": None,
+                "root_wow_id": third_id,
+                "observation": "Stablecoin reserve-income sharing may pressure headline revenue assumptions.",
+                "why_worth_watching": "It links Circle, Coinbase, exchanges, and payment infrastructure into one revenue-architecture question.",
+                "candidate_status": "active_candidate",
+                "source_refs": ["Reading Item 3"],
+                "agent_facts": {"wow_type": "candidate_wow", "scoreable": False, "accuracy_endpoint_eligible": False},
+            },
+            option_number=3,
+            title="Stablecoin reserve-income sharing deserves preservation",
+            why="The observation is not fully testable yet, but it is specific enough to train future attention.",
+        ),
+    ]
+
+
+def with_visible_fields(item: dict[str, Any], *, option_number: int, title: str, why: str) -> dict[str, Any]:
+    item = deepcopy(item)
+    item["option_number"] = option_number
+    item["visible_type_label"] = VISIBLE_TYPE_LABELS[item["wow_type"]]
+    item["plain_english_title"] = title
+    item["why_worth_watching"] = why if item["wow_type"] != "candidate_wow" else item.get("why_worth_watching") or why
+    if item["wow_type"] == "status_update":
+        item.setdefault("target_summary", title)
+    return item
+
+
+def initial_daily_state(
+    *,
+    author_id: str,
+    market_date: date,
+    journal_path: Path,
+    reading_log: list[dict[str, Any]],
+    wow_options: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "version": "v0.2",
+        "market_date": market_date.isoformat(),
+        "author_id": author_id,
+        "journal_path": str(journal_path),
+        "state": "awaiting_user_choice",
+        "reading_log": deepcopy(reading_log),
+        "wow_options": deepcopy(wow_options),
+        "selection": {
+            "selected_wow_id": "",
+            "reason_for_selection": "",
+            "reason_for_pass": "",
+            "closest_rejected_wow": "",
+            "missing_evidence": "",
+        },
+    }
+
+
+def render_daily_options_prompt(wow_options: list[dict[str, Any]]) -> str:
+    lines = []
+    for option in wow_options:
+        lines.append(f"{option['option_number']}. {option['visible_type_label']}: {option['plain_english_title']}")
+        lines.append(f"   Why: {option['why_worth_watching']}")
+        if option["wow_type"] == "scoreable_signal":
+            lines.append(f"   Test: {option['invalidate_test']}")
+            lines.append(f"   Resolve by: {option['resolve_by']}")
+            lines.append(f"   Resolution source: {option['resolution_source']}")
+        elif option["wow_type"] == "trackable_wow":
+            lines.append(f"   Watch: {', '.join(option.get('evidence_to_watch') or [])}")
+            lines.append(f"   Review: {option.get('review_cadence', '')}, next {option.get('next_review_at', '')}")
+        elif option["wow_type"] == "status_update":
+            lines.append(f"   Target: {option['target_summary']}")
+            lines.append(f"   Status: {option['previous_status']} to {option['new_status']}")
+            lines.append(f"   Evidence: {option['evidence_summary']}")
+    lines.append(DAILY_PROMPT)
+    return "\n".join(lines)
+
+
+def normalize_user_reply(state: dict[str, Any], user_reply: str) -> tuple[dict[str, Any], str, dict[str, str]]:
+    next_state = deepcopy(state)
+    normalized: dict[str, str] = {}
+    current = next_state.get("state")
+    if current == "awaiting_user_choice":
+        choice = _choice_from_reply(user_reply, next_state["wow_options"])
+        if choice == "pass":
+            next_state["selection"]["selected_wow_id"] = "none"
+            _merge_pass_fields(next_state, user_reply)
+            missing = _missing_pass_fields(next_state)
+            if missing:
+                next_state["state"] = "awaiting_pass_fields"
+                return next_state, _pass_prompt(missing), {"choice": "pass", "missing": ", ".join(missing)}
+            next_state["state"] = "ready_to_submit"
+            return next_state, "Daily WoW Packet is complete and ready to submit.", {"choice": "pass"}
+        if isinstance(choice, int):
+            selected = next_state["wow_options"][choice - 1]["wow_id"]
+            reason = _reason_from_reply(user_reply)
+            next_state["selection"]["selected_wow_id"] = selected
+            normalized["selected_wow_id"] = selected
+            if reason:
+                next_state["selection"]["reason_for_selection"] = reason
+                next_state["state"] = "ready_to_submit"
+                normalized["reason_for_selection"] = reason
+                return next_state, "Daily WoW Packet is complete and ready to submit.", normalized
+            next_state["state"] = "awaiting_selection_reason"
+            return next_state, "Why did you select this WoW?", normalized
+        return next_state, DAILY_PROMPT, {"unrecognized_reply": user_reply}
+
+    if current == "awaiting_selection_reason":
+        reason = _reason_from_reply(user_reply) or user_reply.strip()
+        next_state["selection"]["reason_for_selection"] = reason
+        next_state["state"] = "ready_to_submit"
+        return next_state, "Daily WoW Packet is complete and ready to submit.", {"reason_for_selection": reason}
+
+    if current == "awaiting_pass_fields":
+        _merge_pass_fields(next_state, user_reply)
+        missing = _missing_pass_fields(next_state)
+        if missing:
+            return next_state, _pass_prompt(missing), {"missing": ", ".join(missing)}
+        next_state["state"] = "ready_to_submit"
+        return next_state, "Daily WoW Packet is complete and ready to submit.", {"choice": "pass"}
+
+    return next_state, "", {}
+
+
+def mark_no_reply(state: dict[str, Any]) -> dict[str, Any]:
+    next_state = deepcopy(state)
+    next_state["state"] = "user_no_reply"
+    return next_state
+
+
+def validate_daily_state(state: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    for field_name in ("version", "market_date", "author_id", "state", "reading_log", "wow_options", "selection"):
+        if field_name not in state:
+            errors.append(f"daily_state missing required field: {field_name}")
+    if errors:
+        return errors
+    if state["version"] != "v0.2":
+        errors.append("daily_state version must be v0.2")
+    if len(state["reading_log"]) > 10:
+        errors.append("reading_log can include at most 10 items")
+    options = state["wow_options"]
+    if len(options) != 3:
+        errors.append("daily state must include exactly 3 wow_options")
+    option_ids = {str(option.get("wow_id") or "") for option in options}
+    for index, option in enumerate(options, start=1):
+        errors.extend(_validate_option(index, option))
+    selected = state["selection"].get("selected_wow_id", "")
+    if selected and selected != "none" and selected not in option_ids:
+        errors.append("selected_wow_id must be one of today's 3 wow_options")
+    if state["state"] in {"ready_to_submit", "submitted", "verified"}:
+        errors.extend(_validate_completed_selection(state, option_ids))
+    return errors
+
+
+def packet_from_state(state: dict[str, Any]) -> dict[str, Any]:
+    counts = _wow_type_counts(state["wow_options"])
+    packet_id = f"WKAP-{state['author_id']}-{state['market_date']}"
+    selected = state["selection"]["selected_wow_id"]
+    return {
+        "packet_id": packet_id,
+        "author_id": state["author_id"],
+        "market_date": state["market_date"],
+        "created_at": f"{state['market_date']}T21:00:00Z",
+        "packet_spec_version": "v0.2",
+        "packet_spec_url": "https://wkap.ai/specs/wow-packet-v0.2.md",
+        "packet_spec_latest_url": "https://wkap.ai/specs/wow-packet-latest.md",
+        "skill_version": "v0.2",
+        "skill_url": "https://wkap.ai/skills/wkap-wow-skill-latest.md",
+        "human_view": {
+            "title": _packet_title(state),
+            "summary": "Local pressure-test packet generated from realistic market-reading samples.",
+            "top_wows": [selected] if selected and selected != "none" else [],
+        },
+        "agent_facts": {
+            "packet_id": packet_id,
+            "author_id": state["author_id"],
+            "packet_spec_version": "v0.2",
+            **counts,
+        },
+        "reading_log": deepcopy(state["reading_log"]),
+        "wow_items": [_packet_item(option) for option in state["wow_options"]],
+        "selection": deepcopy(state["selection"]),
+        "validation_notes": {
+            "schema_valid": True,
+            "missing_fields": [],
+            "warnings": ["local_daily_conversation_simulation"],
+        },
+    }
+
+
+def packet_markdown(packet: dict[str, Any]) -> str:
+    return "# WKAP Daily WoW Packet\n\n```yaml\n" + yaml.safe_dump({"packet": packet}, sort_keys=False, allow_unicode=True) + "```\n"
+
+
+def lifecycle_transition_options(
+    market_date: date,
+    *,
+    author_id: str,
+    transition_number: int,
+    target_wow_type: str,
+    previous_status: str,
+    new_status: str,
+) -> list[dict[str, Any]]:
+    update_type = update_type_for_status(new_status)
+    target_id = f"WOW-2026-06-01-{transition_number:03d}"
+    update_id = wow_id(market_date, 1)
+    sample = READING_SAMPLES[transition_number % len(READING_SAMPLES)]
+    update = with_visible_fields(
+        {
+            "wow_id": update_id,
+            "wow_type": "status_update",
+            "author_id": author_id,
+            "target_wow_type": target_wow_type,
+            "target_wow_id": target_id,
+            "target_root_wow_id": target_id,
+            "update_type": update_type,
+            "previous_status": previous_status,
+            "new_status": new_status,
+            "update_summary": f"{target_wow_type} moved from {previous_status} to {new_status}.",
+            "target_summary": f"{target_wow_type} lifecycle maintenance for {sample['themes'][0]}",
+            "evidence_summary": f"Realistic source sample supports {previous_status} to {new_status}: {sample['source_title']}.",
+            "scoreable": False,
+            "accuracy_endpoint_eligible": False,
+            "lineage_node": False,
+            "source_refs": ["Reading Item 1"],
+            "agent_facts": {
+                "wow_type": "status_update",
+                "lineage_node": False,
+                "target_wow_type": target_wow_type,
+                "target_wow_id": target_id,
+                "target_root_wow_id": target_id,
+                "update_type": update_type,
+                "previous_status": previous_status,
+                "new_status": new_status,
+            },
+        },
+        option_number=1,
+        title=f"{target_wow_type} moves from {previous_status} to {new_status}",
+        why="Lifecycle maintenance keeps the private CRM and public ledger state reconcilable.",
+    )
+    if update_type == "resolution" and new_status in {"resolved_correct", "resolved_incorrect"}:
+        update["resolution_source_used"] = sample["source_url"]
+
+    second = promotion_child_item(market_date, target_id=target_id, new_status=new_status) or base_daily_options(market_date, author_id=author_id)[1]
+    second["option_number"] = 2
+    third = base_daily_options(market_date, author_id=author_id)[2]
+    third["option_number"] = 3
+    return [update, second, third]
+
+
+def promotion_child_item(market_date: date, *, target_id: str, new_status: str) -> dict[str, Any] | None:
+    child_id = wow_id(market_date, 2)
+    if new_status == "promoted_trackable":
+        return with_visible_fields(
+            {
+                "wow_id": child_id,
+                "wow_type": "trackable_wow",
+                "scoreable": False,
+                "accuracy_endpoint_eligible": False,
+                "parent_wow_id": target_id,
+                "root_wow_id": target_id,
+                "claim": "The promoted idea now has a concrete evidence watchlist and review cadence.",
+                "evidence_to_watch": ["repeat public source mentions", "company commentary", "pricing or volume signals"],
+                "review_cadence": "weekly",
+                "next_review_at": "2026-09-30",
+                "trackable_status": "active_trackable",
+                "source_refs": ["Reading Item 1"],
+                "agent_facts": {"wow_type": "trackable_wow", "scoreable": False, "accuracy_endpoint_eligible": False},
+            },
+            option_number=2,
+            title="Promoted child trackable for the existing candidate",
+            why="The idea now has cadence and evidence to monitor.",
+        )
+    if new_status == "promoted_scoreable":
+        return with_visible_fields(
+            {
+                "wow_id": child_id,
+                "wow_type": "scoreable_signal",
+                "scoreable": True,
+                "accuracy_endpoint_eligible": True,
+                "parent_wow_id": target_id,
+                "root_wow_id": target_id,
+                "claim": "The promoted idea will produce confirmable public evidence before 2026-09-30.",
+                "invalidate_test": "No qualifying public evidence appears by resolve_by.",
+                "resolve_by": "2026-09-30",
+                "resolution_source": "public filings or earnings transcripts",
+                "signal_status": "pending_scoreable",
+                "source_refs": ["Reading Item 1"],
+                "agent_facts": {"wow_type": "scoreable_signal", "scoreable": True, "accuracy_endpoint_eligible": True},
+            },
+            option_number=2,
+            title="Promoted child scoreable signal for the existing idea",
+            why="The child carries pending_scoreable while the status update uses promoted_scoreable.",
+        )
+    return None
+
+
+def update_type_for_status(new_status: str) -> str:
+    if new_status in {"promoted_trackable", "promoted_scoreable"}:
+        return "promotion"
+    if new_status in {"resolved_correct", "resolved_incorrect", "unresolved"}:
+        return "resolution"
+    if new_status == "killed":
+        return "killed"
+    if new_status == "stale":
+        return "stale"
+    if new_status == "voided":
+        return "voided"
+    if new_status == "invalid_test":
+        return "invalid_test"
+    if new_status in {"supported", "weakened", "retired"}:
+        return "thesis_update"
+    return "other"
+
+
+def run_daily_wow_simulation(
+    *,
+    journal_path: Path | None = None,
+    start_date: date = date(2026, 7, 6),
+    author_id: str = SIM_INVESTOR_ID,
+    publish: bool = False,
+    write_journal: bool = True,
+) -> dict[str, Any]:
+    journal = journal_path or default_journal_path()
+    created_paths = ensure_private_journal(journal) if write_journal else []
+    cases = build_simulation_cases(journal_path=journal, start_date=start_date, author_id=author_id)
+    run_id = uuid.uuid4()
+    if publish:
+        Investor.objects.update_or_create(
+            investor_id=author_id,
+            defaults={
+                "email_private": SIM_EMAIL,
+                "display_name": SIM_DISPLAY_NAME,
+                "status": Investor.Status.ACTIVE,
+            },
+        )
+
+    for case in cases:
+        case.validation_errors = validate_daily_state(case.state)
+        if case.completed and not case.validation_errors:
+            case.packet = packet_from_state(case.state)
+            case.packet_markdown = packet_markdown(case.packet)
+            case.parse_error = _parse_packet_error(case.packet_markdown, case.market_date)
+            if publish and not case.parse_error:
+                _publish_case(case, run_id=run_id)
+        if write_journal:
+            write_case_journal(case, journal)
+
+    profile = judgment_profile(cases)
+    findings = simulation_findings(cases)
+    report = {
+        "run_id": str(run_id),
+        "journal_path": str(journal),
+        "created_paths": [str(path) for path in created_paths],
+        "case_count": len(cases),
+        "completed_case_count": sum(1 for case in cases if case.completed),
+        "published_case_count": sum(1 for case in cases if case.published_url),
+        "lifecycle_transition_count": sum(1 for case in cases if case.name.startswith("lifecycle_")),
+        "findings": findings,
+        "judgment_profile": profile,
+        "cases": [case_summary(case) for case in cases],
+    }
+    if write_journal:
+        write_crm_summary_files(cases, journal)
+        write_training_profile(profile, journal)
+        write_simulation_report(report, journal)
+    return report
+
+
+def build_simulation_cases(*, journal_path: Path, start_date: date, author_id: str) -> list[SimulationCase]:
+    cases: list[SimulationCase] = []
+    day = start_date
+
+    conversation_specs = [
+        ("select_scoreable_with_reason", ["I pick 2 because the deadline and source make it easiest to judge later."]),
+        ("select_missing_reason_then_train", ["1", "Because I want the agent to keep monitoring power and packaging as a recurring bottleneck."]),
+        ("pass_complete", ["pass; closest: 2; reason: the claim is directionally right but I do not trust the source mix yet; missing: named company evidence."]),
+        ("pass_missing_closest_then_fix", ["pass; reason: too early to publish; missing: a company disclosure, not just market chatter.", "closest: 3"]),
+        ("natural_language_choice", ["The scoreable one, because I want calibration practice when the evidence is clear."]),
+    ]
+    for index, (name, replies) in enumerate(conversation_specs):
+        market_date = day + timedelta(days=index)
+        state = initial_daily_state(
+            author_id=author_id,
+            market_date=market_date,
+            journal_path=journal_path,
+            reading_log=reading_log_for_day(market_date, offset=index),
+            wow_options=base_daily_options(market_date, author_id=author_id),
+        )
+        case = simulate_replies(name=name, market_date=market_date, state=state, replies=replies)
+        cases.append(case)
+
+    no_reply_date = day + timedelta(days=len(conversation_specs))
+    no_reply_state = initial_daily_state(
+        author_id=author_id,
+        market_date=no_reply_date,
+        journal_path=journal_path,
+        reading_log=reading_log_for_day(no_reply_date, offset=5),
+        wow_options=base_daily_options(no_reply_date, author_id=author_id),
+    )
+    turns = [ConversationTurn("agent", render_daily_options_prompt(no_reply_state["wow_options"]), "awaiting_user_choice")]
+    cases.append(SimulationCase("user_no_reply_private_only", no_reply_date, mark_no_reply(no_reply_state), turns))
+
+    transition_index = 1
+    lifecycle_start = no_reply_date + timedelta(days=1)
+    for target_wow_type, previous_map in ALLOWED_STATUS_TRANSITIONS.items():
+        for previous_status, new_statuses in previous_map.items():
+            for new_status in sorted(new_statuses):
+                market_date = lifecycle_start + timedelta(days=transition_index - 1)
+                options = lifecycle_transition_options(
+                    market_date,
+                    author_id=author_id,
+                    transition_number=transition_index,
+                    target_wow_type=target_wow_type,
+                    previous_status=previous_status,
+                    new_status=new_status,
+                )
+                state = initial_daily_state(
+                    author_id=author_id,
+                    market_date=market_date,
+                    journal_path=journal_path,
+                    reading_log=reading_log_for_day(market_date, offset=transition_index, count=1),
+                    wow_options=options,
+                )
+                name = f"lifecycle_{target_wow_type}_{previous_status}_to_{new_status}"
+                cases.append(simulate_replies(name=name, market_date=market_date, state=state, replies=["1 because this is the cleanest lifecycle update today."]))
+                transition_index += 1
+    return cases
+
+
+def simulate_replies(*, name: str, market_date: date, state: dict[str, Any], replies: list[str]) -> SimulationCase:
+    turns = [ConversationTurn("agent", render_daily_options_prompt(state["wow_options"]), state["state"])]
+    current = deepcopy(state)
+    for reply in replies:
+        turns.append(ConversationTurn("user", reply, current["state"]))
+        current, prompt, normalized = normalize_user_reply(current, reply)
+        turns.append(ConversationTurn("agent", prompt, current["state"], normalized))
+    return SimulationCase(name, market_date, current, turns)
+
+
+def write_case_journal(case: SimulationCase, journal_path: Path) -> Path:
+    path = journal_path / "daily" / f"{case.market_date.isoformat()}-{case.name}.md"
+    body = [
+        f"# Daily WoW Simulation: {case.name}",
+        "",
+        "```yaml",
+        yaml.safe_dump(
+            {
+                "daily_packet_record": {
+                    "local_journal_entry_id": f"sim-{case.market_date.isoformat()}-{case.name}",
+                    "prepared_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+                    "packet_spec_version": "v0.2",
+                    "skill_version": "v0.2",
+                    "private_status": "prepared_private",
+                    "submission_status": "submitted" if case.published_url else "not_submitted",
+                    "receipt_status": "no_receipt",
+                    "public_status": "published_on_local_wkap" if case.published_url else "not_public",
+                    "public_url": case.published_url or None,
+                    "receipt_id": None,
+                    "packet_id": case.packet["packet_id"] if case.packet else None,
+                }
+            },
+            sort_keys=False,
+        ).strip(),
+        "```",
+        "",
+        "## Conversation",
+        "",
+    ]
+    for turn in case.turns:
+        body.append(f"- {turn.actor} [{turn.state}]: {turn.message}")
+    body.extend(["", "## Daily WoW State", "", "```json", json.dumps(case.state, indent=2, sort_keys=True), "```"])
+    if case.packet_markdown:
+        body.extend(["", "## Packet", "", case.packet_markdown])
+    if case.validation_errors or case.parse_error or case.ledger_errors:
+        body.extend(["", "## Errors", ""])
+        for error in [*case.validation_errors, case.parse_error, *case.ledger_errors]:
+            if error:
+                body.append(f"- {error}")
+    path.write_text("\n".join(body).strip() + "\n", encoding="utf-8")
+    return path
+
+
+def write_training_profile(profile: dict[str, Any], journal_path: Path) -> Path:
+    path = journal_path / "user-judgment-profile.md"
+    body = [
+        "# User Judgment Profile",
+        "",
+        "Private training record generated by the Daily WoW simulator. This is agent working memory, not a public packet.",
+        "",
+        "```json",
+        json.dumps(profile, indent=2, sort_keys=True),
+        "```",
+        "",
+    ]
+    path.write_text("\n".join(body), encoding="utf-8")
+    return path
+
+
+def write_crm_summary_files(cases: list[SimulationCase], journal_path: Path) -> None:
+    published = [case for case in cases if case.published_url]
+    _replace_generated_block(
+        journal_path / "receipts.md",
+        "daily-wow-simulation",
+        [
+            "## Daily WoW Simulation Receipts",
+            "",
+            *[
+                f"- local simulation: receipt not sent; case={case.name}; public_url={case.published_url}"
+                for case in published
+            ],
+        ],
+    )
+    _replace_generated_block(
+        journal_path / "public-verification.md",
+        "daily-wow-simulation",
+        [
+            "## Daily WoW Simulation Public Verification",
+            "",
+            *[
+                f"- verified local page: {case.published_url}; case={case.name}; errors={case.ledger_errors}"
+                for case in published
+            ],
+        ],
+    )
+    _replace_generated_block(
+        journal_path / "active-trackables.md",
+        "daily-wow-simulation",
+        [
+            "## Daily WoW Simulation Active Trackables",
+            "",
+            *_trackable_summary_lines(published),
+        ],
+    )
+    _replace_generated_block(
+        journal_path / "pending-scoreables.md",
+        "daily-wow-simulation",
+        [
+            "## Daily WoW Simulation Pending Scoreables",
+            "",
+            *_scoreable_summary_lines(published),
+        ],
+    )
+    _replace_generated_block(
+        journal_path / "thesis-map.md",
+        "daily-wow-simulation",
+        [
+            "## Daily WoW Simulation Thesis Map",
+            "",
+            *_thesis_summary_lines(published),
+        ],
+    )
+
+
+def _replace_generated_block(path: Path, block_id: str, lines: list[str]) -> None:
+    start = f"<!-- {block_id}:start -->"
+    end = f"<!-- {block_id}:end -->"
+    body = path.read_text(encoding="utf-8") if path.exists() else f"# {path.stem}\n"
+    pattern = re.compile(rf"\n?{re.escape(start)}.*?{re.escape(end)}\n?", flags=re.DOTALL)
+    block = "\n".join([start, *lines, end, ""])
+    if pattern.search(body):
+        body = pattern.sub("\n" + block, body).rstrip() + "\n"
+    else:
+        body = body.rstrip() + "\n\n" + block
+    path.write_text(body, encoding="utf-8")
+
+
+def _trackable_summary_lines(cases: list[SimulationCase]) -> list[str]:
+    lines = []
+    for case in cases:
+        for option in case.state.get("wow_options", []):
+            if option.get("wow_type") == "trackable_wow" and option.get("trackable_status") == "active_trackable":
+                lines.append(f"- `{option['wow_id']}`: {option.get('claim', option.get('plain_english_title', 'trackable'))}. Public: {case.published_url}")
+            if option.get("wow_type") == "status_update" and option.get("target_wow_type") == "trackable_wow":
+                lines.append(
+                    f"- `{option['target_wow_id']}`: status {option['previous_status']} to {option['new_status']}. Public: {case.published_url}"
+                )
+    return lines or ["- No active trackable updates generated by this simulation run."]
+
+
+def _scoreable_summary_lines(cases: list[SimulationCase]) -> list[str]:
+    lines = []
+    for case in cases:
+        for option in case.state.get("wow_options", []):
+            if option.get("wow_type") == "scoreable_signal" and option.get("signal_status") == "pending_scoreable":
+                lines.append(
+                    f"- `{option['wow_id']}`: resolve_by={option.get('resolve_by')}; resolution_source={option.get('resolution_source')}; public={case.published_url}"
+                )
+            if option.get("wow_type") == "status_update" and option.get("target_wow_type") == "scoreable_signal":
+                lines.append(
+                    f"- `{option['target_wow_id']}`: status {option['previous_status']} to {option['new_status']}. Public: {case.published_url}"
+                )
+    return lines or ["- No pending scoreable updates generated by this simulation run."]
+
+
+def _thesis_summary_lines(cases: list[SimulationCase]) -> list[str]:
+    lines = []
+    for case in cases:
+        for option in case.state.get("wow_options", []):
+            if option.get("wow_type") == "thesis_wow":
+                lines.append(f"- `{option['wow_id']}`: {option.get('thesis_claim', '')}. Public: {case.published_url}")
+            if option.get("wow_type") == "status_update" and option.get("target_wow_type") == "thesis_wow":
+                lines.append(
+                    f"- `{option['target_wow_id']}`: thesis status {option['previous_status']} to {option['new_status']}. Public: {case.published_url}"
+                )
+    return lines or ["- No thesis updates generated by this simulation run."]
+
+
+def write_simulation_report(report: dict[str, Any], journal_path: Path) -> Path:
+    path = journal_path / "simulation" / "daily-wow-pressure-test-report.md"
+    lines = [
+        "# Daily WoW Conversation Pressure Test",
+        "",
+        f"Run ID: `{report['run_id']}`",
+        f"Cases: {report['case_count']}",
+        f"Completed packets: {report['completed_case_count']}",
+        f"Published packets: {report['published_case_count']}",
+        f"Lifecycle transitions covered: {report['lifecycle_transition_count']}",
+        "",
+        "## Findings",
+        "",
+    ]
+    for finding in report["findings"]:
+        lines.append(f"- {finding['severity']} {finding['title']}: {finding['status']}. {finding['fix_plan']}")
+    lines.extend(["", "## Cases", ""])
+    for case in report["cases"]:
+        status = "ok" if not case["errors"] else "needs_fix"
+        lines.append(f"- {case['name']}: {status}; state={case['state']}; published={case['published_url'] or 'no'}")
+        for error in case["errors"]:
+            lines.append(f"  - {error}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def judgment_profile(cases: list[SimulationCase]) -> dict[str, Any]:
+    selected_types: dict[str, int] = {}
+    pass_reasons: list[str] = []
+    missing_evidence: list[str] = []
+    selected_reasons: list[str] = []
+    for case in cases:
+        selection = case.state.get("selection", {})
+        selected = selection.get("selected_wow_id", "")
+        if selected == "none":
+            if selection.get("reason_for_pass"):
+                pass_reasons.append(selection["reason_for_pass"])
+            if selection.get("missing_evidence"):
+                missing_evidence.append(selection["missing_evidence"])
+            continue
+        selected_option = next((option for option in case.state.get("wow_options", []) if option.get("wow_id") == selected), None)
+        if selected_option:
+            selected_types[selected_option["wow_type"]] = selected_types.get(selected_option["wow_type"], 0) + 1
+        if selection.get("reason_for_selection"):
+            selected_reasons.append(selection["reason_for_selection"])
+    return {
+        "selected_type_counts": selected_types,
+        "selection_reasons": selected_reasons,
+        "pass_reasons": pass_reasons,
+        "missing_evidence_requests": missing_evidence,
+        "agent_training_notes": [
+            "Prefer scoreable options when the user explicitly values calibration practice and clean evidence.",
+            "Keep pass days public-ready only after closest_rejected_wow, reason_for_pass, and missing_evidence are all present.",
+            "Do not substitute agent confidence for user judgment; ask for the missing field only.",
+        ],
+    }
+
+
+def simulation_findings(cases: list[SimulationCase]) -> list[dict[str, str]]:
+    findings = [
+        {
+            "severity": "P1",
+            "title": "No dedicated Daily WoW conversation simulator existed",
+            "status": "fixed_by_simulator",
+            "fix_plan": "The simulator now normalizes user replies into Daily WoW State, writes private journal records, and can publish local packets.",
+        },
+        {
+            "severity": "P1",
+            "title": "Daily WoW State needed pre-submission validation",
+            "status": "fixed_by_validator",
+            "fix_plan": "The simulator validates the exact 3-option display contract, selection/pass rules, and CRM transition rules before packet generation.",
+        },
+        {
+            "severity": "P2",
+            "title": "User-level bundled packet template is stale at v0.1",
+            "status": "fixed_installed_template",
+            "fix_plan": "The installed local skill template was updated to v0.2 and the missing v0.2 reference snapshot was added.",
+        },
+    ]
+    broken = [case for case in cases if case.validation_errors or case.parse_error or case.ledger_errors]
+    if broken:
+        findings.append(
+            {
+                "severity": "P0",
+                "title": "One or more simulated cases failed validation",
+                "status": "needs_fix",
+                "fix_plan": f"Fix {len(broken)} case(s) listed in the report before treating the flow as production-ready.",
+            }
+        )
+    return findings
+
+
+def case_summary(case: SimulationCase) -> dict[str, Any]:
+    return {
+        "name": case.name,
+        "market_date": case.market_date.isoformat(),
+        "state": case.state.get("state"),
+        "selected_wow_id": case.state.get("selection", {}).get("selected_wow_id", ""),
+        "published_url": case.published_url,
+        "errors": [error for error in [*case.validation_errors, case.parse_error, *case.ledger_errors] if error],
+    }
+
+
+def wow_id(market_date: date, number: int) -> str:
+    return f"WOW-{market_date.isoformat()}-{number:03d}"
+
+
+def _validate_option(index: int, option: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    for field_name in ("wow_id", "wow_type", "visible_type_label", "plain_english_title", "why_worth_watching"):
+        if not _has_value(option.get(field_name)):
+            errors.append(f"wow_option {index} missing {field_name}")
+    wow_type = option.get("wow_type")
+    expected_label = VISIBLE_TYPE_LABELS.get(str(wow_type))
+    if expected_label and option.get("visible_type_label") != expected_label:
+        errors.append(f"wow_option {index} visible_type_label must be {expected_label}")
+    if wow_type == "scoreable_signal":
+        for field_name in ("invalidate_test", "resolve_by", "resolution_source"):
+            if not _has_value(option.get(field_name)):
+                errors.append(f"scoreable option {index} missing visible {field_name}")
+    if wow_type == "status_update":
+        for field_name in ("target_summary", "previous_status", "new_status", "evidence_summary"):
+            if not _has_value(option.get(field_name)):
+                errors.append(f"status_update option {index} missing visible {field_name}")
+        for field_name in STATUS_UPDATE_REQUIRED_FIELDS:
+            if not _has_value(option.get(field_name)):
+                errors.append(f"status_update option {index} missing {field_name}")
+        transition_error = validate_status_transition(
+            target_wow_type=str(option.get("target_wow_type") or ""),
+            previous_status=str(option.get("previous_status") or ""),
+            new_status=str(option.get("new_status") or ""),
+            update_type=str(option.get("update_type") or ""),
+        )
+        if transition_error:
+            errors.append(f"status_update option {index} invalid transition: {transition_error}")
+    elif wow_type in NORMAL_WOW_REQUIRED_FIELDS:
+        for field_name in NORMAL_WOW_REQUIRED_FIELDS[wow_type]:
+            if field_name == "parent_wow_id" and field_name in option:
+                continue
+            if not _has_value(option.get(field_name)):
+                errors.append(f"{wow_type} option {index} missing {field_name}")
+    else:
+        errors.append(f"wow_option {index} invalid wow_type: {wow_type}")
+    return errors
+
+
+def _validate_completed_selection(state: dict[str, Any], option_ids: set[str]) -> list[str]:
+    errors: list[str] = []
+    selection = state["selection"]
+    selected = selection.get("selected_wow_id", "")
+    if selected == "none":
+        for field_name in ("reason_for_pass", "closest_rejected_wow", "missing_evidence"):
+            if not selection.get(field_name):
+                errors.append(f"pass selection missing {field_name}")
+        if selection.get("closest_rejected_wow") and selection["closest_rejected_wow"] not in option_ids:
+            errors.append("closest_rejected_wow must be one of today's 3 wow_options")
+        if selection.get("reason_for_selection"):
+            errors.append("reason_for_selection must be blank on pass")
+    elif selected:
+        if not selection.get("reason_for_selection"):
+            errors.append("selected WoW missing reason_for_selection")
+        for field_name in ("reason_for_pass", "closest_rejected_wow", "missing_evidence"):
+            if selection.get(field_name):
+                errors.append(f"{field_name} must be blank when a WoW is selected")
+    else:
+        errors.append("ready_to_submit requires selected_wow_id or none")
+    return errors
+
+
+def _packet_item(option: dict[str, Any]) -> dict[str, Any]:
+    item = deepcopy(option)
+    for field_name in ("option_number", "visible_type_label", "plain_english_title", "target_summary"):
+        item.pop(field_name, None)
+    return item
+
+
+def _wow_type_counts(options: list[dict[str, Any]]) -> dict[str, int]:
+    values = [str(option.get("wow_type") or "") for option in options]
+    return {
+        "wow_count": len(values),
+        "scoreable_count": values.count("scoreable_signal"),
+        "trackable_count": values.count("trackable_wow"),
+        "thesis_count": values.count("thesis_wow"),
+        "candidate_count": values.count("candidate_wow"),
+        "status_update_count": values.count("status_update"),
+    }
+
+
+def _packet_title(state: dict[str, Any]) -> str:
+    selected = state["selection"].get("selected_wow_id")
+    option = next((item for item in state["wow_options"] if item.get("wow_id") == selected), None)
+    if option:
+        return option["plain_english_title"]
+    return "Daily WoW pass"
+
+
+def _choice_from_reply(user_reply: str, options: list[dict[str, Any]]) -> int | str | None:
+    text = user_reply.strip().lower()
+    if not text:
+        return None
+    if re.search(r"\bpass\b", text):
+        return "pass"
+    match = re.search(r"\b([123])\b", text)
+    if match:
+        return int(match.group(1))
+    for option in options:
+        label = str(option.get("visible_type_label") or "").lower()
+        if label and label in text:
+            matches = [item for item in options if str(item.get("visible_type_label") or "").lower() == label]
+            if len(matches) == 1:
+                return int(matches[0]["option_number"])
+    word_map = {"first": 1, "second": 2, "third": 3}
+    for word, number in word_map.items():
+        if re.search(rf"\b{word}\b", text):
+            return number
+    return None
+
+
+def _reason_from_reply(user_reply: str) -> str:
+    text = user_reply.strip()
+    for pattern in (r"\bbecause\b\s*(.+)$", r"\breason\s*[:=-]\s*(.+)$", r"\bsince\b\s*(.+)$"):
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip(" .")
+    return ""
+
+
+def _merge_pass_fields(state: dict[str, Any], user_reply: str) -> None:
+    selection = state["selection"]
+    closest = _closest_from_reply(user_reply, state["wow_options"])
+    if closest:
+        selection["closest_rejected_wow"] = closest
+    reason = _field_from_reply(user_reply, "reason") or _field_from_reply(user_reply, "reason_for_pass") or _field_from_reply(user_reply, "why_pass")
+    if not reason and "because" in user_reply.lower():
+        reason = _reason_from_reply(user_reply)
+    if reason:
+        selection["reason_for_pass"] = reason
+    missing = _field_from_reply(user_reply, "missing") or _field_from_reply(user_reply, "missing_evidence")
+    if missing:
+        selection["missing_evidence"] = missing
+
+
+def _closest_from_reply(user_reply: str, options: list[dict[str, Any]]) -> str:
+    text = user_reply.strip()
+    match = re.search(r"\bclosest(?:_rejected_wow)?\s*[:=-]\s*([^\n;,.]+)", text, flags=re.IGNORECASE)
+    if not match:
+        return ""
+    value = match.group(1).strip()
+    if re.fullmatch(r"[123]", value):
+        return options[int(value) - 1]["wow_id"]
+    ids = {option["wow_id"] for option in options}
+    return value if value in ids else value
+
+
+def _field_from_reply(user_reply: str, field_name: str) -> str:
+    match = re.search(rf"\b{re.escape(field_name)}\s*[:=-]\s*([^;\n]+)", user_reply, flags=re.IGNORECASE)
+    return match.group(1).strip(" .") if match else ""
+
+
+def _missing_pass_fields(state: dict[str, Any]) -> list[str]:
+    missing = []
+    selection = state["selection"]
+    option_ids = {option["wow_id"] for option in state["wow_options"]}
+    if not selection.get("closest_rejected_wow"):
+        missing.append("closest_rejected_wow")
+    elif selection["closest_rejected_wow"] not in option_ids:
+        missing.append("closest_rejected_wow")
+    if not selection.get("reason_for_pass"):
+        missing.append("reason_for_pass")
+    if not selection.get("missing_evidence"):
+        missing.append("missing_evidence")
+    return missing
+
+
+def _pass_prompt(missing: list[str]) -> str:
+    prompts = {
+        "closest_rejected_wow": "Which of today's 3 WoWs came closest?",
+        "reason_for_pass": "Why pass today?",
+        "missing_evidence": "What evidence is missing?",
+    }
+    if len(missing) == 1:
+        return prompts[missing[0]]
+    return " ".join(prompts[field_name] for field_name in missing)
+
+
+def _has_value(value: Any) -> bool:
+    if isinstance(value, list):
+        return any(_has_value(item) for item in value)
+    if isinstance(value, dict):
+        return bool(value)
+    if value is None:
+        return False
+    return bool(str(value).strip())
+
+
+def _parse_packet_error(markdown: str, market_date: date) -> str:
+    raw = RawEmail(
+        gmail_message_id=f"sim-parse-{market_date.isoformat()}",
+        sender_email=SIM_EMAIL,
+        subject=f"Daily WoW Packet - {market_date.isoformat()} - {SIM_DISPLAY_NAME}",
+        raw_body=markdown,
+        received_at=timezone.make_aware(datetime.combine(market_date, time(21, 0))),
+    )
+    try:
+        parse_wow(raw)
+    except ParseError as exc:
+        return str(exc)
+    return ""
+
+
+def _publish_case(case: SimulationCase, *, run_id: uuid.UUID) -> None:
+    raw, _ = RawEmail.objects.update_or_create(
+        gmail_message_id=f"local-daily-wow-sim-{case.market_date.isoformat()}-{case.name}",
+        defaults={
+            "sender_email": SIM_EMAIL,
+            "subject": f"Daily WoW Packet - {case.market_date.isoformat()} - {SIM_DISPLAY_NAME}",
+            "raw_body": case.packet_markdown,
+            "received_at": timezone.make_aware(datetime.combine(case.market_date, time(21, 0))),
+            "classification": RawEmail.Classification.WOW,
+            "processing_status": RawEmail.ProcessingStatus.SAVED,
+            "error_message": "",
+        },
+    )
+    packet = create_wow_submission(raw, run_id=run_id)
+    publish_artifact("wow", packet.id, run_id=run_id)
+    packet.refresh_from_db()
+    case.published_url = packet.canonical_url
+    case.ledger_errors = validate_ledger("wow", packet.id)
+    case.state["public_url"] = packet.canonical_url
+    case.state["receipt_status"] = "skipped_local" if not packet.receipt_email_message_id else "sent"
+    case.state["state"] = "verified" if not case.ledger_errors else "submitted"

@@ -91,7 +91,10 @@ class ParsedWoWPacket:
 def parse_radar(raw_email: RawEmail) -> ParsedRadar:
     fields = _fields(raw_email.raw_body)
     market_date = _date(
-        fields.get("market_date") or fields.get("date") or _standalone_date(raw_email.raw_body),
+        _date_from_subject(raw_email.subject)
+        or fields.get("market_date")
+        or fields.get("date")
+        or _standalone_date(raw_email.raw_body),
         default=raw_email.received_at.date(),
     )
     title = fields.get("title") or _radar_title(raw_email.raw_body, market_date) or raw_email.subject or f"WKAP Radar Feed {market_date}"
@@ -231,7 +234,7 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
         raise ParseError("Structured WoW Packet requires at least one wow_items entry.")
     if len(wow_items) != 3:
         raise ParseError("Structured WoW Packet must include exactly 3 wow_items entries.")
-    _validate_structured_wow_items(wow_items)
+    _validate_structured_wow_items(wow_items, packet_author_id=author_id)
 
     reading_items = _structured_reading_items(packet.get("reading_log") or packet.get("reading_items") or [])
     if len(reading_items) > 10:
@@ -351,7 +354,7 @@ def _structured_reading_items(items) -> list[ParsedReadingLogItem]:
     return parsed
 
 
-def _validate_structured_wow_items(items: list[dict]) -> None:
+def _validate_structured_wow_items(items: list[dict], *, packet_author_id: str = "") -> None:
     for index, item in enumerate(items, start=1):
         if not isinstance(item, dict):
             raise ParseError(f"Structured WoW item {index} must be an object.")
@@ -364,6 +367,11 @@ def _validate_structured_wow_items(items: list[dict]) -> None:
         if wow_type == "scoreable_signal" and str(item.get("signal_status") or "").strip() == "pending":
             item["signal_status"] = "pending_scoreable"
         if wow_type == "status_update":
+            item_author_id = str(item.get("author_id") or "").strip()
+            if item_author_id and packet_author_id and item_author_id != packet_author_id:
+                raise ParseError(
+                    f"status_update {wow_id} author_id must match packet author_id: {packet_author_id}"
+                )
             missing = [
                 field
                 for field in (
@@ -650,8 +658,11 @@ def _blocks(text: str, heading_pattern: str) -> list[tuple[int | None, str]]:
 
 
 def _date_from_subject(subject: str) -> str:
-    match = re.search(r"\d{4}-\d{2}-\d{2}", subject or "")
-    return match.group(0) if match else ""
+    match = re.search(r"\b(\d{4})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{1,2})\b", subject or "")
+    if not match:
+        return ""
+    year, month, day = match.groups()
+    return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
 
 
 def _without_field_lines(text: str) -> str:
