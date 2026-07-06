@@ -844,6 +844,43 @@ packet:
         self.assertIn("cloudflare_email_received", set(LedgerEvent.objects.values_list("event_name", flat=True)))
         self.assertTrue(expected_page_exists)
 
+    def test_cloudflare_radar_authorizes_visible_from_header_when_envelope_is_rewritten(self):
+        payload = self.cloudflare_payload(
+            sender="minxixi0103@gmail.com",
+            subject="WKAP Radar Feed - 2026 - 07 - 06",
+            body="\n".join(
+                [
+                    "WKAP Radar Feed",
+                    "2026-07-06",
+                    "AI ROI discipline / sovereign AI / edge AI / AI drug discovery",
+                    "",
+                    "Body: Radar context",
+                ]
+            ),
+        )
+        payload["from"] = "SRS0=-dGq=af=gmail.com=minxixi0103@wkap.ai"
+
+        with TemporaryDirectory() as tmp:
+            with override_settings(
+                WKAP_CLOUDFLARE_INGEST_SECRET="secret",
+                WKAP_PUBLIC_SITE_ROOT=Path(tmp),
+                WKAP_LEDGER_REPO_PATH="",
+                WKAP_SEND_RECEIPTS=False,
+                WKAP_RADAR_AUTHORIZED_SENDERS={"minxixi0103@gmail.com"},
+            ):
+                response = self.client.post(
+                    "/internal/cloudflare-email-ingest/",
+                    data=json.dumps(payload),
+                    content_type="application/json",
+                    HTTP_X_WKAP_WORKER_SECRET="secret",
+                )
+
+        self.assertEqual(response.status_code, 200)
+        raw = RawEmail.objects.get()
+        self.assertEqual(raw.sender_email, "minxixi0103@gmail.com")
+        self.assertEqual(raw.classification, RawEmail.Classification.RADAR)
+        self.assertEqual(raw.processing_status, RawEmail.ProcessingStatus.PUBLISHED)
+
     def test_unauthorized_radar_is_rejected_and_logged(self):
         run_id = "00000000-0000-0000-0000-000000000002"
         raw = self.raw_email(sender="outsider@example.com", body="Market_date: 2026-06-30\nBody: Context")

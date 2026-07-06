@@ -224,7 +224,7 @@ Cloudflare:
   - `WKAP_RENDER_INGEST_URL=https://wkap.ai/internal/cloudflare-email-ingest/`
   - `WKAP_CLOUDFLARE_INGEST_SECRET=<same value as Render>`
   - `WKAP_FORWARD_TO=playinc@gmail.com`
-- Gmail remains the backup mailbox and receipt sender for V0. If Worker ingest fails, the forwarded Gmail copy can still be processed manually or by a fallback poller.
+- Gmail remains the backup mailbox and receipt sender for V0. If Worker ingest fails, the Worker logs `wkap_ingest_failed` or `wkap_ingest_skipped`, and the forwarded Gmail copy can still be processed manually or by a fallback poller.
 - `wkap.ai` must be proxied through Cloudflare for cache rules to apply.
 - Cache only the Radar archive plus dated Radar Feed pages with a Cache Rule matching `(http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/" or (starts_with(http.request.uri.path, "/radar/wkap-radar-feed-") and ends_with(http.request.uri.path, ".html"))))`: Eligible for cache, Edge TTL 1 month, Browser TTL respect origin, Ignore query string. The app sends `Cache-Control: public, max-age=300` for `/radar/` and dated feed pages. This expression works on the Cloudflare Free plan without the plan-gated regex `matches` operator.
 - Do not use a broad `starts_with("/radar/")` rule; it can accidentally cache future non-feed Radar routes.

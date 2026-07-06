@@ -80,6 +80,26 @@ python manage.py wkap --json show-events --entity-type wow --entity-id <id>
 python manage.py wkap --json show-events --gmail-message-id <gmail-message-id>
 ```
 
+Manual fallback for a Cloudflare-forwarded Radar email that reached Gmail but did not publish:
+
+```powershell
+python manage.py wkap --json ingest-gmail-query --query 'in:anywhere from:<sender-email> to:ledger@wkap.ai subject:"WKAP Radar Feed - YYYY - MM - DD"' --limit 1 --publish
+python manage.py wkap --json warm-radar-cache --market-date YYYY-MM-DD
+```
+
+If the message was already identified by Gmail ID, prefer the narrower direct path:
+
+```powershell
+python manage.py wkap --json ingest-email --gmail-message-id <gmail-message-id>
+python manage.py wkap --json classify-email --raw-email-id <raw-email-id>
+python manage.py wkap --json parse-radar --raw-email-id <raw-email-id>
+python manage.py wkap --json generate-radar-html --radar-id <radar-id>
+python manage.py wkap --json generate-manifest --entity-type radar --entity-id <radar-id>
+python manage.py wkap --json commit-ledger --entity-type radar --entity-id <radar-id>
+python manage.py wkap --json timestamp-artifact --entity-type radar --entity-id <radar-id>
+python manage.py wkap --json warm-radar-cache --market-date YYYY-MM-DD
+```
+
 ## Production Ledger Config
 
 Production ledger config requires both a writable checkout path and clone URL:

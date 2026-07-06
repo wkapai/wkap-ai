@@ -98,8 +98,8 @@ def parse_cloudflare_email_payload(payload: dict) -> CloudflareEmailPayload:
 
     raw_mime = base64.b64decode(raw_mime_base64, validate=True)
     message = BytesParser(policy=policy.default).parsebytes(raw_mime)
-    sender = parseaddr(str(payload.get("from") or message.get("from") or ""))[1]
-    recipient = parseaddr(str(payload.get("to") or message.get("to") or ""))[1]
+    sender = parseaddr(str(message.get("from") or payload.get("from") or ""))[1]
+    recipient = parseaddr(str(message.get("to") or payload.get("to") or ""))[1]
     subject = str(payload.get("subject") or message.get("subject") or "")
     message_id = _cloudflare_message_id(payload, message, raw_mime)
     received_at = _cloudflare_received_at(payload, message)
