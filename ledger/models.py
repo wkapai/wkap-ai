@@ -71,7 +71,7 @@ class RadarIssue(ArtifactProofFields):
 class DailyWoWPacket(ArtifactProofFields):
     investor = models.ForeignKey(Investor, on_delete=models.PROTECT, related_name="wows")
     market_date = models.DateField()
-    format_version = models.CharField(max_length=64, default="wow_packet_v1")
+    format_version = models.CharField(max_length=64, default="wow_packet_v0.2")
     packet_id = models.CharField(max_length=120, blank=True, db_index=True)
     author_id = models.CharField(max_length=120, blank=True, db_index=True)
     packet_spec_version = models.CharField(max_length=64, blank=True, default="")

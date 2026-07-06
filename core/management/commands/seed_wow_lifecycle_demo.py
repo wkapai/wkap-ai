@@ -23,6 +23,95 @@ DEMO_EMAIL = "wkap-lifecycle-demo@example.com"
 DEMO_NAME = "WKAP Lifecycle Demo Agent"
 START_DATE = date(2026, 7, 6)
 
+REALISTIC_SCENARIOS = {
+    "candidate_wow": [
+        (
+            "GPU rental price pressure",
+            "Cloud GPU rental checks hint at AI infrastructure pricing pressure",
+            "https://www.coreweave.com/blog",
+            "Spot GPU rental quotes and shorter reservation commitments may become an early sign that AI compute supply is loosening.",
+        ),
+        (
+            "AI inference margin pressure",
+            "Inference API price cuts create a new read-through for model serving margins",
+            "https://openai.com/news/",
+            "Repeated model API price cuts may pressure investors to separate usage growth from gross-margin durability.",
+        ),
+        (
+            "Enterprise AI seat expansion quality",
+            "Software AI seat adoption may be shifting from pilots to budget scrutiny",
+            "https://www.microsoft.com/en-us/investor",
+            "Management commentary around paid AI seats could reveal whether enterprise adoption is broadening or just concentrated in pilots.",
+        ),
+    ],
+    "trackable_wow": [
+        (
+            "AI data-center power bottlenecks",
+            "AI data-center buildouts keep running into power and interconnect constraints",
+            "https://www.digitimes.com/",
+            "Power availability and grid interconnection timelines are becoming recurring constraints for AI capacity deployment.",
+        ),
+        (
+            "advanced packaging lead-time scarcity",
+            "Advanced packaging checks show CoWoS-like capacity still gating accelerator supply",
+            "https://www.tsmc.com/english/investorRelations",
+            "Advanced packaging bottlenecks could keep the AI supply-chain profit pool concentrated even if GPU demand broadens.",
+        ),
+        (
+            "HBM pricing and memory cycle quality",
+            "Memory earnings revisions may depend more on HBM mix than commodity DRAM beta",
+            "https://semiconductor.samsung.com/resources/",
+            "The next memory cycle may be judged by high-bandwidth memory allocation and gross margin mix, not just bit growth.",
+        ),
+    ],
+    "scoreable_signal": [
+        (
+            "stablecoin reserve-income architecture",
+            "Open USD and stablecoin reserve economics put Circle revenue assumptions in focus",
+            "https://reports.tiger-research.com/p/how-open-usd-sent-circle-down-17-eng",
+            "Stablecoin issuers will face public evidence of reserve-income sharing pressure before the review date.",
+        ),
+        (
+            "hyperscaler power constraint disclosure",
+            "Hyperscaler capex commentary increasingly mentions power as a deployment constraint",
+            "https://www.microsoft.com/en-us/investor/earnings",
+            "At least one hyperscaler will cite power availability or interconnection delay as an AI deployment bottleneck.",
+        ),
+        (
+            "robotaxi utilization proof point",
+            "Autonomy optionality needs utilization evidence beyond launch-area headlines",
+            "https://ir.tesla.com/",
+            "Public robotaxi or autonomy data will show measurable utilization progress before the review date.",
+        ),
+        (
+            "exchange moat absorption thesis",
+            "Regulated exchanges may absorb crypto market-structure innovation rather than be displaced",
+            "https://www.cmegroup.com/investor-relations.html",
+            "An incumbent exchange will announce or disclose a crypto/RWA market-structure integration before the review date.",
+        ),
+    ],
+    "thesis_wow": [
+        (
+            "regulated exchange market-structure moat",
+            "Why established exchanges are harder to displace than the market believes",
+            "https://substack.com/home/post/p-204294860",
+            "Regulation, settlement, clearing, and institutional access may matter more than matching-engine technology in exchange moats.",
+        ),
+        (
+            "AI deployment profit pool shift",
+            "China AI deployment reframes the AI profit pool toward cost, hardware, and manufacturing integration",
+            "https://mp.weixin.qq.com/s/HdZmqCHfzRBUyFT1QjAlzw",
+            "The public-market AI profit pool may migrate from frontier model benchmarks to deployment, integration, and physical-world hardware.",
+        ),
+        (
+            "agent-native investor workflow",
+            "Investor logs may become training data for personal market agents",
+            "https://wkap.ai/submit-to-wkap-ledger.html",
+            "Agent-readable investor records may become more valuable than short-form investment takes as agents learn user standards.",
+        ),
+    ],
+}
+
 
 @dataclass(frozen=True)
 class Target:
@@ -147,17 +236,16 @@ class Command(BaseCommand):
             resolved.unlink()
 
     def _create_target_packet(self, *, market_date: date, wow_type: str, transition_number: int, run_id: uuid.UUID) -> Target:
-        theme = self._theme_for(wow_type, transition_number)
-        source_url = self._source_for(wow_type, transition_number)
-        wow_id = f"WOW-{market_date}-001"
+        theme, reading_title, source_url, _ = self._scenario_for(wow_type, transition_number)
+        wow_id = self._wow_id(market_date, "001")
         item = self._root_item(wow_id=wow_id, wow_type=wow_type, theme=theme, source_url=source_url)
         packet = self._packet(
             market_date=market_date,
             title=f"{theme} baseline",
-            summary=f"Baseline public WoW used to test {wow_type} lifecycle updates.",
-            reading_title=self._reading_title_for(wow_type, theme),
+            summary=f"Baseline public WoW used to test {wow_type} lifecycle updates with realistic market context.",
+            reading_title=reading_title,
             source_url=source_url,
-            wow_items=[item, self._context_item(market_date, "002"), self._candidate_item(market_date, "003")],
+            wow_items=[item, self._candidate_item(market_date, "002"), self._candidate_item(market_date, "003")],
             selected_wow_id=wow_id,
             reason=f"Baseline {wow_type} needed for local lifecycle reconstruction testing.",
         )
@@ -181,7 +269,7 @@ class Command(BaseCommand):
         run_id: uuid.UUID,
         title: str,
     ) -> None:
-        update_id = f"WOW-{market_date}-001"
+        update_id = self._wow_id(market_date, "001")
         update_item = {
             "wow_id": update_id,
             "wow_type": "status_update",
@@ -212,7 +300,7 @@ class Command(BaseCommand):
         if update_type == "resolution" and new_status in {"resolved_correct", "resolved_incorrect"}:
             update_item["resolution_source_used"] = target.source_url
 
-        second_item = self._promotion_child_item(market_date, target, new_status) or self._context_item(market_date, "002")
+        second_item = self._promotion_child_item(market_date, target, new_status) or self._candidate_item(market_date, "002")
         packet = self._packet(
             market_date=market_date,
             title=title,
@@ -257,15 +345,15 @@ class Command(BaseCommand):
             "author_id": DEMO_INVESTOR_ID,
             "market_date": market_date.isoformat(),
             "created_at": f"{market_date}T21:00:00-04:00",
-            "packet_spec_version": "v0.1",
+            "packet_spec_version": "v0.2",
             "packet_spec_url": "https://wkap.ai/specs/wow-packet-latest.md",
-            "skill_version": "v0.1",
+            "skill_version": "v0.2",
             "skill_url": "https://wkap.ai/skills/wkap-wow-skill-latest.md",
             "human_view": {"title": title, "summary": summary},
             "agent_facts": {
                 "packet_id": f"WKAP-{DEMO_INVESTOR_ID}-{market_date}",
                 "author_id": DEMO_INVESTOR_ID,
-                "packet_spec_version": "v0.1",
+                "packet_spec_version": "v0.2",
             },
             "reading_log": [
                 {
@@ -277,7 +365,7 @@ class Command(BaseCommand):
                     "tickers": ["NVDA", "TSM", "CRCL"],
                     "themes": ["AI infrastructure", "market structure", "stablecoin rails"],
                     "reading_origin": "agent_suggested",
-                    "agent_summary": "Realistic public-market source used to pressure-test WKAP lifecycle reconstruction.",
+                    "agent_summary": "Realistic public-market source used to pressure-test WKAP lifecycle reconstruction and outside-agent tracking.",
                 }
             ],
             "wow_items": wow_items,
@@ -340,19 +428,12 @@ class Command(BaseCommand):
                     "thesis_status": "active_thesis",
                 }
             )
-        elif wow_type == "context_note":
-            base.update(
-                {
-                    "observation": f"{theme} is useful context for future agent research but is not itself an investable claim.",
-                    "context_status": "active_context",
-                }
-            )
         return base
 
     def _promotion_child_item(self, market_date: date, target: Target, new_status: str) -> dict | None:
         if new_status == "promoted_trackable":
             return {
-                "wow_id": f"WOW-{market_date}-002",
+                "wow_id": self._wow_id(market_date, "002"),
                 "wow_type": "trackable_wow",
                 "scoreable": False,
                 "accuracy_endpoint_eligible": False,
@@ -368,7 +449,7 @@ class Command(BaseCommand):
             }
         if new_status == "promoted_scoreable":
             return {
-                "wow_id": f"WOW-{market_date}-002",
+                "wow_id": self._wow_id(market_date, "002"),
                 "wow_type": "scoreable_signal",
                 "scoreable": True,
                 "accuracy_endpoint_eligible": True,
@@ -384,23 +465,8 @@ class Command(BaseCommand):
             }
         return None
 
-    def _context_item(self, market_date: date, suffix: str) -> dict:
-        wow_id = f"WOW-{market_date}-{suffix}"
-        return {
-            "wow_id": wow_id,
-            "wow_type": "context_note",
-            "scoreable": False,
-            "accuracy_endpoint_eligible": False,
-            "parent_wow_id": None,
-            "root_wow_id": wow_id,
-            "observation": "This source is useful context for the daily investor loop but not selected as the main CRM update.",
-            "context_status": "active_context",
-            "source_refs": ["Reading Item 1"],
-            "agent_facts": {"wow_type": "context_note", "scoreable": False, "accuracy_endpoint_eligible": False},
-        }
-
     def _candidate_item(self, market_date: date, suffix: str) -> dict:
-        wow_id = f"WOW-{market_date}-{suffix}"
+        wow_id = self._wow_id(market_date, suffix)
         return {
             "wow_id": wow_id,
             "wow_type": "candidate_wow",
@@ -430,47 +496,39 @@ class Command(BaseCommand):
             return "invalid_test"
         if wow_type == "thesis_wow" and new_status in {"supported", "weakened", "retired"}:
             return "thesis_update"
-        if wow_type == "context_note" and new_status in {"superseded", "retired"}:
-            return "context_update"
         return "other"
 
-    def _theme_for(self, wow_type: str, index: int) -> str:
-        themes = {
-            "candidate_wow": "GPU rental price pressure",
-            "trackable_wow": "AI data-center power bottlenecks",
-            "scoreable_signal": "stablecoin reserve-income architecture",
-            "thesis_wow": "regulated exchange market-structure moat",
-            "context_note": "China AI industrial deployment context",
-        }
-        return f"{themes[wow_type]} #{index}"
+    def _wow_id(self, market_date: date, suffix: str) -> str:
+        return f"WOW-{DEMO_INVESTOR_ID}-{market_date}-{suffix}"
 
-    def _source_for(self, wow_type: str, index: int) -> str:
-        sources = {
-            "candidate_wow": "https://www.coreweave.com/blog",
-            "trackable_wow": "https://www.digitimes.com/",
-            "scoreable_signal": "https://reports.tiger-research.com/p/how-open-usd-sent-circle-down-17-eng",
-            "thesis_wow": "https://substack.com/home/post/p-204294860",
-            "context_note": "https://mp.weixin.qq.com/s/HdZmqCHfzRBUyFT1QjAlzw",
-        }
-        return sources[wow_type]
-
-    def _reading_title_for(self, wow_type: str, theme: str) -> str:
-        titles = {
-            "candidate_wow": "GPU cloud rental checks hint at AI infrastructure pricing pressure",
-            "trackable_wow": "AI data-center buildouts keep running into power and interconnect constraints",
-            "scoreable_signal": "Open USD and stablecoin reserve economics put Circle revenue assumptions in focus",
-            "thesis_wow": "Incumbent exchanges may be harder to displace than crypto narratives imply",
-            "context_note": "China AI deployment may compound through low-cost models and manufacturing integration",
-        }
-        return f"{titles[wow_type]}: {theme}"
+    def _scenario_for(self, wow_type: str, index: int) -> tuple[str, str, str, str]:
+        scenarios = REALISTIC_SCENARIOS[wow_type]
+        return scenarios[(index - 1) % len(scenarios)]
 
     def _status_reading_title(self, target: Target, new_status: str) -> str:
-        return f"{target.theme} lifecycle evidence now supports {new_status}"
+        return f"{target.theme} lifecycle evidence now supports {new_status.replace('_', ' ')}"
 
     def _evidence_for(self, target: Target, previous_status: str, new_status: str) -> str:
+        evidence_by_status = {
+            "promoted_trackable": "The signal repeated across sources and now has a concrete evidence watchlist plus review cadence.",
+            "promoted_scoreable": "The signal now has a falsifiable claim, explicit invalidate test, review date, and resolution source.",
+            "resolved_correct": "The declared public source produced evidence consistent with the original claim.",
+            "resolved_incorrect": "The declared public source produced evidence that invalidates the original claim.",
+            "unresolved": "The review date arrived without enough clean evidence to score the claim either way.",
+            "invalid_test": "The original test was too ambiguous or mismatched to judge the market claim cleanly.",
+            "voided": "The signal remained unjudgeable after the grace window and should no longer pollute active CRM state.",
+            "killed": "Follow-up evidence made the idea no longer worth active attention.",
+            "stale": "The idea has not repeated recently and should be deprioritized until fresh evidence appears.",
+            "active_candidate": "Fresh evidence revived the previously stale candidate into active watch status.",
+            "active_trackable": "Fresh evidence revived the stale trackable into active monitoring status.",
+            "supported": "New evidence strengthens the broader thesis without making it a single scoreable claim.",
+            "weakened": "New evidence weakens the thesis and should lower confidence or narrow its scope.",
+            "retired": "The thesis no longer helps current investor work and should be archived.",
+        }
+        reason = evidence_by_status.get(new_status, "New evidence changes the CRM state.")
         return (
-            f"New public evidence from {target.source_url} changes {target.theme} from "
-            f"{previous_status} to {new_status}; this is a local demo packet built so an outside agent can reconstruct the CRM state."
+            f"{reason} Source used: {target.source_url}. "
+            f"Transition: {previous_status} -> {new_status}."
         )
 
     def _url_for(self, market_date: date) -> str:

@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wkap.ai/specs/daily-wow-state-v0.2.schema.json",
+  "title": "WKAP Daily WoW State v0.2",
+  "type": "object",
+  "required": [
+    "version",
+    "market_date",
+    "author_id",
+    "state",
+    "reading_log",
+    "wow_options",
+    "selection"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": "v0.2"
+    },
+    "market_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "author_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "journal_path": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "setup",
+        "collecting_reading_log",
+        "draft_options",
+        "awaiting_user_choice",
+        "awaiting_selection_reason",
+        "awaiting_pass_fields",
+        "ready_to_submit",
+        "submitted",
+        "verified",
+        "user_no_reply",
+        "not_submitted_format_error"
+      ]
+    },
+    "reading_log": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": [
+          "item_number",
+          "source_title",
+          "source_url",
+          "source_type",
+          "reading_origin",
+          "agent_summary"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "item_number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "source_title": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string"
+          },
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "article",
+              "filing",
+              "transcript",
+              "X thread",
+              "podcast",
+              "chart",
+              "internal note",
+              "email",
+              "website",
+              "social post"
+            ]
+          },
+          "published_time": {
+            "type": "string"
+          },
+          "tickers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "themes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reading_origin": {
+            "type": "string",
+            "enum": [
+              "user_browsed",
+              "agent_suggested"
+            ]
+          },
+          "agent_summary": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "wow_options": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": [
+          "wow_id",
+          "wow_type",
+          "visible_type_label",
+          "plain_english_title",
+          "why_worth_watching"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "selection": {
+      "type": "object",
+      "required": [
+        "selected_wow_id",
+        "reason_for_selection",
+        "reason_for_pass",
+        "closest_rejected_wow",
+        "missing_evidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "selected_wow_id": {
+          "type": "string"
+        },
+        "reason_for_selection": {
+          "type": "string"
+        },
+        "reason_for_pass": {
+          "type": "string"
+        },
+        "closest_rejected_wow": {
+          "type": "string"
+        },
+        "missing_evidence": {
+          "type": "string"
+        }
+      }
+    },
+    "validation_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "public_url": {
+      "type": "string"
+    },
+    "receipt_status": {
+      "type": "string"
+    }
+  }
+}

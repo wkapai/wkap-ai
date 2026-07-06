@@ -23,7 +23,6 @@ WOW_TYPE_REQUIRED_FIELDS = {
     "trackable_wow": ("claim", "evidence_to_watch", "review_cadence", "next_review_at", "trackable_status", "source_refs"),
     "scoreable_signal": ("claim", "invalidate_test", "resolve_by", "resolution_source", "signal_status", "source_refs"),
     "thesis_wow": ("thesis_claim", "thesis_status", "source_refs"),
-    "context_note": ("observation", "context_status", "source_refs"),
 }
 
 
@@ -190,7 +189,7 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
             "candidate_count": 0,
             "status_update_count": 0,
         },
-        validation_results_json={"schema_valid": True, "warnings": ["legacy_wow_packet_v1_parser"]},
+        validation_results_json={"schema_valid": True, "warnings": ["plain_text_wow_packet_parser"]},
         wow_items_json=_legacy_wow_items(suggested_wows),
         wow_count=len(suggested_wows),
         trackable_count=len(suggested_wows),
@@ -223,7 +222,7 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
         str(packet.get("market_date") or _date_from_subject(raw_email.subject) or _standalone_date(text) or ""),
         default=raw_email.received_at.date(),
     )
-    packet_spec_version = str(packet.get("packet_spec_version") or packet.get("spec_version") or "v0.1")
+    packet_spec_version = str(packet.get("packet_spec_version") or packet.get("spec_version") or "v0.2")
     author_id = str(packet.get("author_id") or "").strip()
     if not author_id:
         raise ParseError("Structured WoW Packet requires author_id.")
@@ -292,7 +291,7 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
 
     return ParsedWoWPacket(
         market_date=market_date,
-        format_version="wow_packet_v0.1",
+        format_version="wow_packet_v0.2",
         submitted_at=raw_email.received_at or timezone.now(),
         packet_id=str(packet.get("packet_id") or f"WKAP-{author_id}-{market_date}").strip(),
         author_id=author_id,

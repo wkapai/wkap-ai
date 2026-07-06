@@ -12,10 +12,10 @@ packet:
   author_id: [WKAP investor ID if known, otherwise stable user/agent identity slug]
   market_date: YYYY-MM-DD
   created_at: YYYY-MM-DDTHH:MM:SSZ
-  packet_spec_version: v0.1
-  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
+  packet_spec_version: v0.2
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.2.md
   packet_spec_latest_url: https://wkap.ai/specs/wow-packet-latest.md
-  skill_version: v0.1
+  skill_version: v0.2
   skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
   human_view:
     title:
@@ -24,7 +24,7 @@ packet:
   agent_facts:
     packet_id: WKAP-[author_id]-[YYYY-MM-DD]
     author_id: [same as above]
-    packet_spec_version: v0.1
+    packet_spec_version: v0.2
     wow_count: 0
     scoreable_count: 0
     trackable_count: 0
@@ -53,12 +53,17 @@ Rules:
 - Include exactly 3 `wow_items` for the daily user choice.
 - Include up to 10 top reading items in `reading_log`.
 - A prose list of top private WoWs is not enough; preserve this full packet structure even when the packet stays private.
+- Before asking the user to choose, show exactly 3 numbered options with a visible type label, plain-English title, and why it is worth watching.
+- Store `wow_id` internally, but do not show it in the default user-facing choice prompt unless the user asks for technical details.
+- The user chooses by number only: `Pick one WoW: 1, 2, 3, or pass.`
+- For `scoreable_signal`, visibly show `invalidate_test`, `resolve_by`, and `resolution_source`.
 - Default scope is one Daily WoW Packet for the current US market day, not a weekly review.
 - Use `status_update` only for append-only updates to existing WoWs.
 - Every `status_update` must include `target_wow_type`, `target_wow_id`, `target_root_wow_id`, `update_type`, `previous_status`, and `new_status`.
 - Every status transition must follow the allowed Agent CRM status table in the public skill/spec.
 - Do not use `pending_scoreable` as `status_update.new_status`; promotion updates use `promoted_scoreable`, while the new child scoreable signal starts with `signal_status: pending_scoreable`.
-- User selection/pass plus required reason is approval to submit.
+- User selection/pass plus required reason completes the Daily WoW Packet and triggers submission.
+- The agent must remove or summarize private/confidential material and keep sensitive details in the Private WoW Journal.
 - If `selected_wow_id` is not `none`, leave pass-only fields blank.
 - If `selected_wow_id` is `none`, fill `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence`.
 - On pass days, `closest_rejected_wow` must be one of today's suggested `wow_id` values, not prose.

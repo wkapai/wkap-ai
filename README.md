@@ -11,7 +11,7 @@ The same Django codebase runs locally on a PC and in production on Render. Envir
 - Radar authorization through `WKAP_RADAR_AUTHORIZED_SENDERS`
 - Investor ID assignment starting at `w0202`
 - Radar and Daily WoW Packet parsing into Django models
-- Versioned WoW packet format specs in `specs/wow_packet/`
+- Public WoW protocol specs in `specs/public/`, generated from `specs/source/wow_protocol_v0_2.yaml`
 - Raw Daily WoW Packet email artifacts written to the ledger
 - Text-first public HTML at the V0 URL surface
 - Private manifest artifacts, GitHub ledger commits, and OpenTimestamp proof/status fields
@@ -186,6 +186,7 @@ Implemented commands:
 - `validate-ledger --entity-type <radar|wow> --entity-id <id>`
 - `validate-all`
 - `retry-failed --run-id <id>`
+- `warm-radar-cache --market-date <YYYY-MM-DD>`
 - `show-events --run-id <id>`
 - `show-events --entity-type <radar|wow|raw_email> --entity-id <id>`
 - `show-events --gmail-message-id <id>`
@@ -221,6 +222,10 @@ Cloudflare:
   - `WKAP_CLOUDFLARE_INGEST_SECRET=<same value as Render>`
   - `WKAP_FORWARD_TO=playinc@gmail.com`
 - Gmail remains the backup mailbox and receipt sender for V0. If Worker ingest fails, the forwarded Gmail copy can still be processed manually or by a fallback poller.
+- `wkap.ai` must be proxied through Cloudflare for cache rules to apply.
+- Cache dated Radar Feed pages with a Cache Rule matching `(http.host eq "wkap.ai" and http.request.uri.path matches "^/radar/wkap-radar-feed-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.html$")`: Eligible for cache, Edge TTL 1 year, Browser TTL 5 minutes, Ignore query string.
+- Cache the Radar archive index with a Cache Rule matching `(http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/"))`: Eligible for cache, Edge TTL 1 day, Browser TTL 5 minutes, Ignore query string.
+- Production defaults `WKAP_CACHE_WARMUP_ENABLED=true`, so successful Radar publishes warm `/radar/` and the dated feed page with full GET requests. Manual warm/verify: `python manage.py wkap --json warm-radar-cache --market-date 2026-07-03`; run it twice and confirm `cf_cache_status` becomes `HIT`.
 
 GitHub ledger:
 

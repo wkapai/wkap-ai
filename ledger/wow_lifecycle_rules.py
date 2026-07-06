@@ -6,7 +6,6 @@ VALID_WOW_TYPES = {
     "trackable_wow",
     "scoreable_signal",
     "thesis_wow",
-    "context_note",
     "status_update",
 }
 
@@ -15,7 +14,6 @@ WOW_TYPE_DEFAULT_STATUS = {
     "trackable_wow": "active_trackable",
     "scoreable_signal": "pending_scoreable",
     "thesis_wow": "active_thesis",
-    "context_note": "active_context",
 }
 
 ALLOWED_STATUS_TRANSITIONS = {
@@ -60,12 +58,6 @@ ALLOWED_STATUS_TRANSITIONS = {
         "supported": {"weakened", "retired"},
         "weakened": {"supported", "retired"},
     },
-    "context_note": {
-        "active_context": {
-            "superseded",
-            "retired",
-        },
-    },
 }
 
 TERMINAL_STATUSES = {
@@ -77,18 +69,16 @@ TERMINAL_STATUSES = {
     "invalid_test",
     "voided",
     "retired",
-    "superseded",
 }
 
 UPDATE_TYPE_TO_NEW_STATUS = {
-    "promotion": {"promoted_trackable", "promoted_scoreable", "pending_scoreable"},
+    "promotion": {"promoted_trackable", "promoted_scoreable"},
     "resolution": {"resolved_correct", "resolved_incorrect", "unresolved"},
     "killed": {"killed"},
     "stale": {"stale"},
     "voided": {"voided"},
     "invalid_test": {"invalid_test"},
     "thesis_update": {"supported", "weakened", "retired"},
-    "context_update": {"superseded", "retired"},
     "other": set(),
 }
 

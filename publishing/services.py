@@ -4,6 +4,8 @@ import hashlib
 import json
 import shutil
 import subprocess
+import urllib.error
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import Any
@@ -17,13 +19,14 @@ from core.events import log_event
 from ingestion.models import RawEmail
 from ledger.lifecycle_events import ensure_wow_lifecycle_events
 from ledger.models import LedgerEvent, RadarIssue, DailyWoWPacket
-from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, market_terms
+from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, local_wow_id, market_terms
 from ledger.wow_lifecycle import ITEM_EVENT, STATUS_UPDATE_EVENT, lifecycle_records, lifecycle_records_json, status_update_records
 from publishing.receipts import send_radar_receipt, send_wow_receipt
 from publishing.urls import (
     investor_home_path,
     investor_wows_path,
     manifest_path,
+    radar_archive_url,
     radar_issue_path,
     radar_issue_url,
     wow_path,
@@ -338,6 +341,21 @@ def publish_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
     if entity_type == "wow":
         send_wow_receipt(artifact, run_id=run_id)
     artifact.refresh_from_db()
+    if entity_type == "radar" and settings.WKAP_CACHE_WARMUP_ENABLED:
+        try:
+            warm_radar_cache(artifact.market_date, run_id=run_id)
+        except Exception as exc:
+            log_event(
+                "radar_cache_warmup_failed",
+                run_id=run_id,
+                status=LedgerEvent.Status.FAILED,
+                entity_type="radar",
+                entity_id=artifact.id,
+                raw_email=artifact.source_email,
+                artifact=artifact,
+                error_code=exc.__class__.__name__,
+                error_message=str(exc),
+            )
     log_event(
         "publish_succeeded",
         run_id=run_id,
@@ -347,6 +365,60 @@ def publish_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
         artifact=artifact,
     )
     return artifact
+
+
+def warm_radar_cache(market_date, *, run_id: uuid.UUID) -> list[dict[str, Any]]:
+    urls = [radar_archive_url(), radar_issue_url(market_date)]
+    log_event(
+        "radar_cache_warmup_started",
+        run_id=run_id,
+        status=LedgerEvent.Status.STARTED,
+        entity_type="radar",
+        details={"market_date": str(market_date), "urls": urls},
+    )
+    results = [_warm_cache_url(url) for url in urls]
+    errors = [result for result in results if result.get("error")]
+    log_event(
+        "radar_cache_warmup_failed" if errors else "radar_cache_warmup_succeeded",
+        run_id=run_id,
+        status=LedgerEvent.Status.FAILED if errors else LedgerEvent.Status.SUCCEEDED,
+        entity_type="radar",
+        details={"market_date": str(market_date), "results": results},
+        error_code="cache_warmup_request_failed" if errors else "",
+        error_message="; ".join(f"{item['url']}: {item['error']}" for item in errors),
+    )
+    return results
+
+
+def _warm_cache_url(url: str) -> dict[str, Any]:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "accept": "text/html,*/*;q=0.8",
+            "user-agent": "WKAP cache warmup/1.0",
+        },
+        method="GET",
+    )
+    result: dict[str, Any] = {"url": url, "method": "GET"}
+    try:
+        with urllib.request.urlopen(request, timeout=settings.WKAP_CACHE_WARMUP_TIMEOUT_SECONDS) as response:
+            response.read()
+            headers = response.headers
+            result.update(
+                {
+                    "status_code": response.getcode(),
+                    "cf_cache_status": headers.get("cf-cache-status", ""),
+                    "cache_control": headers.get("cache-control", ""),
+                    "content_length": headers.get("content-length", ""),
+                }
+            )
+    except urllib.error.HTTPError as exc:
+        result.update({"status_code": exc.code, "error": str(exc)})
+    except urllib.error.URLError as exc:
+        result.update({"error": str(exc.reason)})
+    except OSError as exc:
+        result.update({"error": str(exc)})
+    return result
 
 
 def validate_ledger(entity_type: str, entity_id: int) -> list[str]:
@@ -605,6 +677,7 @@ def _render_wow(submission: DailyWoWPacket) -> str:
             "page_type": "wow_submission",
             "agent_spec_version": submission.format_version,
             "agent_facts": _wow_agent_facts(submission, selected_wow, selection_status),
+            "wow_signal_records": _wow_signal_records(submission),
             "status_update_records": status_update_records(
                 submission.wow_items_json,
                 investor_id=submission.investor.investor_id,
@@ -617,6 +690,126 @@ def _render_wow(submission: DailyWoWPacket) -> str:
             ],
         },
     )
+
+
+def _wow_signal_records(submission: DailyWoWPacket) -> list[dict[str, object]]:
+    lifecycle_by_id = {}
+    for record in lifecycle_records(
+        submission.wow_items_json,
+        investor_id=submission.investor.investor_id,
+        packet_id=submission.packet_id,
+    ):
+        for key in (str(record.get("wow_id") or ""), str(record.get("public_wow_id") or "")):
+            if key:
+                lifecycle_by_id[key] = record
+                lifecycle_by_id[local_wow_id(key)] = record
+
+    raw_by_id = {}
+    for item in submission.wow_items_json or []:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("wow_id") or "")
+        if key:
+            raw_by_id[key] = item
+            raw_by_id[local_wow_id(key)] = item
+
+    records = []
+    for wow in submission.suggested_wows.all():
+        lifecycle = lifecycle_by_id.get(wow.wow_id, {})
+        raw = raw_by_id.get(wow.wow_id, {})
+        wow_type = str(lifecycle.get("wow_type") or raw.get("wow_type") or "candidate_wow")
+        records.append(
+            {
+                "wow": wow,
+                "wow_type": wow_type,
+                "type_rows": _wow_type_rows(wow_type, raw, lifecycle),
+            }
+        )
+    return records
+
+
+def _wow_type_rows(wow_type: str, raw: dict, lifecycle: dict) -> list[dict[str, str]]:
+    rows = [
+        {"label": "WoW type", "field": "wow_type", "value": wow_type},
+        {"label": "Parent WoW ID", "field": "parent_wow_id", "value": _row_value(lifecycle, raw, "parent_wow_id")},
+        {"label": "Root WoW ID", "field": "root_wow_id", "value": _row_value(lifecycle, raw, "root_wow_id")},
+        {"label": "Scoreable", "field": "scoreable", "value": _bool_row_value(lifecycle.get("scoreable", raw.get("scoreable")))},
+        {
+            "label": "Accuracy endpoint eligible",
+            "field": "accuracy_endpoint_eligible",
+            "value": _bool_row_value(lifecycle.get("accuracy_endpoint_eligible", raw.get("accuracy_endpoint_eligible"))),
+        },
+    ]
+    if wow_type == "status_update":
+        rows.extend(
+            [
+                {"label": "Target WoW type", "field": "target_wow_type", "value": _row_value(lifecycle, raw, "target_wow_type")},
+                {"label": "Target WoW ID", "field": "target_wow_id", "value": _row_value(lifecycle, raw, "target_wow_id")},
+                {"label": "Target root WoW ID", "field": "target_root_wow_id", "value": _row_value(lifecycle, raw, "target_root_wow_id")},
+                {"label": "Update type", "field": "update_type", "value": _row_value(lifecycle, raw, "update_type")},
+                {"label": "Previous status", "field": "previous_status", "value": _row_value(lifecycle, raw, "previous_status")},
+                {"label": "New status", "field": "new_status", "value": _row_value(lifecycle, raw, "new_status")},
+                {"label": "Update summary", "field": "update_summary", "value": _row_value(lifecycle, raw, "update_summary")},
+                {"label": "Evidence summary", "field": "evidence_summary", "value": _row_value(lifecycle, raw, "evidence_summary")},
+                {"label": "Resolution source used", "field": "resolution_source_used", "value": _row_value(lifecycle, raw, "resolution_source_used")},
+                {"label": "Lineage node", "field": "lineage_node", "value": "false"},
+            ]
+        )
+    elif wow_type == "scoreable_signal":
+        rows.extend(
+            [
+                {"label": "Claim", "field": "claim", "value": _row_value(lifecycle, raw, "claim")},
+                {"label": "Invalidate test", "field": "invalidate_test", "value": _row_value(lifecycle, raw, "invalidate_test")},
+                {"label": "Resolve by", "field": "resolve_by", "value": _row_value(lifecycle, raw, "resolve_by")},
+                {"label": "Resolution source", "field": "resolution_source", "value": _row_value(lifecycle, raw, "resolution_source")},
+                {"label": "Signal status", "field": "signal_status", "value": _row_value(lifecycle, raw, "signal_status")},
+            ]
+        )
+    elif wow_type == "trackable_wow":
+        rows.extend(
+            [
+                {"label": "Claim", "field": "claim", "value": _row_value(lifecycle, raw, "claim")},
+                {"label": "Evidence to watch", "field": "evidence_to_watch", "value": _list_row_value(raw.get("evidence_to_watch"))},
+                {"label": "Review cadence", "field": "review_cadence", "value": _row_value(lifecycle, raw, "review_cadence")},
+                {"label": "Next review", "field": "next_review_at", "value": _row_value(lifecycle, raw, "next_review_at")},
+                {"label": "Trackable status", "field": "trackable_status", "value": _row_value(lifecycle, raw, "trackable_status")},
+            ]
+        )
+    elif wow_type == "thesis_wow":
+        rows.extend(
+            [
+                {"label": "Thesis claim", "field": "thesis_claim", "value": _row_value(lifecycle, raw, "thesis_claim", "claim")},
+                {"label": "Thesis status", "field": "thesis_status", "value": _row_value(lifecycle, raw, "thesis_status")},
+            ]
+        )
+    else:
+        rows.extend(
+            [
+                {"label": "Observation", "field": "observation", "value": _row_value(lifecycle, raw, "observation", "claim")},
+                {"label": "Why worth watching", "field": "why_worth_watching", "value": _row_value(lifecycle, raw, "why_worth_watching")},
+            ]
+        )
+    rows.append({"label": "Source refs", "field": "source_refs", "value": _list_row_value(lifecycle.get("source_refs") or raw.get("source_refs"))})
+    return [row for row in rows if row["value"] not in ("", None)]
+
+
+def _row_value(primary: dict, fallback: dict, *keys: str) -> str:
+    for source in (primary, fallback):
+        for key in keys:
+            value = source.get(key)
+            if value not in (None, ""):
+                return _list_row_value(value)
+    return ""
+
+
+def _list_row_value(value) -> str:
+    if isinstance(value, list):
+        return "; ".join(str(item) for item in value if item not in (None, ""))
+    return str(value or "")
+
+
+def _bool_row_value(value) -> str:
+    return "true" if bool(value) else "false"
 
 
 def _github_url(relative_or_absolute_path) -> str:

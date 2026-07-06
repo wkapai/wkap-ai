@@ -35,7 +35,7 @@ Core event families:
 - Cloudflare Email Worker ingestion: `cloudflare_email_received`, `cloudflare_email_auth_failed`, `cloudflare_email_ingest_failed`, `cloudflare_email_not_published`.
 - Radar authorization: `radar_authorized`, `radar_rejected`.
 - Parsing: `radar_parsed`, `wow_parsed`, `wow_format_repaired`, `wow_format_fix_needed`.
-- Publishing: `publish_started`, `html_generated`, `index_rebuilt`, `manifest_created`, `github_commit_started`, `github_commit_succeeded`, `github_commit_failed`, `opentimestamp_started`, `opentimestamp_succeeded`, `opentimestamp_failed`, `page_published`, `publish_succeeded`.
+- Publishing: `publish_started`, `html_generated`, `index_rebuilt`, `manifest_created`, `github_commit_started`, `github_commit_succeeded`, `github_commit_failed`, `opentimestamp_started`, `opentimestamp_succeeded`, `opentimestamp_failed`, `page_published`, `radar_cache_warmup_started`, `radar_cache_warmup_succeeded`, `radar_cache_warmup_failed`, `publish_succeeded`.
 - OpenTimestamp upgrades: `opentimestamp_upgrade_started`, `opentimestamp_upgrade_succeeded`, `opentimestamp_upgrade_failed`, `opentimestamp_upgrade_skipped`.
 - Receipts: `receipt_email_started`, `receipt_email_sent`, `receipt_email_skipped`, `receipt_email_failed`, `format_fix_receipt_started`, `format_fix_receipt_sent`, `format_fix_receipt_skipped`, `format_fix_receipt_failed`.
 - Recovery: `retry_started`, `retry_succeeded`, `retry_failed`.
@@ -92,6 +92,35 @@ WKAP_LEDGER_GITHUB_BASE_URL=https://github.com/ORG/REPO/blob/main
 ```
 
 Render runs `scripts/render_release.sh`, which clones or fast-forwards the ledger repo before deploy checks. Live `commit-ledger` writes, commits, and pushes generated HTML, manifests, and WoW raw email artifacts.
+
+## Cloudflare Radar Cache
+
+`wkap.ai` must be proxied through Cloudflare while still pointing at Render.
+
+Dated Radar Feed HTML files are immutable and should be cached aggressively:
+
+```txt
+(http.host eq "wkap.ai" and http.request.uri.path matches "^/radar/wkap-radar-feed-[0-9]{4}-[0-9]{2}-[0-9]{2}\\.html$")
+```
+
+Settings: Eligible for cache, Edge TTL 1 year, Browser TTL 5 minutes, Ignore query string.
+
+The changing archive index is cached separately:
+
+```txt
+(http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/"))
+```
+
+Settings: Eligible for cache, Edge TTL 1 day, Browser TTL 5 minutes, Ignore query string.
+
+Production defaults `WKAP_CACHE_WARMUP_ENABLED=true`, so successful Radar publishes warm the archive and dated feed URLs with normal GET requests. Manual warm/verify:
+
+```powershell
+python manage.py wkap --json warm-radar-cache --market-date 2026-07-03
+python manage.py wkap --json warm-radar-cache --market-date 2026-07-03
+```
+
+Check the second response for `cf_cache_status: HIT`. If a new feed has just been published and the archive is stale, purge only `https://wkap.ai/radar/`, then run the warm command again. Do not purge old dated feed pages.
 
 ## OpenTimestamp
 
@@ -165,4 +194,4 @@ Do not treat a major version as production-ready until these three scans are cle
 
 ## Change Rule
 
-When changing a workflow, update the relevant spec or operations doc first, then update code, then tests. For WoW Packet format changes, update `specs/wow_packet/` first so the parser, setup page, and tests follow one source of truth.
+When changing a workflow, update the relevant spec or operations doc first, then update code, then tests. For WoW protocol changes, update `specs/source/wow_protocol_v0_2.yaml`, run `python manage.py build_wow_protocol`, then update Markdown docs and tests so parser, setup page, skill, and public specs follow one source of truth.

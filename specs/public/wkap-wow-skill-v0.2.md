@@ -1,24 +1,24 @@
-# WKAP WoW Skill v0.1
+# WKAP WoW Skill v0.2
 
 ## Metadata
 
 skill_name: WKAP WoW Skill  
-skill_version: v0.1  
-skill_url: https://wkap.ai/skills/wkap-wow-skill-v0.1.md  
+skill_version: v0.2  
+skill_url: https://wkap.ai/skills/wkap-wow-skill-v0.2.md  
 latest_skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md  
 current_wow_packet_spec: https://wkap.ai/specs/wow-packet-latest.md
 current_wow_crm_spec: https://wkap.ai/specs/wow-crm-latest.json
 current_wow_intake_flow: https://wkap.ai/specs/wow-intake-flow-latest.json
 current_daily_wow_state_schema: https://wkap.ai/specs/daily-wow-state-latest.schema.json
 
-This Markdown file is the canonical public operating manual for WKAP WoW Skill v0.1. The machine-readable CRM, intake, and daily state JSON specs are the execution contract. If this Markdown and the JSON specs disagree, follow the JSON specs and record the mismatch privately.
+This Markdown file is the canonical public operating manual for WKAP WoW Skill v0.2. The machine-readable CRM, intake, and daily state JSON specs are the execution contract. If Markdown and JSON specs disagree, follow the JSON execution contract, record the mismatch in the Private WoW Journal, show the mismatch to the user, and include spec_mismatch_detected plus mismatch details in the next packet validation_notes.
 
 ## Agent Facts
 
 ```yaml
 agent_facts:
   skill: wkap_wow_skill
-  skill_version: v0.1
+  skill_version: v0.2
   current_wow_packet_spec: https://wkap.ai/specs/wow-packet-latest.md
   current_wow_crm_spec: https://wkap.ai/specs/wow-crm-latest.json
   current_wow_intake_flow: https://wkap.ai/specs/wow-intake-flow-latest.json
@@ -26,8 +26,8 @@ agent_facts:
   default_spec_fetch: daily
   minimum_fallback_refresh_days: 30
   private_journal_required: true
-  public_submission_requires_user_approval: true
-  user_decision_is_submission_approval: true
+  public_submission_requires_completed_daily_choice: true
+  user_decision_completes_packet: true
   setup_mode: low_friction_defaults_first
   ask_user_only_when_blocked: true
   durable_private_journal_required: true
@@ -36,7 +36,7 @@ agent_facts:
 
 ## Purpose
 
-The WKAP WoW Skill helps an agent prepare Daily WoW Packets, maintain a private workout trail, ask the user for judgment, and submit only approved packets to WKAP Public Ledger.
+The WKAP WoW Skill helps an agent prepare Daily WoW Packets, maintain a private workout trail, ask the user for judgment, and submit completed packets to WKAP Public Ledger.
 
 It is not a newsletter-writing skill. It is an investor judgment training skill.
 
@@ -60,12 +60,12 @@ setup_defaults:
   author_id: use known WKAP investor ID if available; otherwise use a stable local draft identity until public ledger identity is assigned or confirmed
   daily_send_time: infer from the user's behavior pattern after daily investment research; ask only if it cannot be inferred
   research_sources: agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and high-quality agent-found market items
-  approval_flow: suggest 3 WoW signals, collect user selection or pass plus required reason, then submit; no reply means save privately and submit nothing publicly
+  completion_flow: suggest 3 WoW signals, collect user selection or pass plus required reason, then submit; no reply means save privately and submit nothing publicly
   default_packet_scope: one Daily WoW Packet for the current US market day
   weekly_review_requires_explicit_user_request: true
 ```
 
-The agent may briefly confirm the setup after applying defaults, but it should not block installation on questions about journal location, author ID, schedule, source list, or approval flow unless those defaults are impossible to apply.
+The agent may briefly confirm the setup after applying defaults, but it should not block installation on questions about journal location, author ID, schedule, source list, or completion flow unless those defaults are impossible to apply.
 
 ## Default Run Scope
 
@@ -103,6 +103,8 @@ The user may reply in natural language. The agent must normalize the reply into 
 
 Do not invent required user fields. Do not pick for the user. Do not decide that a completed valid daily packet should remain private because it is imperfect or low confidence. The normal successful workout result is a published Daily WoW Packet on WKAP Ledger.
 
+The agent must remove or summarize private/confidential material and keep sensitive details in the Private WoW Journal.
+
 The daily choice flow is fixed:
 
 1. Prepare exactly 3 WoW options from today's top reading items and active private CRM state.
@@ -110,9 +112,9 @@ The daily choice flow is fixed:
 3. If the user selects an option, collect `reason_for_selection`.
 4. If the user passes, collect `closest_rejected_wow`, `reason_for_pass`, and `missing_evidence`.
 5. `closest_rejected_wow` must be one of today's 3 `wow_id` values.
-6. Selection/pass plus required fields is submission approval.
+6. Selection/pass plus required fields completes the Daily WoW Packet.
 7. Generate the structured packet, validate it, save it privately, and submit it publicly.
-8. Do not ask for a second approval unless the user explicitly interrupts the submission.
+8. Do not ask for a second confirmation unless the user explicitly interrupts the submission.
 
 ## Spec Refresh Rule
 
@@ -180,7 +182,7 @@ Private noticed is not public proof. Public submitted is not the same as receipt
 8. Ask the user to choose exactly one: select 1, select 2, select 3, or pass.
 9. Ask for the required reason: reason_for_selection when selecting, or reason_for_pass when passing.
 10. If the choice or reason is missing, ask only for the missing required field.
-11. Once choice plus reason exists, generate the final v0.1 Daily WoW Packet with reading_log, exactly 3 wow_items, selection, agent_facts, and validation_notes.
+11. Once choice plus reason exists, generate the final v0.2 Daily WoW Packet with reading_log, exactly 3 wow_items, selection, agent_facts, and validation_notes.
 12. Save the full structured packet to the Private WoW Journal.
 13. Submit the packet to WKAP Ledger.
 14. Reconcile receipt and public site status after attempted submission.
@@ -195,7 +197,7 @@ Before suggesting the 3 daily WoWs, the agent must run this operating loop:
 
 ```text
 1. Load today's reading log candidates.
-2. Load active CRM state: active candidates, active trackables, pending scoreable signals, active thesis records, context notes, receipts, and public verification.
+2. Load active CRM state: active candidates, active trackables, pending scoreable signals, active thesis records, receipts, and public verification.
 3. Check whether today's reading creates a new idea, strengthens an existing idea, weakens an existing idea, resolves a scoreable signal, makes a prior test invalid, or makes an old idea stale.
 4. Classify each possible daily option with the WoW type decision rules below.
 5. If an existing idea changes state, prepare an append-only status_update instead of rewriting the old idea.
@@ -242,13 +244,65 @@ passed:
 
 For a pass, `closest_rejected_wow` must be the `wow_id` of one of today's 3 suggested WoW signals. Do not invent a new prose rejected idea at selection time.
 
-The user selection/pass plus required reason is submission approval. Do not ask for a second approval after the user completes the daily choice.
+The user selection/pass plus required reason completes the Daily WoW Packet and triggers submission. Do not ask for a second confirmation after the user completes the daily choice.
 
 Do not ask the user to edit the packet, approve the packet text, or request more research as part of the default routine. If the user explicitly asks to edit or research more, follow that instruction, then return to the same selection/pass plus reason flow.
 
+## Daily Suggestion Display Contract
+
+Before asking the user to pick 1, 2, 3, or pass, the agent MUST show exactly 3 numbered options.
+
+Each visible option MUST include:
+
+```yaml
+required_visible_fields:
+  - option_number
+  - visible_type_label
+  - plain_english_title
+  - why_worth_watching
+```
+
+The agent MUST use these visible labels for internal `wow_type` values:
+
+```yaml
+candidate_wow: Candidate
+trackable_wow: Trackable
+scoreable_signal: Scoreable
+thesis_wow: Thesis
+status_update: Status Update
+```
+
+The user chooses by number only:
+
+```text
+Pick one WoW: 1, 2, 3, or pass.
+```
+
+The agent MUST store `wow_id` internally in the structured packet, but SHOULD NOT show `wow_id` in the default user-facing choice prompt unless the user asks for technical details.
+
+For `scoreable_signal`, the visible option MUST also show `invalidate_test`, `resolve_by`, and `resolution_source`.
+
+For `trackable_wow`, the visible option SHOULD show `evidence_to_watch` and review timing when concise.
+
+For `status_update`, the visible option MUST show the target summary, `previous_status`, `new_status`, and `evidence_summary`.
+
+The agent MUST run this pre-send checklist before showing the 3 options:
+
+```yaml
+invalid_if:
+  - fewer_or_more_than_3_options
+  - any_option_missing_visible_type_label
+  - any_option_missing_plain_english_title
+  - any_option_missing_why_worth_watching
+  - scoreable_signal_missing_invalidate_test
+  - scoreable_signal_missing_resolve_by
+  - scoreable_signal_missing_resolution_source
+  - user_is_required_to_choose_by_wow_id
+```
+
 ## Required Prepared Packet Shape
 
-Every prepared Daily WoW Packet must preserve the public-ready v0.1 structure even when it remains private.
+Every prepared Daily WoW Packet must preserve the public-ready v0.2 structure even when it remains private.
 
 Minimum prepared packet sections:
 
@@ -284,11 +338,10 @@ valid_wow_types:
   - trackable_wow
   - scoreable_signal
   - thesis_wow
-  - context_note
   - status_update
 ```
 
-The agent must not treat `trackable_wow`, `context_note`, `thesis_wow`, or `status_update` as scoreable predictions.
+The agent must not treat `trackable_wow`, `thesis_wow`, or `status_update` as scoreable predictions.
 
 Only `scoreable_signal` is eligible for calibration scoring.
 
@@ -319,11 +372,6 @@ thesis_wow:
   default_status: active_thesis
   example: Stablecoin revenue architecture is shifting from issuer exclusivity to distribution-layer bargaining power.
 
-context_note:
-  use_when: The item is useful market context, vocabulary, source quality, or background, but not an investable claim.
-  default_status: active_context
-  example: A China AI article reframes competition around deployment and manufacturing integration.
-
 status_update:
   use_when: Today's reading changes the CRM state of an existing WoW.
   default_status: none; it updates a target item.
@@ -332,15 +380,17 @@ status_update:
 
 If the agent is unsure between two types, choose the less scoreable type. Do not force a weak idea into `scoreable_signal`.
 
-## User Approval Rule
+Every WoW item must start at least as `candidate_wow`. Broad context belongs in the reading log or Private WoW Journal notes, not as its own WoW type.
 
-Private journal drafts may be saved without approval.
+## Daily Completion Rule
 
-Public submission requires user approval, and the daily user decision is the approval.
+Private journal drafts may be saved before completion.
 
-The agent must not submit a packet publicly to WKAP unless the user selected WoW 1, 2, or 3 with `reason_for_selection`, passed with `reason_for_pass`, or gave an explicit standing instruction to submit after a daily choice.
+Public submission requires a completed daily choice: either selected WoW 1, 2, or 3 with `reason_for_selection`, or pass with `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence`.
 
-Default approval flow is assumed: prepare 3 options, collect selection/pass plus reason, generate the packet, save privately, and submit. Do not ask the user how approval should work unless the current agent environment cannot support this flow.
+The agent must not submit a packet publicly to WKAP unless the daily choice is complete or the user gave an explicit standing instruction to submit after a completed daily choice.
+
+Default completion flow is assumed: prepare 3 options, collect selection/pass plus reason, generate the packet, save privately, and submit. Do not ask the user how confirmation should work unless the current agent environment cannot support this flow.
 
 ## Public Ledger Bias
 
@@ -496,11 +546,6 @@ thesis_supported_or_weakened:
   new_status: supported | weakened | retired
   update_type: thesis_update
 
-context_superseded_or_retired:
-  target_wow_type: context_note
-  previous_status: active_context
-  new_status: superseded | retired
-  update_type: context_update
 ```
 
 Do not use `pending_scoreable` as the `new_status` of a promotion update. Promotion updates mark the old candidate or trackable as `promoted_scoreable`; the new child scoreable signal starts with `signal_status: pending_scoreable`.
@@ -556,7 +601,6 @@ default_status:
   trackable_wow: active_trackable
   scoreable_signal: pending_scoreable
   thesis_wow: active_thesis
-  context_note: active_context
 ```
 
 Allowed status transitions:
@@ -576,8 +620,6 @@ allowed_status_transitions:
     active_thesis: [supported, weakened, retired]
     supported: [weakened, retired]
     weakened: [supported, retired]
-  context_note:
-    active_context: [superseded, retired]
 ```
 
 Status update packet items must include:
@@ -631,7 +673,7 @@ Receipt is useful confirmation, not the sole source of truth.
 
 - Do not force every useful observation into a fake binary test.
 - Do not call a trackable a prediction.
-- Do not submit publicly without user approval.
+- Do not submit publicly without a completed daily choice.
 - Do not lose no-reply days; save them privately.
 - Do not treat private lineage as public proof.
 - Do not mutate original public WoW artifacts; prepare append-only updates.
@@ -646,7 +688,7 @@ daily_packet_record:
   local_journal_entry_id: string
   prepared_at: ISO timestamp
   packet_spec_version: string
-  skill_version: v0.1
+  skill_version: v0.2
   private_status: prepared_private | user_no_reply | user_rejected | user_approved | no_pick | draft_saved
   submission_status: not_submitted | submitted_to_wkap | submission_failed | unknown
   receipt_status: no_receipt | receipt_received | receipt_error | not_checked
@@ -658,7 +700,7 @@ daily_packet_record:
 
 ## Changelog
 
-v0.1 - Initial public draft
+v0.2 - Initial public draft
 
 - Added canonical Markdown skill file.
 - Added daily spec fetch default.
@@ -666,7 +708,7 @@ v0.1 - Initial public draft
 - Added distinction between WoW Packet Spec and WKAP WoW Skill.
 - Added Private WoW Journal requirement for every prepared Daily WoW Packet.
 - Added user no-reply rule: save privately, do not submit publicly.
-- Added user approval rule for public submission.
+- Added completed daily choice rule for public submission.
 - Added private lineage as context, not public timing proof.
 - Added maintenance workflow for status updates.
 - Added unresolved-to-voided maintenance rule after grace window.

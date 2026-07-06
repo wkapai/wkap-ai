@@ -1,50 +1,111 @@
 {
   "protocol": "wkap-wow-intake-flow",
-  "version": "v0.1",
+  "version": "v0.2",
   "latest_url": "https://wkap.ai/specs/wow-intake-flow-latest.json",
   "crm_spec_url": "https://wkap.ai/specs/wow-crm-latest.json",
   "goal": "Make every agent behave like the same intake program during Daily WoW data collection while still accepting natural conversation as input.",
   "states": {
     "setup": {
       "required_action": "install_skill_and_prepare_private_journal",
-      "next": ["collecting_reading_log"]
+      "next": [
+        "collecting_reading_log"
+      ]
     },
     "collecting_reading_log": {
       "required_action": "collect top daily investment readings from user activity and agent-found sources",
-      "limits": {"max_reading_items": 10},
-      "next": ["draft_options"]
+      "limits": {
+        "max_reading_items": 10
+      },
+      "next": [
+        "draft_options"
+      ]
     },
     "draft_options": {
       "required_action": "generate exactly 3 WoW choices from today's readings and existing CRM state",
-      "allowed_option_kinds": ["new_wow_signal", "existing_wow_status_update"],
-      "next": ["awaiting_user_choice"]
+      "allowed_option_kinds": [
+        "new_wow_signal",
+        "existing_wow_status_update"
+      ],
+      "display_contract": {
+        "exact_visible_options": 3,
+        "prompt_template": "Pick one WoW: 1, 2, 3, or pass.",
+        "user_must_not_be_required_to_choose_by_wow_id": true,
+        "wow_id_hidden_by_default": true,
+        "required_visible_fields": [
+          "option_number",
+          "visible_type_label",
+          "plain_english_title",
+          "why_worth_watching"
+        ],
+        "invalid_if": [
+          "fewer_or_more_than_3_options",
+          "any_option_missing_visible_type_label",
+          "any_option_missing_plain_english_title",
+          "any_option_missing_why_worth_watching",
+          "scoreable_signal_missing_invalidate_test",
+          "scoreable_signal_missing_resolve_by",
+          "scoreable_signal_missing_resolution_source",
+          "user_is_required_to_choose_by_wow_id"
+        ]
+      },
+      "next": [
+        "awaiting_user_choice"
+      ]
     },
     "awaiting_user_choice": {
       "prompt_template": "Pick one WoW: 1, 2, 3, or pass.",
-      "accepted_inputs": ["1", "2", "3", "pass", "natural language equivalent"],
+      "accepted_inputs": [
+        "1",
+        "2",
+        "3",
+        "pass",
+        "natural language equivalent"
+      ],
       "normalization_required": true,
-      "next": ["awaiting_selection_reason", "awaiting_pass_fields"]
+      "next": [
+        "awaiting_selection_reason",
+        "awaiting_pass_fields"
+      ]
     },
     "awaiting_selection_reason": {
       "prompt_template": "Why did you select this WoW?",
-      "required_fields": ["reason_for_selection"],
-      "forbidden_fields": ["reason_for_pass", "closest_rejected_wow", "missing_evidence"],
-      "next": ["ready_to_submit"]
+      "required_fields": [
+        "reason_for_selection"
+      ],
+      "forbidden_fields": [
+        "reason_for_pass",
+        "closest_rejected_wow",
+        "missing_evidence"
+      ],
+      "next": [
+        "ready_to_submit"
+      ]
     },
     "awaiting_pass_fields": {
       "prompt_template": "Which of today's 3 WoWs came closest, why pass, and what evidence is missing?",
-      "required_fields": ["closest_rejected_wow", "reason_for_pass", "missing_evidence"],
+      "required_fields": [
+        "closest_rejected_wow",
+        "reason_for_pass",
+        "missing_evidence"
+      ],
       "closest_rejected_wow_rule": "must be one of today's 3 wow_id values",
-      "next": ["ready_to_submit"]
+      "next": [
+        "ready_to_submit"
+      ]
     },
     "ready_to_submit": {
       "required_action": "generate structured Daily WoW Packet, validate it against CRM and intake specs, save privately, submit publicly",
-      "approval_rule": "the user's selection/pass plus required reason is approval",
-      "next": ["submitted", "not_submitted_format_error"]
+      "completion_rule": "the user's selection/pass plus required reason completes the Daily WoW Packet",
+      "next": [
+        "submitted",
+        "not_submitted_format_error"
+      ]
     },
     "submitted": {
       "required_action": "reconcile receipt, public WKAP URL, raw email artifact, proof state, and local private CRM files",
-      "next": ["verified"]
+      "next": [
+        "verified"
+      ]
     },
     "verified": {
       "required_action": "record public URL and lifecycle effects in private journal"

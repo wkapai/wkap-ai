@@ -10,8 +10,7 @@ RADAR_CONTENT_SHA256_COVERS = (
     "It does not cover rendered HTML, proof panels, manifests, or OpenTimestamp status."
 )
 WOW_CONTENT_SHA256_COVERS = (
-    "For wow_packet_v0.1, sha256 over canonical JSON raw_packet_json with sorted keys. "
-    "For legacy wow_packet_v1, sha256 over UTF-8 text fields used by the v1 parser. "
+    "For wow_packet_v0.2, sha256 over canonical JSON raw_packet_json with sorted keys. "
     "It does not cover rendered HTML, proof panels, manifests, raw email text, or OpenTimestamp status."
 )
 

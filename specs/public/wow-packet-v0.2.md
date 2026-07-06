@@ -1,17 +1,17 @@
-# WKAP WoW Packet Spec v0.1
+# WKAP WoW Packet Spec v0.2
 
 ## Metadata
 
 spec_name: WKAP WoW Packet Spec  
-spec_version: v0.1  
-spec_url: https://wkap.ai/specs/wow-packet-v0.1.md  
+spec_version: v0.2  
+spec_url: https://wkap.ai/specs/wow-packet-v0.2.md  
 latest_spec_url: https://wkap.ai/specs/wow-packet-latest.md  
 recommended_agent_skill: https://wkap.ai/skills/wkap-wow-skill-latest.md
 crm_spec: https://wkap.ai/specs/wow-crm-latest.json
 intake_flow: https://wkap.ai/specs/wow-intake-flow-latest.json
 daily_state_schema: https://wkap.ai/specs/daily-wow-state-latest.schema.json
 
-This Markdown file is the canonical public source of truth for WKAP WoW Packet v0.1.
+This Markdown file is the canonical public source of truth for WKAP WoW Packet v0.2.
 
 The machine-readable CRM, intake flow, and daily state JSON specs define the strict agent execution contract for data collection, required fields, and lifecycle transitions:
 
@@ -19,19 +19,20 @@ The machine-readable CRM, intake flow, and daily state JSON specs define the str
 - https://wkap.ai/specs/wow-intake-flow-latest.json
 - https://wkap.ai/specs/daily-wow-state-latest.schema.json
 
+If Markdown and JSON specs disagree, follow the JSON execution contract, record the mismatch in the Private WoW Journal, show the mismatch to the user, and include spec_mismatch_detected plus mismatch details in the next packet validation_notes.
+
 ## Agent Facts
 
 ```yaml
 agent_facts:
   protocol: wkap_wow_packet
-  spec_version: v0.1
+  spec_version: v0.2
   required_identity_field: author_id
   valid_wow_types:
     - candidate_wow
     - trackable_wow
     - scoreable_signal
     - thesis_wow
-    - context_note
     - status_update
   unresolved_grace_window_days: 30
 ```
@@ -51,8 +52,8 @@ packet:
   packet_id: string
   author_id: string
   created_at: ISO timestamp
-  packet_spec_version: v0.1
-  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
+  packet_spec_version: v0.2
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.2.md
   packet_spec_latest_url: https://wkap.ai/specs/wow-packet-latest.md
   skill_version: string | null
   skill_url: string | null
@@ -111,13 +112,55 @@ daily_workout_contract:
     - missing_evidence
 ```
 
-The agent prepares the options. The user performs the judgment by selecting one of the 3 WoW signals or passing. User selection/pass plus the required reason is approval to submit the packet to WKAP Ledger.
+The agent prepares the options. The user performs the judgment by selecting one of the 3 WoW signals or passing. User selection/pass plus the required reason completes the Daily WoW Packet and triggers submission to WKAP Ledger.
+
+The agent must remove or summarize private/confidential material and keep sensitive details in the Private WoW Journal.
 
 Any of the 3 daily options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, a promotion, a resolution, or a maintenance event.
 
 When the user passes, `closest_rejected_wow` MUST be the `wow_id` of one of today's 3 suggested WoW signals. It is not a free-text idea field; put the idea text inside the suggested WoW item.
 
 If the user does not provide a choice or required reason, the packet is incomplete for public submission. Save it privately as no-reply or incomplete, and ask only for the missing required field.
+
+## Daily Suggestion Display Contract
+
+Before asking the user to pick 1, 2, 3, or pass, the agent MUST show exactly 3 numbered options.
+
+Each visible option MUST include:
+
+```yaml
+required_visible_fields:
+  - option_number
+  - visible_type_label
+  - plain_english_title
+  - why_worth_watching
+```
+
+Visible type labels MUST map from internal `wow_type` values:
+
+```yaml
+candidate_wow: Candidate
+trackable_wow: Trackable
+scoreable_signal: Scoreable
+thesis_wow: Thesis
+status_update: Status Update
+```
+
+The user chooses by number only:
+
+```text
+Pick one WoW: 1, 2, 3, or pass.
+```
+
+The agent MUST store `wow_id` internally in the structured packet, but SHOULD NOT show `wow_id` in the default user-facing choice prompt unless the user asks for technical details.
+
+For `scoreable_signal`, the visible option MUST also show `invalidate_test`, `resolve_by`, and `resolution_source`.
+
+For `trackable_wow`, the visible option SHOULD show `evidence_to_watch` and review timing when concise.
+
+For `status_update`, the visible option MUST show the target summary, `previous_status`, `new_status`, and `evidence_summary`.
+
+The visible daily suggestion prompt is invalid if it has fewer or more than 3 options, hides the type label, omits the plain-English title, omits why the item is worth watching, requires the user to choose by `wow_id`, or presents a `scoreable_signal` without its test, deadline, and resolution source.
 
 ## Agent Tracking Workflow
 
@@ -133,7 +176,7 @@ tracking_inputs:
   - prior daily packets
 ```
 
-The 3 suggested WoW signals may include new observations, trackables, scoreable signals, thesis children, context notes, or append-only status updates on prior WoWs.
+The 3 suggested WoW signals may include new observations, trackables, scoreable signals, thesis children, or append-only status updates on prior WoWs.
 
 After public submission, the agent should update private lifecycle state. Public artifacts remain immutable.
 
@@ -143,7 +186,7 @@ Daily CRM loop:
 
 ```text
 1. Load today's top reading candidates.
-2. Load active CRM state: candidates, trackables, scoreable signals, theses, context notes, receipts, and public verification.
+2. Load active CRM state: candidates, trackables, scoreable signals, theses, receipts, and public verification.
 3. Decide whether today's evidence creates a new WoW or changes an existing WoW.
 4. Classify new items with the WoW type decision rules.
 5. Express existing-item changes as append-only status_update items.
@@ -161,7 +204,6 @@ valid_wow_types:
   - trackable_wow
   - scoreable_signal
   - thesis_wow
-  - context_note
   - status_update
 ```
 
@@ -169,8 +211,9 @@ valid_wow_types:
 `trackable_wow` is a claim or pattern worth monitoring but not ready for binary scoring.  
 `scoreable_signal` is a falsifiable claim with a declared invalidation test and resolution date.  
 `thesis_wow` is a broader thesis supported by child WoWs.  
-`context_note` is background context and must not be treated as a market call.  
 `status_update` is an append-only maintenance item for an existing WoW.
+
+Every WoW item must start at least as `candidate_wow`. Broad context belongs in the reading log or Private WoW Journal notes, not as its own WoW type.
 
 ## WoW Type Decision Rules
 
@@ -193,11 +236,6 @@ scoreable_signal:
 thesis_wow:
   use_when: Higher-level thesis that can collect child WoWs over time.
   default_status: active_thesis
-  scoreable: false
-
-context_note:
-  use_when: Useful background context, source quality note, vocabulary, or framing that is not an investable claim.
-  default_status: active_context
   scoreable: false
 
 status_update:
@@ -265,14 +303,6 @@ thesis_wow:
   parent_wow_id: string | null
   root_wow_id: string
 
-context_note:
-  wow_type: context_note
-  summary: string
-  source_refs: list
-  created_at: ISO timestamp
-  scoreable: false
-  parent_wow_id: string | null
-  root_wow_id: string
 ```
 
 ## Scoreability Rule
@@ -298,10 +328,6 @@ thesis_wow:
   scoreable: false
   accuracy_endpoint_eligible: false
 
-context_note:
-  scoreable: false
-  accuracy_endpoint_eligible: false
-
 status_update:
   scoreable: false
   accuracy_endpoint_eligible: false
@@ -315,13 +341,13 @@ Trackable statuses:
 
 ```yaml
 trackable_status:
-  - active
-  - promoted
+  - active_trackable
+  - promoted_scoreable
   - killed
   - stale
 ```
 
-A trackable must eventually become promoted, killed, or stale. A trackable that never promotes, dies, or receives timely reviews becomes visible dead weight in the ledger.
+A trackable must eventually become promoted_scoreable, killed, or stale. A trackable that never promotes, dies, or receives timely reviews becomes visible dead weight in the ledger.
 
 ## Signal Resolution Statuses
 
@@ -378,11 +404,11 @@ signal_status_record_mapping:
 
 ## Resolution Authority
 
-For v0.1, resolution status is author-declared against the stated `resolution_source`.
+For v0.2, resolution status is author-declared against the stated `resolution_source`.
 
 Author-declared resolution must cite or summarize the declared resolution source when available. WKAP verification and adjudication are deferred.
 
-## v0.1 Status Updates and Transitions
+## v0.2 Status Updates and Transitions
 
 Status changes are append-only. A `status_update` is a later packet item, not a mutation of the original WoW artifact.
 
@@ -390,10 +416,10 @@ Status changes are append-only. A `status_update` is a later packet item, not a 
 status_update:
   wow_type: status_update
   wow_id: string
-  target_wow_type: candidate_wow | trackable_wow | scoreable_signal | thesis_wow | context_note
+  target_wow_type: candidate_wow | trackable_wow | scoreable_signal | thesis_wow
   target_wow_id: string
   target_root_wow_id: string
-  update_type: resolution | promotion | killed | stale | voided | invalid_test | thesis_update | context_update | other
+  update_type: resolution | promotion | killed | stale | voided | invalid_test | thesis_update | other
   previous_status: string
   new_status: string
   created_at: ISO timestamp
@@ -440,7 +466,6 @@ default_status:
   trackable_wow: active_trackable
   scoreable_signal: pending_scoreable
   thesis_wow: active_thesis
-  context_note: active_context
 ```
 
 Allowed status transitions:
@@ -486,10 +511,6 @@ allowed_status_transitions:
       - retired
     weakened:
       - supported
-      - retired
-  context_note:
-    active_context:
-      - superseded
       - retired
 ```
 
@@ -553,7 +574,7 @@ Do not use `pending_scoreable` as the `new_status` of a status update. A promoti
 
 ## Status Update Authority
 
-In v0.1, a `status_update` is valid only if its `author_id` matches the target WoW author_id.
+In v0.2, a `status_update` is valid only if its `author_id` matches the target WoW author_id.
 
 Third-party status updates, third-party annotations, and WKAP adjudication are deferred.
 
@@ -586,7 +607,7 @@ Child rule:
 If parent_wow_id is not null, root_wow_id should equal the root_wow_id of the parent lineage when the parent is publicly known.
 ```
 
-Do not require `lineage_depth` or `transition_reason` in v0.1.
+Do not require `lineage_depth` or `transition_reason` in v0.2.
 
 ## Public Lineage Proof Rule
 
@@ -603,7 +624,7 @@ Minimum item-level facts for normal WoW items:
 ```yaml
 agent_facts:
   wow_id: string
-  wow_type: candidate_wow | trackable_wow | scoreable_signal | thesis_wow | context_note
+  wow_type: candidate_wow | trackable_wow | scoreable_signal | thesis_wow
   scoreable: boolean
   accuracy_endpoint_eligible: boolean
   parent_wow_id: string | null
@@ -679,11 +700,11 @@ Recommended future storage model:
 9. Treat private journal lineage as context unless publicly ledgered.
 ```
 
-A packet submitted under `wow-packet-v0.1` remains a v0.1 packet forever.
+A packet submitted under `wow-packet-v0.2` remains a v0.2 packet forever.
 
 ## Changelog
 
-v0.1 - Initial public draft
+v0.2 - Initial public draft
 
 - Added canonical Markdown source-of-truth files.
 - Added 302 latest-to-versioned redirect model.
@@ -697,8 +718,8 @@ v0.1 - Initial public draft
 - Fixed `unresolved` as pending, not accuracy-neutral.
 - Added `invalid_test` discipline penalty rule.
 - Added unresolved grace window rule.
-- Added v0.1 resolution authority: author-declared against `resolution_source`.
-- Added v0.1 status updates as subsequent packet items referencing `target_wow_id`.
+- Added v0.2 resolution authority: author-declared against `resolution_source`.
+- Added v0.2 status updates as subsequent packet items referencing `target_wow_id`.
 - Added status update authority: `author_id` must match target WoW `author_id`.
 - Added status update lineage exemption.
 - Added append-only state model.
@@ -710,7 +731,7 @@ v0.1 - Initial public draft
 - Added future-proofing note for version-aware flexible storage.
 - Excluded fake hash fields until real artifact hashing is implemented.
 - Added daily workout contract: up to 10 reading items, exactly 3 WoW signals, user select 1-3 or pass.
-- Added selection/pass plus reason as the public submission approval trigger.
+- Added selection/pass plus reason as the public submission completion trigger.
 - Added agent tracking workflow before suggestions and private lifecycle updates after submission.
 
 ## Related Resources

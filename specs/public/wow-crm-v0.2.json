@@ -1,0 +1,244 @@
+{
+  "protocol": "wkap-wow-crm",
+  "version": "v0.2",
+  "latest_url": "https://wkap.ai/specs/wow-crm-latest.json",
+  "packet_spec_url": "https://wkap.ai/specs/wow-packet-latest.md",
+  "intake_flow_url": "https://wkap.ai/specs/wow-intake-flow-latest.json",
+  "daily_state_schema_url": "https://wkap.ai/specs/daily-wow-state-latest.schema.json",
+  "principle": "WKAP WoW is a strict investor-idea CRM. Agents collect messy human input through conversation, but must convert it into this machine state before private save or public submission.",
+  "wow_types": {
+    "candidate_wow": {
+      "scoreable": false,
+      "initial_status": "active_candidate",
+      "required_fields": [
+        "wow_id",
+        "wow_type",
+        "parent_wow_id",
+        "root_wow_id",
+        "observation",
+        "why_worth_watching",
+        "candidate_status",
+        "source_refs"
+      ]
+    },
+    "trackable_wow": {
+      "scoreable": false,
+      "initial_status": "active_trackable",
+      "required_fields": [
+        "wow_id",
+        "wow_type",
+        "parent_wow_id",
+        "root_wow_id",
+        "claim",
+        "evidence_to_watch",
+        "review_cadence",
+        "next_review_at",
+        "trackable_status",
+        "source_refs"
+      ]
+    },
+    "scoreable_signal": {
+      "scoreable": true,
+      "initial_status": "pending_scoreable",
+      "required_fields": [
+        "wow_id",
+        "wow_type",
+        "parent_wow_id",
+        "root_wow_id",
+        "claim",
+        "invalidate_test",
+        "resolve_by",
+        "resolution_source",
+        "signal_status",
+        "source_refs"
+      ]
+    },
+    "thesis_wow": {
+      "scoreable": false,
+      "initial_status": "active_thesis",
+      "required_fields": [
+        "wow_id",
+        "wow_type",
+        "parent_wow_id",
+        "root_wow_id",
+        "thesis_claim",
+        "thesis_status",
+        "source_refs"
+      ]
+    },
+    "status_update": {
+      "scoreable": false,
+      "lineage_node": false,
+      "required_fields": [
+        "wow_id",
+        "wow_type",
+        "target_wow_type",
+        "target_wow_id",
+        "target_root_wow_id",
+        "update_type",
+        "previous_status",
+        "new_status",
+        "update_summary",
+        "evidence_summary",
+        "source_refs"
+      ]
+    }
+  },
+  "allowed_status_transitions": {
+    "candidate_wow": {
+      "active_candidate": [
+        "promoted_trackable",
+        "promoted_scoreable",
+        "killed",
+        "stale"
+      ],
+      "stale": [
+        "active_candidate",
+        "killed"
+      ]
+    },
+    "trackable_wow": {
+      "active_trackable": [
+        "promoted_scoreable",
+        "killed",
+        "stale"
+      ],
+      "stale": [
+        "active_trackable",
+        "killed"
+      ]
+    },
+    "scoreable_signal": {
+      "pending_scoreable": [
+        "resolved_correct",
+        "resolved_incorrect",
+        "unresolved",
+        "invalid_test",
+        "voided"
+      ],
+      "unresolved": [
+        "resolved_correct",
+        "resolved_incorrect",
+        "invalid_test",
+        "voided"
+      ]
+    },
+    "thesis_wow": {
+      "active_thesis": [
+        "supported",
+        "weakened",
+        "retired"
+      ],
+      "supported": [
+        "weakened",
+        "retired"
+      ],
+      "weakened": [
+        "supported",
+        "retired"
+      ]
+    }
+  },
+  "update_type_to_new_status": {
+    "promotion": [
+      "promoted_trackable",
+      "promoted_scoreable"
+    ],
+    "resolution": [
+      "resolved_correct",
+      "resolved_incorrect",
+      "unresolved"
+    ],
+    "killed": [
+      "killed"
+    ],
+    "stale": [
+      "stale"
+    ],
+    "voided": [
+      "voided"
+    ],
+    "invalid_test": [
+      "invalid_test"
+    ],
+    "thesis_update": [
+      "supported",
+      "weakened",
+      "retired"
+    ],
+    "other": []
+  },
+  "selection_rules": {
+    "daily_options_required": 3,
+    "daily_suggestion_display": {
+      "user_prompt": "Pick one WoW: 1, 2, 3, or pass.",
+      "user_chooses_by": "option_number",
+      "wow_id_visibility": "internal_only_by_default",
+      "required_visible_fields": [
+        "option_number",
+        "visible_type_label",
+        "plain_english_title",
+        "why_worth_watching"
+      ],
+      "hidden_default_fields": [
+        "wow_id",
+        "root_wow_id",
+        "parent_wow_id",
+        "packet_id",
+        "internal_agent_facts"
+      ],
+      "type_labels": {
+        "candidate_wow": "Candidate",
+        "trackable_wow": "Trackable",
+        "scoreable_signal": "Scoreable",
+        "thesis_wow": "Thesis",
+        "status_update": "Status Update"
+      },
+      "scoreable_visible_fields": [
+        "invalidate_test",
+        "resolve_by",
+        "resolution_source"
+      ],
+      "trackable_visible_fields": [
+        "evidence_to_watch",
+        "review_timing"
+      ],
+      "status_update_visible_fields": [
+        "target_summary",
+        "previous_status",
+        "new_status",
+        "evidence_summary"
+      ]
+    },
+    "selected": {
+      "required_fields": [
+        "selected_wow_id",
+        "reason_for_selection"
+      ],
+      "selected_wow_id_must_be_one_of_today_options": true,
+      "pass_fields_must_be_blank": [
+        "reason_for_pass",
+        "closest_rejected_wow",
+        "missing_evidence"
+      ]
+    },
+    "pass": {
+      "selected_wow_id": "none",
+      "required_fields": [
+        "reason_for_pass",
+        "closest_rejected_wow",
+        "missing_evidence"
+      ],
+      "closest_rejected_wow_must_be_one_of_today_options": true
+    },
+    "selection_or_pass_plus_required_reason_completes_packet": true,
+    "agent_must_not_run_second_confirmation_loop": true
+  },
+  "backend_behavior": {
+    "valid_packet": "publish",
+    "repairable_format_problem": "received_needs_format_fix",
+    "spam_or_empty": "rejected_spam_or_empty",
+    "invalid_crm_transition": "received_needs_format_fix",
+    "missing_required_intake_field": "received_needs_format_fix"
+  }
+}

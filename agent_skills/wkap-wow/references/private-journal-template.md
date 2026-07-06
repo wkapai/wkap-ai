@@ -30,8 +30,8 @@ Each daily entry should preserve:
 daily_packet_record:
   local_journal_entry_id:
   prepared_at:
-  packet_spec_version: v0.1
-  skill_version: v0.1
+  packet_spec_version: v0.2
+  skill_version: v0.2
   private_status: prepared_private
   submission_status: not_submitted
   receipt_status: no_receipt

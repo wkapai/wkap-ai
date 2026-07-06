@@ -154,6 +154,25 @@ a:hover {
   color: #ffffff;
 }
 
+.button-link:disabled,
+.button-link-disabled {
+  cursor: default;
+}
+
+.button-link.primary:disabled,
+.button-link.primary.button-link-disabled {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(17, 17, 17, 0.18);
+  color: rgba(17, 17, 17, 0.54);
+}
+
+.button-link.primary:disabled:hover,
+.button-link.primary.button-link-disabled:hover {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(17, 17, 17, 0.18);
+  color: rgba(17, 17, 17, 0.54);
+}
+
 main {
   position: relative;
   z-index: 1;
@@ -264,7 +283,36 @@ body[data-page-type="home"] .hero-subheadline {
 }
 
 body[data-page-type="home"] .action-row {
+  align-items: flex-end;
   margin-top: 14px;
+}
+
+body[data-page-type="home"] .cta-stack {
+  display: inline-flex;
+  padding-top: 11px;
+  position: relative;
+}
+
+body[data-page-type="home"] .coming-soon-badge {
+  align-items: center;
+  background: var(--accent);
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-radius: 999px;
+  box-shadow: 0 8px 18px rgba(58, 31, 12, 0.16);
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  padding: 5px 9px;
+  pointer-events: none;
+  position: absolute;
+  right: 10px;
+  top: 0;
+  text-transform: uppercase;
+  transform: translateY(-2px);
+  white-space: nowrap;
 }
 
 body[data-page-type="home"] .button-link {

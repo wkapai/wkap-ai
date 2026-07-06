@@ -44,6 +44,7 @@ from publishing.services import (
     timestamp_artifact,
     upgrade_opentimestamps,
     validate_ledger,
+    warm_radar_cache,
 )
 
 
@@ -130,10 +131,10 @@ packet:
   author_id: w0202
   market_date: 2026-06-29
   created_at: 2026-06-29T21:00:00Z
-  packet_spec_version: v0.1
-  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
+  packet_spec_version: v0.2
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.2.md
   packet_spec_latest_url: https://wkap.ai/specs/wow-packet-latest.md
-  skill_version: v0.1
+  skill_version: v0.2
   skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
   human_view:
     title: AI infrastructure bottleneck
@@ -143,7 +144,7 @@ packet:
   agent_facts:
     packet_id: WKAP-w0202-2026-06-29
     author_id: w0202
-    packet_spec_version: v0.1
+    packet_spec_version: v0.2
     wow_count: 3
     scoreable_count: 1
     trackable_count: 1
@@ -238,9 +239,9 @@ packet:
   author_id: w0202
   market_date: 2026-07-01
   created_at: 2026-07-01T21:00:00Z
-  packet_spec_version: v0.1
-  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
-  skill_version: v0.1
+  packet_spec_version: v0.2
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.2.md
+  skill_version: v0.2
   skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
   human_view:
     title: AI power bottleneck lifecycle update
@@ -248,7 +249,7 @@ packet:
   agent_facts:
     packet_id: WKAP-w0202-2026-07-01
     author_id: w0202
-    packet_spec_version: v0.1
+    packet_spec_version: v0.2
   reading_log:
     - item_number: 1
       source_title: Utility interconnection queue update
@@ -307,17 +308,18 @@ packet:
         scoreable: true
         accuracy_endpoint_eligible: true
     - wow_id: WOW-w0202-2026-07-01-003
-      wow_type: context_note
+      wow_type: candidate_wow
       scoreable: false
       accuracy_endpoint_eligible: false
       parent_wow_id: null
       root_wow_id: WOW-w0202-2026-07-01-003
       observation: Power names may become part of the AI infrastructure basket.
-      context_status: active_context
+      why_worth_watching: It may become trackable if future AI power sourcing evidence repeats.
+      candidate_status: active_candidate
       source_refs:
         - Reading Item 1
       agent_facts:
-        wow_type: context_note
+        wow_type: candidate_wow
         scoreable: false
         accuracy_endpoint_eligible: false
   selection:
@@ -351,28 +353,24 @@ packet:
             "trackable_wow": "AI data-center power availability",
             "scoreable_signal": "Stablecoin reserve-income architecture",
             "thesis_wow": "Regulated exchange moat thesis",
-            "context_note": "China AI deployment context",
         }.get(target_wow_type, "AI infrastructure")
         source_title = {
             "candidate_wow": "Cloud GPU rental price checks show early loosening",
             "trackable_wow": "AI data-center power constraints appear in hyperscaler commentary",
             "scoreable_signal": "How Open USD Sent Circle Down 17%",
             "thesis_wow": "Why established exchanges are harder to displace than the market believes",
-            "context_note": "中国 AI 会像电动车一样“反超”美国吗？",
         }.get(target_wow_type, "AI infrastructure source")
         source_url = {
             "candidate_wow": "https://www.coreweave.com/blog",
             "trackable_wow": "https://www.digitimes.com/",
             "scoreable_signal": "https://reports.tiger-research.com/p/how-open-usd-sent-circle-down-17-eng",
             "thesis_wow": "https://substack.com/home/post/p-204294860",
-            "context_note": "https://mp.weixin.qq.com/s/HdZmqCHfzRBUyFT1QjAlzw",
         }.get(target_wow_type, "https://www.reuters.com/technology/")
         ticker = {
             "candidate_wow": "CRWV",
             "trackable_wow": "NVDA",
             "scoreable_signal": "CRCL",
             "thesis_wow": "CME",
-            "context_note": "BABA",
         }.get(target_wow_type, "NVDA")
         follow_up_item = self._lifecycle_follow_up_item(
             market_date=market_date,
@@ -387,9 +385,9 @@ packet:
   author_id: w0202
   market_date: {market_date}
   created_at: {market_date}T21:00:00Z
-  packet_spec_version: v0.1
-  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
-  skill_version: v0.1
+  packet_spec_version: v0.2
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.2.md
+  skill_version: v0.2
   skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
   human_view:
     title: {theme} lifecycle check
@@ -397,7 +395,7 @@ packet:
   agent_facts:
     packet_id: {packet_id}
     author_id: w0202
-    packet_spec_version: v0.1
+    packet_spec_version: v0.2
   reading_log:
     - item_number: 1
       source_title: {source_title}
@@ -439,17 +437,18 @@ packet:
         new_status: {new_status}
 {follow_up_item}
     - wow_id: WOW-w0202-{market_date}-003
-      wow_type: context_note
+      wow_type: candidate_wow
       scoreable: false
       accuracy_endpoint_eligible: false
       parent_wow_id: null
       root_wow_id: WOW-w0202-{market_date}-003
       observation: Market context remains relevant but not scoreable today.
-      context_status: active_context
+      why_worth_watching: It may become a concrete candidate if the same theme repeats in future sources.
+      candidate_status: active_candidate
       source_refs:
         - Reading Item 1
       agent_facts:
-        wow_type: context_note
+        wow_type: candidate_wow
         scoreable: false
         accuracy_endpoint_eligible: false
   selection:
@@ -531,9 +530,9 @@ packet:
   author_id: w0202
   market_date: 2026-06-30
   created_at: 2026-06-30T21:00:00Z
-  packet_spec_version: v0.1
-  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
-  skill_version: v0.1
+  packet_spec_version: v0.2
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.2.md
+  skill_version: v0.2
   skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
   human_view:
     title: Market structure and China AI context
@@ -541,7 +540,7 @@ packet:
   agent_facts:
     packet_id: WKAP-w0202-2026-06-30
     author_id: w0202
-    packet_spec_version: v0.1
+    packet_spec_version: v0.2
   reading_log:
     - item_number: 1
       source_title: Why established exchanges are harder to displace than the market believes
@@ -584,17 +583,18 @@ packet:
         scoreable: false
         accuracy_endpoint_eligible: false
     - wow_id: WOW-w0202-2026-06-30-002
-      wow_type: context_note
+      wow_type: candidate_wow
       scoreable: false
       accuracy_endpoint_eligible: false
       parent_wow_id: null
       root_wow_id: WOW-w0202-2026-06-30-002
       observation: China AI edge may show up in deployment cost and hardware integration before frontier benchmark leadership.
-      context_status: active_context
+      why_worth_watching: It could become trackable if public market sources repeat the deployment-cost angle.
+      candidate_status: active_candidate
       source_refs:
         - Reading Item 2
       agent_facts:
-        wow_type: context_note
+        wow_type: candidate_wow
         scoreable: false
         accuracy_endpoint_eligible: false
     - wow_id: WOW-w0202-2026-06-30-003
@@ -646,9 +646,9 @@ packet:
   author_id: w0202
   market_date: {market_date}
   created_at: {market_date}T21:00:00Z
-  packet_spec_version: v0.1
-  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.1.md
-  skill_version: v0.1
+  packet_spec_version: v0.2
+  packet_spec_url: https://wkap.ai/specs/wow-packet-v0.2.md
+  skill_version: v0.2
   skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
   human_view:
     title: Existing WoW Signal Status Update
@@ -656,7 +656,7 @@ packet:
   agent_facts:
     packet_id: WKAP-w0202-{market_date}
     author_id: w0202
-    packet_spec_version: v0.1
+    packet_spec_version: v0.2
   reading_log:
     - item_number: 1
       source_title: Public investment source updates prior WoW lifecycle
@@ -698,17 +698,18 @@ packet:
         previous_status: {previous_status}
         new_status: {new_status}
     - wow_id: WOW-w0202-{market_date}-002
-      wow_type: context_note
+      wow_type: candidate_wow
       scoreable: false
       accuracy_endpoint_eligible: false
       parent_wow_id: null
       root_wow_id: WOW-w0202-{market_date}-002
       observation: The source is useful context for ongoing investor research but is not selected today.
-      context_status: active_context
+      why_worth_watching: It may become a candidate if future evidence turns the context into a concrete market signal.
+      candidate_status: active_candidate
       source_refs:
         - Reading Item 1
       agent_facts:
-        wow_type: context_note
+        wow_type: candidate_wow
         scoreable: false
         accuracy_endpoint_eligible: false
     - wow_id: WOW-w0202-{market_date}-003
@@ -998,7 +999,7 @@ packet:
         parsed = parse_wow(raw)
 
         self.assertEqual(str(parsed.market_date), "2026-06-29")
-        self.assertEqual(parsed.format_version, "wow_packet_v1")
+        self.assertEqual(parsed.format_version, "wow_packet_v0.2")
         self.assertEqual(len(parsed.reading_items), 1)
         self.assertEqual(len(parsed.suggested_wows), 3)
         self.assertEqual(parsed.selected_wow_id, "WOW-2026-06-29-001")
@@ -1057,16 +1058,16 @@ packet:
         parsed = parse_wow(raw)
         packet = create_wow_submission(raw, run_id=run_id)
 
-        self.assertEqual(parsed.format_version, "wow_packet_v0.1")
-        self.assertEqual(parsed.packet_spec_version, "v0.1")
+        self.assertEqual(parsed.format_version, "wow_packet_v0.2")
+        self.assertEqual(parsed.packet_spec_version, "v0.2")
         self.assertEqual(parsed.author_id, "w0202")
         self.assertEqual(parsed.scoreable_count, 1)
         self.assertEqual(parsed.trackable_count, 1)
         self.assertEqual(parsed.candidate_count, 1)
         self.assertEqual(parsed.selected_wow_id, "WOW-2026-06-29-001")
-        self.assertEqual(packet.format_version, "wow_packet_v0.1")
+        self.assertEqual(packet.format_version, "wow_packet_v0.2")
         self.assertEqual(packet.author_id, "w0202")
-        self.assertEqual(packet.packet_spec_version, "v0.1")
+        self.assertEqual(packet.packet_spec_version, "v0.2")
         self.assertEqual(packet.wow_count, 3)
         self.assertEqual(packet.scoreable_count, 1)
         self.assertEqual(packet.trackable_count, 1)
@@ -1092,6 +1093,18 @@ packet:
         raw = self.raw_email(sender="structured@example.com", subject="Daily WoW Packet - 2026-06-29 - Structured Agent", body=body)
 
         with self.assertRaisesMessage(ParseError, "trackable_wow"):
+            parse_wow(raw)
+
+    def test_structured_wow_packet_rejects_removed_broad_context_type(self):
+        removed_type = "context" + "_note"
+        body = self.structured_wow_packet_body().replace(
+            "wow_type: candidate_wow",
+            f"wow_type: {removed_type}",
+            1,
+        )
+        raw = self.raw_email(sender="structured@example.com", subject="Daily WoW Packet - 2026-06-29 - Structured Agent", body=body)
+
+        with self.assertRaisesMessage(ParseError, f"invalid wow_type: {removed_type}"):
             parse_wow(raw)
 
     def test_structured_wow_packet_requires_scoreable_resolution_fields(self):
@@ -1471,6 +1484,79 @@ packet:
         )
         self.assertTrue(LedgerEvent.objects.filter(event_name="publish_succeeded", entity_type="radar", entity_id=str(issue.id)).exists())
 
+    def test_publish_radar_warms_cache_when_enabled(self):
+        run_id = "00000000-0000-0000-0000-000000000029"
+        raw = self.raw_email(sender="playinc@gmail.com", body="Market_date: 2026-07-03\nTitle: Warm Radar\nBody: Context")
+        issue = create_radar_issue(raw, run_id=run_id)
+
+        with TemporaryDirectory() as tmp:
+            with override_settings(WKAP_PUBLIC_SITE_ROOT=Path(tmp), WKAP_LEDGER_REPO_PATH="", WKAP_SEND_RECEIPTS=False, WKAP_CACHE_WARMUP_ENABLED=True):
+                with patch("publishing.services.warm_radar_cache") as warm_cache:
+                    publish_artifact("radar", issue.id, run_id=run_id)
+
+        warm_cache.assert_called_once()
+        self.assertEqual(str(warm_cache.call_args.args[0]), "2026-07-03")
+
+    def test_warm_radar_cache_uses_get_and_records_cf_headers(self):
+        class WarmupResponse:
+            headers = {
+                "cf-cache-status": "MISS",
+                "cache-control": "public, max-age=300",
+                "content-length": "1234",
+            }
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return b"ok"
+
+            def getcode(self):
+                return 200
+
+        run_id = "00000000-0000-0000-0000-000000000030"
+        with override_settings(WKAP_BASE_URL="https://wkap.ai"):
+            with patch("publishing.services.urllib.request.urlopen", side_effect=[WarmupResponse(), WarmupResponse()]) as urlopen:
+                results = warm_radar_cache("2026-07-03", run_id=run_id)
+
+        requested_urls = [call.args[0].full_url for call in urlopen.call_args_list]
+        requested_methods = [call.args[0].get_method() for call in urlopen.call_args_list]
+        self.assertEqual(
+            requested_urls,
+            [
+                "https://wkap.ai/radar/",
+                "https://wkap.ai/radar/wkap-radar-feed-2026-07-03.html",
+            ],
+        )
+        self.assertEqual(requested_methods, ["GET", "GET"])
+        self.assertEqual([result["cf_cache_status"] for result in results], ["MISS", "MISS"])
+        self.assertTrue(LedgerEvent.objects.filter(event_name="radar_cache_warmup_succeeded", entity_type="radar").exists())
+
+    def test_warm_radar_cache_cli_returns_header_details(self):
+        output = StringIO()
+        fake_results = [
+            {"url": "https://wkap.ai/radar/", "method": "GET", "status_code": 200, "cf_cache_status": "HIT"},
+            {
+                "url": "https://wkap.ai/radar/wkap-radar-feed-2026-07-03.html",
+                "method": "GET",
+                "status_code": 200,
+                "cf_cache_status": "HIT",
+            },
+        ]
+
+        with patch("core.management.commands.wkap.warm_radar_cache", return_value=fake_results):
+            with redirect_stdout(output), self.assertRaises(SystemExit) as exit_context:
+                call_command("wkap", "--json", "warm-radar-cache", "--market-date", "2026-07-03")
+
+        self.assertEqual(exit_context.exception.code, 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["status"], "succeeded")
+        self.assertEqual(payload["market_date"], "2026-07-03")
+        self.assertEqual(payload["details"]["results"][0]["cf_cache_status"], "HIT")
+
     def test_show_events_cli_returns_agent_readable_json(self):
         run_id = "00000000-0000-0000-0000-000000000026"
         raw = self.raw_email(body="Market_date: 2026-06-30\nTitle: Morning Radar\nBody: Context")
@@ -1533,8 +1619,12 @@ packet:
         expected_label = "Test Agent - 2026-06-29"
         self.assertContains(home_response, expected_href)
         self.assertContains(home_response, expected_label)
+        self.assertContains(home_response, 'data-field="entry_count"')
+        self.assertNotContains(home_response, 'data-field="submission_count"')
         self.assertContains(index_response, expected_href)
         self.assertContains(index_response, expected_label)
+        self.assertContains(index_response, 'data-field="entry_count"')
+        self.assertNotContains(index_response, 'data-field="submission_count"')
 
     def test_home_and_investor_archive_link_to_wow_ledger(self):
         run_id = "00000000-0000-0000-0000-000000000008"
@@ -1548,6 +1638,8 @@ packet:
         self.assertContains(home_response, "Open WoW ledger")
         self.assertContains(archive_response, "Test Agent - 2026-06-29")
         self.assertContains(archive_response, 'href="/investors/w0202/wows/wow-w0202-2026-06-29.html"')
+        self.assertContains(archive_response, 'data-field="entry_count"')
+        self.assertNotContains(archive_response, 'data-field="submission_count"')
 
     def test_investor_archive_lists_recently_active_investors_first(self):
         run_id = "00000000-0000-0000-0000-000000000018"
@@ -1591,11 +1683,11 @@ packet:
 
         self.assertLess(content.index("Calendar Old Agent - 2026-06-29"), content.index("Calendar New Agent - 2026-07-04"))
 
-    def test_home_links_to_investor_log_setup_page(self):
+    def test_home_shows_daily_wow_training_coming_soon(self):
         home_response = self.client.get("/")
         setup_response = self.client.get("/submit-to-wkap-ledger.html")
 
-        self.assertContains(home_response, 'href="/submit-to-wkap-ledger.html"')
+        self.assertNotContains(home_response, 'href="/submit-to-wkap-ledger.html"')
         self.assertContains(home_response, "Build Your AI-Native")
         self.assertContains(home_response, "Investor Loop")
         self.assertContains(home_response, "daily investment research")
@@ -1605,11 +1697,16 @@ packet:
         self.assertContains(home_response, "turning daily research into memory it can use")
         self.assertContains(home_response, "Your public WoW Ledger builds your investor record")
         self.assertContains(home_response, "Your private WoW loop sharpens your judgment over time")
+        self.assertContains(home_response, 'aria-label="Daily WoW Training coming soon"')
+        self.assertContains(home_response, 'class="coming-soon-badge"')
+        self.assertContains(home_response, ">Coming soon<")
+        self.assertNotContains(home_response, "Daily WoW Training is being polished for launch")
+        self.assertContains(home_response, '<button class="button-link primary button-link-disabled" type="button" disabled', html=True)
         self.assertContains(home_response, "Start Daily WoW Training")
         self.assertContains(setup_response, "Start Daily WoW Training")
         self.assertContains(setup_response, "Set up the feedback loop for you and your agent")
-        self.assertContains(setup_response, "WKAP turns daily investment research into a repeatable WoW routine")
-        self.assertContains(setup_response, "asks you to select one of three WoW signals or pass")
+        self.assertContains(setup_response, "WKAP turns daily investment research into a simple training loop")
+        self.assertContains(setup_response, "brings you three Worth Watching signals")
         self.assertContains(setup_response, "Daily WoW Packet")
         self.assertContains(setup_response, "ledger@wkap.ai")
         self.assertContains(setup_response, "Private WoW Loop")
@@ -1620,10 +1717,6 @@ packet:
         self.assertContains(setup_response, "Set up WKAP WoW for me.")
         self.assertContains(setup_response, "Install WKAP WoW Skill as a durable skill")
         self.assertContains(setup_response, "Use this universal skill as the source of truth")
-        self.assertContains(setup_response, "The skill must follow these machine-readable WKAP specs exactly")
-        self.assertContains(setup_response, "https://wkap.ai/specs/wow-crm-latest.json")
-        self.assertContains(setup_response, "https://wkap.ai/specs/wow-intake-flow-latest.json")
-        self.assertContains(setup_response, "https://wkap.ai/specs/daily-wow-state-latest.schema.json")
         self.assertContains(setup_response, "If you are Codex, install this Codex-native skill")
         self.assertContains(setup_response, "verify the install by checking for a local wkap-wow/SKILL.md file")
         self.assertContains(setup_response, "Tell me whether the install is verified")
@@ -1661,8 +1754,8 @@ packet:
         self.assertContains(setup_response, "https://wkap.ai/skills/wkap-wow-skill-latest.md")
         self.assertContains(setup_response, "wkap_wow_codex_skill_url")
         self.assertContains(setup_response, "private_journal_required")
-        self.assertContains(setup_response, "public_submission_requires_user_approval")
-        self.assertContains(setup_response, "user_decision_is_submission_approval")
+        self.assertContains(setup_response, "public_submission_requires_completed_daily_choice")
+        self.assertContains(setup_response, "user_decision_completes_packet")
         self.assertContains(setup_response, "required_wow_options")
         self.assertContains(setup_response, "current_submission_format")
         self.assertContains(setup_response, "protocol_reference_version")
@@ -1671,11 +1764,11 @@ packet:
         self.assertNotContains(setup_response, "wow_type: trackable_wow")
 
     def test_wow_protocol_markdown_routes_are_public_and_redirect_latest(self):
-        packet = self.client.get("/specs/wow-packet-v0.1.md")
-        crm = self.client.get("/specs/wow-crm-v0.1.json")
-        intake = self.client.get("/specs/wow-intake-flow-v0.1.json")
-        daily_state = self.client.get("/specs/daily-wow-state-v0.1.schema.json")
-        skill = self.client.get("/skills/wkap-wow-skill-v0.1.md")
+        packet = self.client.get("/specs/wow-packet-v0.2.md")
+        crm = self.client.get("/specs/wow-crm-v0.2.json")
+        intake = self.client.get("/specs/wow-intake-flow-v0.2.json")
+        daily_state = self.client.get("/specs/daily-wow-state-v0.2.schema.json")
+        skill = self.client.get("/skills/wkap-wow-skill-v0.2.md")
         codex_skill = self.client.get("/skills/wkap-wow-codex/SKILL.md")
         packet_latest = self.client.get("/specs/wow-packet-latest.md")
         crm_latest = self.client.get("/specs/wow-crm-latest.json")
@@ -1702,26 +1795,79 @@ packet:
         self.assertContains(codex_skill, "Private WoW Journal")
         self.assertContains(codex_skill, "status_update")
         self.assertEqual(packet_latest.status_code, 302)
-        self.assertEqual(packet_latest.headers["Location"], "/specs/wow-packet-v0.1.md")
+        self.assertEqual(packet_latest.headers["Location"], "/specs/wow-packet-v0.2.md")
         self.assertEqual(crm_latest.status_code, 302)
-        self.assertEqual(crm_latest.headers["Location"], "/specs/wow-crm-v0.1.json")
+        self.assertEqual(crm_latest.headers["Location"], "/specs/wow-crm-v0.2.json")
         self.assertEqual(intake_latest.status_code, 302)
-        self.assertEqual(intake_latest.headers["Location"], "/specs/wow-intake-flow-v0.1.json")
+        self.assertEqual(intake_latest.headers["Location"], "/specs/wow-intake-flow-v0.2.json")
         self.assertEqual(daily_state_latest.status_code, 302)
-        self.assertEqual(daily_state_latest.headers["Location"], "/specs/daily-wow-state-v0.1.schema.json")
+        self.assertEqual(daily_state_latest.headers["Location"], "/specs/daily-wow-state-v0.2.schema.json")
         self.assertEqual(skill_latest.status_code, 302)
-        self.assertEqual(skill_latest.headers["Location"], "/skills/wkap-wow-skill-v0.1.md")
+        self.assertEqual(skill_latest.headers["Location"], "/skills/wkap-wow-skill-v0.2.md")
+
+    def test_wow_protocol_generated_specs_are_in_sync(self):
+        out = StringIO()
+
+        call_command("build_wow_protocol", "--check", stdout=out)
+
+        self.assertIn("WKAP WoW protocol checked", out.getvalue())
+
+    def test_wow_protocol_crm_json_matches_backend_lifecycle_rules(self):
+        from ledger.wow_lifecycle_rules import ALLOWED_STATUS_TRANSITIONS, UPDATE_TYPE_TO_NEW_STATUS, VALID_WOW_TYPES
+
+        response = self.client.get("/specs/wow-crm-v0.2.json")
+        crm = json.loads(response.content)
+
+        self.assertEqual(set(crm["wow_types"]), VALID_WOW_TYPES)
+        self.assertEqual(
+            {key: {status: set(values) for status, values in transitions.items()} for key, transitions in crm["allowed_status_transitions"].items()},
+            ALLOWED_STATUS_TRANSITIONS,
+        )
+        self.assertEqual(
+            {key: set(values) for key, values in crm["update_type_to_new_status"].items()},
+            UPDATE_TYPE_TO_NEW_STATUS,
+        )
+        display = crm["selection_rules"]["daily_suggestion_display"]
+        self.assertEqual(display["user_chooses_by"], "option_number")
+        self.assertEqual(display["wow_id_visibility"], "internal_only_by_default")
+        self.assertIn("visible_type_label", display["required_visible_fields"])
+        self.assertEqual(display["type_labels"]["scoreable_signal"], "Scoreable")
+
+    def test_wow_intake_and_state_schema_require_visible_daily_options(self):
+        intake = json.loads(self.client.get("/specs/wow-intake-flow-v0.2.json").content)
+        daily_state = json.loads(self.client.get("/specs/daily-wow-state-v0.2.schema.json").content)
+
+        display_contract = intake["states"]["draft_options"]["display_contract"]
+        self.assertTrue(display_contract["wow_id_hidden_by_default"])
+        self.assertTrue(display_contract["user_must_not_be_required_to_choose_by_wow_id"])
+        self.assertIn("user_is_required_to_choose_by_wow_id", display_contract["invalid_if"])
+
+        required = daily_state["properties"]["wow_options"]["items"]["required"]
+        for field in ["wow_id", "wow_type", "visible_type_label", "plain_english_title", "why_worth_watching"]:
+            self.assertIn(field, required)
+
+    def test_wow_protocol_markdown_has_no_removed_or_ambiguous_status_values(self):
+        packet = self.client.get("/specs/wow-packet-v0.2.md").content.decode()
+        skill = self.client.get("/skills/wkap-wow-skill-v0.2.md").content.decode()
+        combined = packet + "\n" + skill
+
+        self.assertNotIn("context" + "_note", combined)
+        self.assertNotIn("active_context", combined)
+        self.assertNotIn("context_update", combined)
+        self.assertNotRegex(combined, r"(?m)^\s*-\s*promoted\s*$")
+        self.assertNotRegex(combined, r"(?m)^\s*-\s*pending\s*$")
 
     def test_wow_packet_protocol_markdown_contains_agent_contract(self):
-        response = self.client.get("/specs/wow-packet-v0.1.md")
+        response = self.client.get("/specs/wow-packet-v0.2.md")
         body = response.content.decode()
 
-        self.assertIn("# WKAP WoW Packet Spec v0.1", body)
+        self.assertIn("# WKAP WoW Packet Spec v0.2", body)
         self.assertNotIn("canonical_hash", body)
         self.assertIn("author_id", body)
         self.assertNotIn("contributor_id", body)
-        for wow_type in ["candidate_wow", "trackable_wow", "scoreable_signal", "thesis_wow", "context_note", "status_update"]:
+        for wow_type in ["candidate_wow", "trackable_wow", "scoreable_signal", "thesis_wow", "status_update"]:
             self.assertIn(wow_type, body)
+        self.assertNotIn("context" + "_note", body)
         self.assertIn("status_update", body)
         self.assertIn("scoreable: false", body)
         self.assertIn("append-only", body)
@@ -1751,10 +1897,19 @@ packet:
         self.assertIn("https://wkap.ai/specs/wow-intake-flow-latest.json", body)
         self.assertIn("https://wkap.ai/specs/daily-wow-state-latest.schema.json", body)
         self.assertIn("strict agent execution contract", body)
+        self.assertIn("show the mismatch to the user", body)
+        self.assertIn("spec_mismatch_detected", body)
         self.assertIn("reading_log_max_items: 10", body)
         self.assertIn("suggested_wow_count: 3", body)
+        self.assertIn("Daily Suggestion Display Contract", body)
+        self.assertIn("visible_type_label", body)
+        self.assertIn("plain_english_title", body)
+        self.assertIn("why_worth_watching", body)
+        self.assertIn("Pick one WoW: 1, 2, 3, or pass.", body)
+        self.assertIn("SHOULD NOT show `wow_id` in the default user-facing choice prompt", body)
         self.assertIn("reason_for_pass", body)
-        self.assertIn("User selection/pass plus the required reason is approval to submit", body)
+        self.assertIn("User selection/pass plus the required reason completes the Daily WoW Packet", body)
+        self.assertIn("The agent must remove or summarize private/confidential material", body)
         self.assertIn("tracking_inputs", body)
         self.assertIn("WoW Type Decision Rules", body)
         self.assertIn("candidate_to_scoreable", body)
@@ -1762,16 +1917,18 @@ packet:
         self.assertIn("signal_status: pending_scoreable", body)
 
     def test_wkap_wow_skill_markdown_contains_private_journal_contract(self):
-        response = self.client.get("/skills/wkap-wow-skill-v0.1.md")
+        response = self.client.get("/skills/wkap-wow-skill-v0.2.md")
         body = response.content.decode()
 
-        self.assertIn("# WKAP WoW Skill v0.1", body)
+        self.assertIn("# WKAP WoW Skill v0.2", body)
         self.assertNotIn("canonical_hash", body)
         self.assertIn("https://wkap.ai/specs/wow-packet-latest.md", body)
         self.assertIn("https://wkap.ai/specs/wow-crm-latest.json", body)
         self.assertIn("https://wkap.ai/specs/wow-intake-flow-latest.json", body)
         self.assertIn("https://wkap.ai/specs/daily-wow-state-latest.schema.json", body)
         self.assertIn("machine-readable CRM, intake, and daily state JSON specs are the execution contract", body)
+        self.assertIn("show the mismatch to the user", body)
+        self.assertIn("spec_mismatch_detected", body)
         self.assertIn("Strict Intake Program Rule", body)
         self.assertIn("behave like an intake program", body)
         self.assertIn("normalize the reply into the Daily WoW State object", body)
@@ -1793,21 +1950,29 @@ packet:
         self.assertIn("Do not summarize the user's past 7 days", body)
         self.assertIn("Suggest exactly 3 WoW signals for the user to choose from", body)
         self.assertIn("reason_for_pass", body)
-        self.assertIn("The user selection/pass plus required reason is submission approval", body)
-        self.assertIn("Do not ask for a second approval", body)
+        self.assertIn("The user selection/pass plus required reason completes the Daily WoW Packet", body)
+        self.assertIn("Do not ask for a second confirmation", body)
+        self.assertIn("Daily Suggestion Display Contract", body)
+        self.assertIn("visible_type_label", body)
+        self.assertIn("plain_english_title", body)
+        self.assertIn("why_worth_watching", body)
+        self.assertIn("Pick one WoW: 1, 2, 3, or pass.", body)
+        self.assertIn("SHOULD NOT show `wow_id` in the default user-facing choice prompt", body)
+        self.assertIn("user_is_required_to_choose_by_wow_id", body)
+        self.assertIn("The agent must remove or summarize private/confidential material", body)
         self.assertIn("The agent must not decide that a completed daily choice should stay private", body)
         self.assertIn('A prose list of "top private WoWs" is not a valid WKAP WoW output by itself', body)
         self.assertIn("select WoW 1", body)
         self.assertIn("Do not block private setup on WKAP `author_id`", body)
-        self.assertIn("Default approval flow is assumed", body)
+        self.assertIn("Default completion flow is assumed", body)
         self.assertIn("The Private WoW Journal must be stored in durable user-owned storage", body)
         self.assertIn("If the agent has local filesystem access, it must use a local Markdown folder by default", body)
         self.assertIn("Create the folder and files if missing", body)
         self.assertIn("Agent memory may be used as a cache, but it must not be the only Private WoW Journal", body)
         self.assertIn("tell the user where the Private WoW Journal is stored", body)
         self.assertIn("Every prepared Daily WoW Packet must be saved to the Private WoW Journal", body)
-        self.assertIn("Private journal drafts may be saved without approval", body)
-        self.assertIn("Public submission requires user approval, and the daily user decision is the approval", body)
+        self.assertIn("Private journal drafts may be saved before completion", body)
+        self.assertIn("Public submission requires a completed daily choice", body)
         self.assertIn("save the prepared packet privately and must not submit publicly", body)
         self.assertIn("private_status: user_no_reply", body)
         self.assertIn("submission_status: not_submitted", body)
@@ -1840,9 +2005,11 @@ packet:
         self.assertIn("https://wkap.ai/specs/wow-crm-latest.json", body)
         self.assertIn("https://wkap.ai/specs/wow-intake-flow-latest.json", body)
         self.assertIn("https://wkap.ai/specs/daily-wow-state-latest.schema.json", body)
+        self.assertIn("show the mismatch to the user", body)
+        self.assertIn("spec_mismatch_detected", body)
         self.assertIn("Strict Intake Program Rule", body)
         self.assertIn("behave like an intake program", body)
-        self.assertIn("Selection/pass plus required fields is submission approval", body)
+        self.assertIn("Selection/pass plus required fields completes the Daily WoW Packet", body)
         self.assertIn("C:\\Users\\ASUS\\Documents\\wkap\\WKAP WoW Journal", body)
         self.assertIn("If the journal folder or required files are missing, create them before the first prepared packet", body)
         self.assertIn("Codex Local Journal Layout", body)
@@ -1856,7 +2023,11 @@ packet:
         self.assertIn("A prose list of top private WoWs is not enough", body)
         self.assertIn("Do not decide to keep a completed daily choice private", body)
         self.assertIn("Show exactly 3 WoW signal options", body)
-        self.assertIn("Selection/pass plus reason is approval", body)
+        self.assertIn("Selection/pass plus reason completes the Daily WoW Packet", body)
+        self.assertIn("Daily Suggestion Display Contract", body)
+        self.assertIn("visible_type_label", body)
+        self.assertIn("Pick one WoW: 1, 2, 3, or pass.", body)
+        self.assertIn("do not show `wow_id` in the default user-facing choice prompt", body)
         self.assertIn("Before suggesting the 3 WoWs, inspect", body)
         self.assertIn("Ask the user only for information that is required and cannot be inferred or safely defaulted", body)
         self.assertIn("Lifecycle Sync Contract", body)
@@ -2012,7 +2183,7 @@ packet:
         self.assertContains(response, "<h1>AI power bottleneck lifecycle update</h1>", html=True)
         self.assertContains(response, 'data-agent-wow-type-fields="status_update"')
         self.assertContains(response, 'data-agent-wow-type-fields="scoreable_signal"')
-        self.assertContains(response, 'data-agent-wow-type-fields="context_note"')
+        self.assertContains(response, 'data-agent-wow-type-fields="candidate_wow"')
         self.assertContains(response, 'data-field="target_wow_id"')
         self.assertContains(response, 'data-field="target_wow_type"')
         self.assertContains(response, 'data-field="target_root_wow_id"')
@@ -2155,8 +2326,6 @@ packet:
             return "invalid_test"
         if new_status in {"supported", "weakened", "retired"}:
             return "thesis_update"
-        if new_status == "superseded":
-            return "context_update"
         return "other"
 
     def _assert_outside_agent_can_reconstruct_transition(self, response, expected: dict[str, str]) -> None:
@@ -2247,11 +2416,11 @@ packet:
                 "2026-07-05",
                 self.structured_target_update_packet_body(
                     market_date="2026-07-05",
-                    target_wow_id="WOW-w0202-2026-06-30-002",
-                    target_wow_type="context_note",
-                    previous_status="active_context",
-                    new_status="superseded",
-                    update_type="context_update",
+                    target_wow_id="WOW-w0202-2026-06-30-001",
+                    target_wow_type="thesis_wow",
+                    previous_status="supported",
+                    new_status="retired",
+                    update_type="thesis_update",
                 ),
             ),
         ]
@@ -2302,8 +2471,7 @@ packet:
         self.assertEqual(reconstructed["WOW-w0202-2026-06-29-003"]["current_status"], "promoted_trackable")
         self.assertEqual(reconstructed["WOW-w0202-2026-06-29-001"]["current_status"], "promoted_scoreable")
         self.assertEqual(reconstructed["WOW-w0202-2026-06-29-002"]["current_status"], "resolved_correct")
-        self.assertEqual(reconstructed["WOW-w0202-2026-06-30-001"]["current_status"], "supported")
-        self.assertEqual(reconstructed["WOW-w0202-2026-06-30-002"]["current_status"], "superseded")
+        self.assertEqual(reconstructed["WOW-w0202-2026-06-30-001"]["current_status"], "retired")
         self.assertEqual(len(transitions), 5)
 
         lifecycle_events = LedgerEvent.objects.filter(
@@ -2336,8 +2504,6 @@ packet:
             return str(item.get("signal_status") or "pending_scoreable")
         if wow_type == "thesis_wow":
             return str(item.get("thesis_status") or "active_thesis")
-        if wow_type == "context_note":
-            return str(item.get("context_status") or "active_context")
         return "unknown"
 
     def test_robots_and_sitemap_are_agent_friendly(self):

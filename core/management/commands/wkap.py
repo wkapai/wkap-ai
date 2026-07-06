@@ -25,6 +25,7 @@ from publishing.services import (
     upgrade_opentimestamps,
     validate_all,
     validate_ledger,
+    warm_radar_cache,
 )
 from publishing.receipts import (
     radar_receipt_body,
@@ -96,6 +97,9 @@ class Command(BaseCommand):
         upgrade_ots.add_argument("--entity-id", type=int)
 
         subparsers.add_parser("rebuild-indexes")
+
+        warm_radar = subparsers.add_parser("warm-radar-cache")
+        warm_radar.add_argument("--market-date", required=True)
 
         validate = subparsers.add_parser("validate-ledger")
         self._add_entity_args(validate)
@@ -345,6 +349,21 @@ class Command(BaseCommand):
         if command == "rebuild-indexes":
             rebuild_indexes(run_id=run_id)
             return CommandResult(command=command, run_id=str(run_id), status="succeeded", next_action="wkap validate-all")
+
+        if command == "warm-radar-cache":
+            results = warm_radar_cache(options["market_date"], run_id=run_id)
+            errors = [result for result in results if result.get("error")]
+            result = CommandResult(
+                command=command,
+                run_id=str(run_id),
+                status="failed" if errors else "succeeded",
+                entity_type="radar",
+                market_date=options["market_date"],
+                next_action="run again and confirm cf_cache_status is HIT",
+            )
+            result.details = {"results": results}
+            result.errors = [f"{item['url']}: {item['error']}" for item in errors]
+            return result
 
         if command == "validate-ledger":
             errors = validate_ledger(options["entity_type"], options["entity_id"])

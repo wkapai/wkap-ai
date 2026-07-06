@@ -1,4 +1,4 @@
-# WKAP WoW Packet v0.1 Snapshot
+# WKAP WoW Packet v0.2 Snapshot
 
 Authoritative latest URL:
 
@@ -10,7 +10,6 @@ Required `wow_type` values:
 - trackable_wow
 - scoreable_signal
 - thesis_wow
-- context_note
 - status_update
 
 Only `scoreable_signal` is calibration-scoreable.
@@ -21,8 +20,9 @@ Type decision shortcuts:
 - `trackable_wow`: concrete pattern to monitor with evidence/cadence, but not binary.
 - `scoreable_signal`: falsifiable claim with `invalidate_test`, `resolve_by`, and `resolution_source`; default `signal_status: pending_scoreable`.
 - `thesis_wow`: broader thesis with child WoWs.
-- `context_note`: useful background, not a market call.
 - `status_update`: append-only CRM state change for an existing WoW.
+
+Every WoW item must start at least as `candidate_wow`. Broad context belongs in the reading log or Private WoW Journal notes, not as its own WoW type.
 
 Normal WoW items use `parent_wow_id` and `root_wow_id`.
 
@@ -47,7 +47,19 @@ Daily workout rule:
 5. Selection requires `reason_for_selection`.
 6. Pass requires `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence`.
 7. On pass days, `closest_rejected_wow` must be one of today's suggested `wow_id` values.
-8. Selection/pass plus required reason is approval to submit to WKAP Ledger.
+8. Selection/pass plus required reason completes the Daily WoW Packet and triggers submission to WKAP Ledger.
+
+Daily suggestion display rule:
+
+- Show exactly 3 numbered options before asking the user to pick.
+- Each option must show a visible type label, plain-English title, and why it is worth watching.
+- Use visible labels: Candidate, Trackable, Scoreable, Thesis, Status Update.
+- Store `wow_id` internally, but do not show it in the default user-facing prompt unless the user asks for technical details.
+- For `scoreable_signal`, visibly show `invalidate_test`, `resolve_by`, and `resolution_source`.
+- For `status_update`, visibly show the target summary, `previous_status`, `new_status`, and `evidence_summary`.
+- The user chooses by number: `Pick one WoW: 1, 2, 3, or pass.`
+
+The agent must remove or summarize private/confidential material and keep sensitive details in the Private WoW Journal.
 
 Agent tracking rule:
 

@@ -20,15 +20,15 @@ from publishing.urls import investor_home_url, investor_wows_url, radar_archive_
 ET_ZONE = ZoneInfo("America/New_York")
 
 MARKDOWN_RESOURCES = {
-    "wow_packet_v0_1": "specs/public/wow-packet-v0.1.md",
-    "wkap_wow_skill_v0_1": "specs/public/wkap-wow-skill-v0.1.md",
+    "wow_packet_v0_2": "specs/public/wow-packet-v0.2.md",
+    "wkap_wow_skill_v0_2": "specs/public/wkap-wow-skill-v0.2.md",
     "wkap_wow_codex_skill": "agent_skills/wkap-wow/SKILL.md",
 }
 
 JSON_RESOURCES = {
-    "wow_crm_v0_1": "specs/public/wow-crm-v0.1.json",
-    "wow_intake_flow_v0_1": "specs/public/wow-intake-flow-v0.1.json",
-    "daily_wow_state_v0_1": "specs/public/daily-wow-state-v0.1.schema.json",
+    "wow_crm_v0_2": "specs/public/wow-crm-v0.2.json",
+    "wow_intake_flow_v0_2": "specs/public/wow-intake-flow-v0.2.json",
+    "daily_wow_state_v0_2": "specs/public/daily-wow-state-v0.2.schema.json",
 }
 
 
@@ -51,7 +51,7 @@ def _page_context(
         "meta_description": description,
         "canonical_url": canonical_url,
         "page_type": page_type,
-        "agent_spec_version": "wow_packet_v1",
+        "agent_spec_version": "wow_packet_v0.2",
         "crawl_links": extra.pop("crawl_links", []),
         "agent_facts": agent_facts or [],
         "json_ld": _json_ld(json_ld or _website_json_ld(canonical_url)),
@@ -244,11 +244,11 @@ def submit_to_ledger(request):
                 {"name": "wkap_wow_skill_latest_url", "value": wow_skill_url},
                 {"name": "wkap_wow_codex_skill_url", "value": codex_skill_url},
                 {"name": "private_journal_required", "value": "true"},
-                {"name": "public_submission_requires_user_approval", "value": "true"},
-                {"name": "user_decision_is_submission_approval", "value": "true"},
+                {"name": "public_submission_requires_completed_daily_choice", "value": "true"},
+                {"name": "user_decision_completes_packet", "value": "true"},
                 {"name": "required_wow_options", "value": str(spec.get("schema_data", {}).get("suggested_wow_rules", {}).get("required_count", 3))},
                 {"name": "current_submission_format", "value": spec["format_version"]},
-                {"name": "protocol_reference_version", "value": "v0.1"},
+                {"name": "protocol_reference_version", "value": "v0.2"},
                 {"name": "canonical_url", "value": canonical_url},
             ],
             crawl_links=[
@@ -367,7 +367,7 @@ def investor_archive(request):
                 {"name": "artifact_family", "value": "WoW - Worth Watching Workout"},
                 {"name": "archive_url", "value": f"{settings.WKAP_BASE_URL}/investors/"},
                 {"name": "investor_count", "value": str(investors.count())},
-                {"name": "submission_count", "value": str(submissions.count())},
+                {"name": "entry_count", "value": str(submissions.count())},
                 {"name": "privacy_rule", "value": "Investor email addresses are never published."},
             ],
             json_ld={
@@ -411,7 +411,7 @@ def investor_home(request, investor_id):
                 {"name": "investor_status", "value": investor.status},
                 {"name": "private_email_published", "value": "false"},
                 {"name": "wow_archive_url", "value": investor_wows_url(investor.investor_id)},
-                {"name": "submission_count", "value": str(submissions.count())},
+                {"name": "entry_count", "value": str(submissions.count())},
             ],
             investor=investor,
             submissions=submissions,
@@ -439,7 +439,7 @@ def investor_wows(request, investor_id):
                 {"name": "investor_id", "value": investor.investor_id},
                 {"name": "investor_display_name", "value": investor.display_name},
                 {"name": "archive_url", "value": investor_wows_url(investor.investor_id)},
-                {"name": "submission_count", "value": str(submissions.count())},
+                {"name": "entry_count", "value": str(submissions.count())},
             ],
             investor=investor,
             submissions=submissions,
@@ -668,13 +668,6 @@ def _wow_type_rows(wow_type: str, raw: dict, lifecycle: dict) -> list[dict[str, 
             [
                 {"label": "Thesis claim", "field": "thesis_claim", "value": _row_value(lifecycle, raw, "thesis_claim", "claim")},
                 {"label": "Thesis status", "field": "thesis_status", "value": _row_value(lifecycle, raw, "thesis_status")},
-            ]
-        )
-    elif wow_type == "context_note":
-        rows.extend(
-            [
-                {"label": "Observation", "field": "observation", "value": _row_value(lifecycle, raw, "observation", "claim")},
-                {"label": "Context status", "field": "context_status", "value": _row_value(lifecycle, raw, "context_status")},
             ]
         )
     else:
