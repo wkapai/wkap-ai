@@ -39,6 +39,7 @@ from publishing.services import (
     generate_manifest,
     generate_radar_html,
     generate_wow_html,
+    purge_radar_cache,
     publish_artifact,
     rebuild_indexes,
     timestamp_artifact,
@@ -1502,12 +1503,55 @@ packet:
         issue = create_radar_issue(raw, run_id=run_id)
 
         with TemporaryDirectory() as tmp:
-            with override_settings(WKAP_PUBLIC_SITE_ROOT=Path(tmp), WKAP_LEDGER_REPO_PATH="", WKAP_SEND_RECEIPTS=False, WKAP_CACHE_WARMUP_ENABLED=True):
-                with patch("publishing.services.warm_radar_cache") as warm_cache:
+            with override_settings(
+                WKAP_PUBLIC_SITE_ROOT=Path(tmp),
+                WKAP_LEDGER_REPO_PATH="",
+                WKAP_SEND_RECEIPTS=False,
+                WKAP_CLOUDFLARE_CACHE_PURGE_ENABLED=True,
+                WKAP_CLOUDFLARE_ZONE_ID="zone-id",
+                WKAP_CLOUDFLARE_API_TOKEN="token",
+                WKAP_CACHE_WARMUP_ENABLED=True,
+            ):
+                with patch("publishing.services.purge_radar_cache") as purge_cache, patch("publishing.services.warm_radar_cache") as warm_cache:
                     publish_artifact("radar", issue.id, run_id=run_id)
 
+        purge_cache.assert_called_once()
+        self.assertEqual(str(purge_cache.call_args.args[0]), "2026-07-03")
         warm_cache.assert_called_once()
         self.assertEqual(str(warm_cache.call_args.args[0]), "2026-07-03")
+
+    def test_purge_radar_cache_sends_archive_and_issue_urls_to_cloudflare(self):
+        class PurgeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return b'{"success": true}'
+
+            def getcode(self):
+                return 200
+
+        run_id = "00000000-0000-0000-0000-000000000034"
+        with override_settings(WKAP_BASE_URL="https://wkap.ai", WKAP_CLOUDFLARE_ZONE_ID="zone-id", WKAP_CLOUDFLARE_API_TOKEN="token"):
+            with patch("publishing.services.urllib.request.urlopen", return_value=PurgeResponse()) as urlopen:
+                results = purge_radar_cache("2026-07-03", run_id=run_id)
+
+        request = urlopen.call_args.args[0]
+        payload = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(request.full_url, "https://api.cloudflare.com/client/v4/zones/zone-id/purge_cache")
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(
+            payload["files"],
+            [
+                "https://wkap.ai/radar/",
+                "https://wkap.ai/radar/wkap-radar-feed-2026-07-03.html",
+            ],
+        )
+        self.assertEqual([result["status_code"] for result in results], [200, 200])
+        self.assertTrue(LedgerEvent.objects.filter(event_name="radar_cache_purge_succeeded", entity_type="radar").exists())
 
     def test_warm_radar_cache_uses_get_and_records_cf_headers(self):
         class WarmupResponse:
@@ -1531,7 +1575,7 @@ packet:
 
         run_id = "00000000-0000-0000-0000-000000000030"
         with override_settings(WKAP_BASE_URL="https://wkap.ai"):
-            with patch("publishing.services.urllib.request.urlopen", side_effect=[WarmupResponse()]) as urlopen:
+            with patch("publishing.services.urllib.request.urlopen", side_effect=[WarmupResponse(), WarmupResponse()]) as urlopen:
                 results = warm_radar_cache("2026-07-03", run_id=run_id)
 
         requested_urls = [call.args[0].full_url for call in urlopen.call_args_list]
@@ -1539,11 +1583,12 @@ packet:
         self.assertEqual(
             requested_urls,
             [
+                "https://wkap.ai/radar/",
                 "https://wkap.ai/radar/wkap-radar-feed-2026-07-03.html",
             ],
         )
-        self.assertEqual(requested_methods, ["GET"])
-        self.assertEqual([result["cf_cache_status"] for result in results], ["MISS"])
+        self.assertEqual(requested_methods, ["GET", "GET"])
+        self.assertEqual([result["cf_cache_status"] for result in results], ["MISS", "MISS"])
         self.assertTrue(LedgerEvent.objects.filter(event_name="radar_cache_warmup_succeeded", entity_type="radar").exists())
 
     def test_warm_radar_cache_cli_returns_header_details(self):
@@ -1613,12 +1658,14 @@ packet:
         create_radar_issue(raw, run_id=run_id)
 
         response = self.client.get("/radar/")
+        issue_response = self.client.get("/radar/wkap-radar-feed-2026-06-29.html")
 
         self.assertContains(response, 'href="/radar/wkap-radar-feed-2026-06-29.html"')
         self.assertContains(response, "WKAP Radar Feed 2026-06-29")
-        self.assertIn("max-age=0", response.headers["Cache-Control"])
-        self.assertIn("no-cache", response.headers["Cache-Control"])
-        self.assertIn("must-revalidate", response.headers["Cache-Control"])
+        self.assertIn("public", response.headers["Cache-Control"])
+        self.assertIn("max-age=300", response.headers["Cache-Control"])
+        self.assertIn("public", issue_response.headers["Cache-Control"])
+        self.assertIn("max-age=300", issue_response.headers["Cache-Control"])
 
     def test_wow_indexes_use_iso_url_and_feed_label(self):
         run_id = "00000000-0000-0000-0000-000000000007"

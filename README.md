@@ -50,6 +50,9 @@ WKAP_LEDGER_REPO_URL=git@github.com:ORG/REPO.git
 WKAP_LEDGER_DEPLOY_KEY_BASE64=<base64 private deploy key>
 WKAP_LEDGER_GITHUB_BASE_URL=https://github.com/ORG/REPO/blob/main
 WKAP_CLOUDFLARE_INGEST_SECRET=<shared Worker secret>
+WKAP_CLOUDFLARE_CACHE_PURGE_ENABLED=true
+WKAP_CLOUDFLARE_ZONE_ID=<cloudflare zone id>
+WKAP_CLOUDFLARE_API_TOKEN=<api token with Zone.Cache Purge permission>
 WKAP_OPENTIMESTAMP_ENABLED=false
 ```
 
@@ -223,10 +226,9 @@ Cloudflare:
   - `WKAP_FORWARD_TO=playinc@gmail.com`
 - Gmail remains the backup mailbox and receipt sender for V0. If Worker ingest fails, the forwarded Gmail copy can still be processed manually or by a fallback poller.
 - `wkap.ai` must be proxied through Cloudflare for cache rules to apply.
-- Cache dated Radar Feed pages only with a Cache Rule matching `(http.host eq "wkap.ai" and starts_with(http.request.uri.path, "/radar/wkap-radar-feed-") and ends_with(http.request.uri.path, ".html"))`: Eligible for cache, Edge TTL 1 month, Ignore query string. This expression works on the Cloudflare Free plan without the plan-gated regex `matches` operator.
-- Do not edge-cache the live archive `/radar/`. Keep a higher-priority bypass/no-cache rule for `(http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/"))`.
-- After changing Cloudflare from the old broad `/radar/*` rule, purge stale archive URLs once: `https://wkap.ai/radar/`.
-- Production defaults `WKAP_CACHE_WARMUP_ENABLED=true`, so successful Radar publishes warm the dated feed page with a full GET request. Manual warm/verify: `python manage.py wkap --json warm-radar-cache --market-date 2026-07-03`; run it twice and confirm the dated feed page `cf_cache_status` moves from `MISS` to `HIT`.
+- Cache only the Radar archive plus dated Radar Feed pages with a Cache Rule matching `(http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/" or (starts_with(http.request.uri.path, "/radar/wkap-radar-feed-") and ends_with(http.request.uri.path, ".html"))))`: Eligible for cache, Edge TTL 1 month, Browser TTL respect origin, Ignore query string. The app sends `Cache-Control: public, max-age=300` for `/radar/` and dated feed pages. This expression works on the Cloudflare Free plan without the plan-gated regex `matches` operator.
+- Do not use a broad `starts_with("/radar/")` rule; it can accidentally cache future non-feed Radar routes.
+- Production defaults `WKAP_CLOUDFLARE_CACHE_PURGE_ENABLED=true` and `WKAP_CACHE_WARMUP_ENABLED=true`. Successful Radar publishes purge and warm both `https://wkap.ai/radar/` and the dated feed page. Manual warm/verify: `python manage.py wkap --json warm-radar-cache --market-date 2026-07-03`; run it twice and confirm both URLs move from `MISS` to `HIT`.
 
 GitHub ledger:
 

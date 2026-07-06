@@ -95,38 +95,34 @@ Render runs `scripts/render_release.sh`, which clones or fast-forwards the ledge
 
 ## Cloudflare Radar Cache
 
-`wkap.ai` must be proxied through Cloudflare while still pointing at Render. Dated Radar Feed pages are cacheable artifacts. The `/radar/` archive is a live index and must not be cached with a long edge TTL.
+`wkap.ai` must be proxied through Cloudflare while still pointing at Render. Dated Radar Feed pages and the `/radar/` archive are cacheable artifacts. Successful Radar publishes purge and warm both exact URLs so historical resubmissions and new feed pages do not require manual purges.
 
-Use one cache rule for dated Radar Feed pages only:
-
-```txt
-(http.host eq "wkap.ai" and starts_with(http.request.uri.path, "/radar/wkap-radar-feed-") and ends_with(http.request.uri.path, ".html"))
-```
-
-Settings: Eligible for cache, Edge TTL 1 month, Ignore query string. This expression is Cloudflare Free-plan-safe; avoid the regex `matches` operator unless the zone plan supports it. If dated Radar pages return `cf-cache-status: DYNAMIC`, Cloudflare is not treating them as cache-eligible yet.
-
-Add or keep a higher-priority bypass/no-cache rule for the archive:
+Use one cache rule for the Radar archive plus dated Radar Feed pages only:
 
 ```txt
-(http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/"))
+(http.host eq "wkap.ai" and (http.request.uri.path eq "/radar" or http.request.uri.path eq "/radar/" or (starts_with(http.request.uri.path, "/radar/wkap-radar-feed-") and ends_with(http.request.uri.path, ".html"))))
 ```
 
-Do not include `/radar/` in a broad `starts_with("/radar/")` cache rule. The app also sends `Cache-Control: max-age=0, no-cache, must-revalidate` for the archive, but Cloudflare rules that override origin headers can still serve stale content if `/radar/` is included in an edge cache rule.
+Settings: Eligible for cache, Edge TTL 1 month, Browser TTL respect origin, Ignore query string. The app sends `Cache-Control: public, max-age=300` for `/radar/` and dated feed pages. This expression is Cloudflare Free-plan-safe; avoid the regex `matches` operator unless the zone plan supports it. If Radar pages return `cf-cache-status: DYNAMIC`, Cloudflare is not treating them as cache-eligible yet.
 
-After changing Cloudflare, purge these exact stale archive URLs once:
+Do not use a broad `starts_with("/radar/")` cache rule. Keep the match limited to `/radar`, `/radar/`, and dated feed HTML so future non-feed Radar routes are not accidentally cached.
+
+Render must set:
 
 ```txt
-https://wkap.ai/radar/
+WKAP_CLOUDFLARE_CACHE_PURGE_ENABLED=true
+WKAP_CLOUDFLARE_ZONE_ID=<cloudflare zone id>
+WKAP_CLOUDFLARE_API_TOKEN=<api token with Zone.Cache Purge permission>
 ```
 
-Production defaults `WKAP_CACHE_WARMUP_ENABLED=true`, so successful Radar publishes warm the dated feed URL with a normal GET request. Manual warm/verify:
+Production defaults `WKAP_CLOUDFLARE_CACHE_PURGE_ENABLED=true` and `WKAP_CACHE_WARMUP_ENABLED=true`, so successful Radar publishes purge and warm the archive URL and the dated feed URL with normal GET requests. Manual warm/verify:
 
 ```powershell
 python manage.py wkap --json warm-radar-cache --market-date 2026-07-03
 python manage.py wkap --json warm-radar-cache --market-date 2026-07-03
 ```
 
-Expected result for the dated feed page: the first request reports `cf_cache_status: MISS`, and the second reports `cf_cache_status: HIT`. The archive should show fresh entries without manual purge after the one-time Cloudflare rule correction.
+Expected result for both URLs: the first request reports `cf_cache_status: MISS`, and the second reports `cf_cache_status: HIT`. The archive should show fresh entries without manual purge because the publish step purges it before warming.
 
 ## OpenTimestamp
 

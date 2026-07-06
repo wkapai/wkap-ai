@@ -297,7 +297,7 @@ def markdown_latest_redirect(request, target_path: str):
     return HttpResponseRedirect(target_path)
 
 
-@cache_control(no_cache=True, must_revalidate=True, max_age=0)
+@cache_control(public=True, max_age=300)
 def radar_archive(request):
     issues = RadarIssue.objects.order_by("-market_date")
     return render(
@@ -329,6 +329,7 @@ def radar_archive(request):
     )
 
 
+@cache_control(public=True, max_age=300)
 def radar_issue(request, market_date):
     issue = get_object_or_404(RadarIssue, market_date=market_date)
     return render(

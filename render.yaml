@@ -50,5 +50,11 @@ services:
         value: playinc@gmail.com,minxixi0103@gmail.com
       - key: WKAP_CLOUDFLARE_INGEST_SECRET
         sync: false
+      - key: WKAP_CLOUDFLARE_ZONE_ID
+        sync: false
+      - key: WKAP_CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: WKAP_CLOUDFLARE_CACHE_PURGE_ENABLED
+        value: "true"
       - key: WKAP_OPENTIMESTAMP_ENABLED
         value: "false"

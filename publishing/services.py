@@ -341,21 +341,37 @@ def publish_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
     if entity_type == "wow":
         send_wow_receipt(artifact, run_id=run_id)
     artifact.refresh_from_db()
-    if entity_type == "radar" and settings.WKAP_CACHE_WARMUP_ENABLED:
-        try:
-            warm_radar_cache(artifact.market_date, run_id=run_id)
-        except Exception as exc:
-            log_event(
-                "radar_cache_warmup_failed",
-                run_id=run_id,
-                status=LedgerEvent.Status.FAILED,
-                entity_type="radar",
-                entity_id=artifact.id,
-                raw_email=artifact.source_email,
-                artifact=artifact,
-                error_code=exc.__class__.__name__,
-                error_message=str(exc),
-            )
+    if entity_type == "radar":
+        if settings.WKAP_CLOUDFLARE_CACHE_PURGE_ENABLED:
+            try:
+                purge_radar_cache(artifact.market_date, run_id=run_id)
+            except Exception as exc:
+                log_event(
+                    "radar_cache_purge_failed",
+                    run_id=run_id,
+                    status=LedgerEvent.Status.FAILED,
+                    entity_type="radar",
+                    entity_id=artifact.id,
+                    raw_email=artifact.source_email,
+                    artifact=artifact,
+                    error_code=exc.__class__.__name__,
+                    error_message=str(exc),
+                )
+        if settings.WKAP_CACHE_WARMUP_ENABLED:
+            try:
+                warm_radar_cache(artifact.market_date, run_id=run_id)
+            except Exception as exc:
+                log_event(
+                    "radar_cache_warmup_failed",
+                    run_id=run_id,
+                    status=LedgerEvent.Status.FAILED,
+                    entity_type="radar",
+                    entity_id=artifact.id,
+                    raw_email=artifact.source_email,
+                    artifact=artifact,
+                    error_code=exc.__class__.__name__,
+                    error_message=str(exc),
+                )
     log_event(
         "publish_succeeded",
         run_id=run_id,
@@ -367,8 +383,81 @@ def publish_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
     return artifact
 
 
+def radar_cache_urls(market_date) -> list[str]:
+    return [radar_archive_url(), radar_issue_url(market_date)]
+
+
+def purge_radar_cache(market_date, *, run_id: uuid.UUID) -> list[dict[str, Any]]:
+    urls = radar_cache_urls(market_date)
+    log_event(
+        "radar_cache_purge_started",
+        run_id=run_id,
+        status=LedgerEvent.Status.STARTED,
+        entity_type="radar",
+        details={"market_date": str(market_date), "urls": urls},
+    )
+    if not settings.WKAP_CLOUDFLARE_ZONE_ID or not settings.WKAP_CLOUDFLARE_API_TOKEN:
+        results = [{"url": url, "method": "PURGE", "skipped": True, "reason": "cloudflare_credentials_missing"} for url in urls]
+        log_event(
+            "radar_cache_purge_skipped",
+            run_id=run_id,
+            status=LedgerEvent.Status.SKIPPED,
+            entity_type="radar",
+            details={"market_date": str(market_date), "results": results},
+            error_code="cloudflare_credentials_missing",
+            error_message="WKAP_CLOUDFLARE_ZONE_ID and WKAP_CLOUDFLARE_API_TOKEN are required to purge Radar cache.",
+        )
+        return results
+
+    result = _purge_cloudflare_files(urls)
+    results = [{**result, "url": url, "method": "PURGE"} for url in urls]
+    errors = [item for item in results if item.get("error")]
+    log_event(
+        "radar_cache_purge_failed" if errors else "radar_cache_purge_succeeded",
+        run_id=run_id,
+        status=LedgerEvent.Status.FAILED if errors else LedgerEvent.Status.SUCCEEDED,
+        entity_type="radar",
+        details={"market_date": str(market_date), "results": results},
+        error_code="cloudflare_purge_failed" if errors else "",
+        error_message="; ".join(f"{item['url']}: {item['error']}" for item in errors),
+    )
+    return results
+
+
+def _purge_cloudflare_files(urls: list[str]) -> dict[str, Any]:
+    payload = json.dumps({"files": urls}).encode("utf-8")
+    request = urllib.request.Request(
+        f"https://api.cloudflare.com/client/v4/zones/{settings.WKAP_CLOUDFLARE_ZONE_ID}/purge_cache",
+        data=payload,
+        headers={
+            "authorization": f"Bearer {settings.WKAP_CLOUDFLARE_API_TOKEN}",
+            "content-type": "application/json",
+            "accept": "application/json",
+            "user-agent": "WKAP cache purge/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=settings.WKAP_CACHE_WARMUP_TIMEOUT_SECONDS) as response:
+            body = response.read().decode("utf-8", errors="replace")
+            parsed = json.loads(body) if body else {}
+            if not parsed.get("success", False):
+                return {
+                    "status_code": response.getcode(),
+                    "error": json.dumps(parsed.get("errors") or parsed, ensure_ascii=False),
+                }
+            return {"status_code": response.getcode(), "success": True}
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        return {"status_code": exc.code, "error": body or str(exc)}
+    except urllib.error.URLError as exc:
+        return {"error": str(exc.reason)}
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"error": str(exc)}
+
+
 def warm_radar_cache(market_date, *, run_id: uuid.UUID) -> list[dict[str, Any]]:
-    urls = [radar_issue_url(market_date)]
+    urls = radar_cache_urls(market_date)
     log_event(
         "radar_cache_warmup_started",
         run_id=run_id,
