@@ -1,4 +1,4 @@
-# WKAP WoW Skill v0.2
+﻿# WKAP WoW Skill v0.2
 
 ## Metadata
 
@@ -57,7 +57,7 @@ setup_defaults:
   setup_mode: defaults_first
   ask_user_only_when_blocked: true
   private_journal_location: durable user-owned Markdown storage; local Markdown folder if filesystem access exists
-  author_id: use known WKAP investor ID if available; otherwise use a stable local draft identity until public ledger identity is assigned or confirmed
+  investor_id: use known WKAP investor ID if available; otherwise use a stable local draft identity until public ledger identity is assigned or confirmed
   daily_send_time: infer from the user's behavior pattern after daily investment research; ask only if it cannot be inferred
   research_sources: agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and high-quality agent-found market items
   completion_flow: suggest 3 WoW signals, collect user selection or pass plus required reason, then submit; no reply means save privately and submit nothing publicly
@@ -155,9 +155,9 @@ Pure agent memory can be a cache, but it must not be the only durable journal.
 
 ## Author Identity Default
 
-Do not block private setup on WKAP `author_id`.
+Do not block private setup on WKAP `investor_id`.
 
-If the user's WKAP investor ID is known, use it as `author_id`. If not, use a stable local draft identity such as a user or agent slug for private records. When the first public WKAP Ledger submission assigns or confirms the public investor ID, update future packets and preserve the mapping in the Private WoW Journal.
+If the user's WKAP investor ID is known, use it as `investor_id`. If not, use a stable local draft identity such as a user or agent slug for private records. When the first public WKAP Ledger submission assigns or confirms the public investor ID, update future packets and preserve the mapping in the Private WoW Journal.
 
 ## Private vs Public Lineage
 
@@ -568,7 +568,7 @@ Use stable IDs as the reconciliation keys:
 ```yaml
 sync_keys:
   - packet_id
-  - author_id
+  - investor_id
   - wow_id
   - root_wow_id
   - parent_wow_id

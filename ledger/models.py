@@ -73,7 +73,6 @@ class DailyWoWPacket(ArtifactProofFields):
     market_date = models.DateField()
     format_version = models.CharField(max_length=64, default="wow_packet_v0.2")
     packet_id = models.CharField(max_length=120, blank=True, db_index=True)
-    author_id = models.CharField(max_length=120, blank=True, db_index=True)
     packet_spec_version = models.CharField(max_length=64, blank=True, default="")
     packet_spec_url = models.URLField(max_length=1000, blank=True)
     skill_version = models.CharField(max_length=64, blank=True, default="")

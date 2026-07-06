@@ -1,7 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import re
+import shutil
 import uuid
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -11,20 +12,31 @@ from typing import Any
 
 import yaml
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 from ingestion.models import RawEmail
-from ledger.models import Investor
+from ledger.models import DailyWoWPacket, Investor, LedgerEvent
 from ledger.parsers import ParseError, parse_wow
 from ledger.services import create_wow_submission
 from ledger.wow_lifecycle_rules import ALLOWED_STATUS_TRANSITIONS, validate_status_transition
-from publishing.services import publish_artifact, validate_ledger
+from publishing.services import publish_artifact, rebuild_indexes, validate_ledger
 
 
 DAILY_PROMPT = "Pick one WoW: 1, 2, 3, or pass."
 SIM_INVESTOR_ID = "w0998"
 SIM_EMAIL = "wkap-daily-wow-sim@example.com"
 SIM_DISPLAY_NAME = "WKAP Daily WoW Simulation Agent"
+SIM_GENERATED_BLOCK_ID = "daily-wow-simulation"
+SIM_CASE_NAME_MARKERS = (
+    "select_scoreable_with_reason",
+    "select_missing_reason_then_train",
+    "pass_complete",
+    "pass_missing_closest_then_fix",
+    "natural_language_choice",
+    "user_no_reply_private_only",
+    "lifecycle_",
+)
 
 VISIBLE_TYPE_LABELS = {
     "candidate_wow": "Candidate",
@@ -57,52 +69,67 @@ STATUS_UPDATE_REQUIRED_FIELDS = (
 
 READING_SAMPLES = [
     {
-        "source_title": "Cloud GPU rental price checks show early loosening",
-        "source_url": "https://www.coreweave.com/blog",
-        "source_type": "article",
-        "tickers": ["CRWV", "NVDA"],
-        "themes": ["AI infrastructure", "GPU rental pricing"],
-        "agent_summary": "GPU rental quotes and reservation terms are useful second-order checks on AI compute supply.",
+        "source_title": "CoreWeave and Meta announce $21 billion expanded AI infrastructure agreement",
+        "source_url": "https://www.coreweave.com/news/coreweave-and-meta-announce-21-billion-expanded-ai-infrastructure-agreement",
+        "source_type": "press_release",
+        "source_date": "2026-04-09",
+        "tickers": ["CRWV", "META", "NVDA"],
+        "themes": ["AI infrastructure", "AI inference", "Vera Rubin deployments"],
+        "agent_summary": "CoreWeave says Meta will use dedicated AI cloud capacity through 2032, including early NVIDIA Vera Rubin deployments. This gives the agent a concrete capacity-contract data point instead of generic AI capex language.",
     },
     {
-        "source_title": "Hyperscaler earnings commentary highlights AI power constraints",
-        "source_url": "https://www.microsoft.com/en-us/investor/earnings",
-        "source_type": "transcript",
-        "tickers": ["MSFT", "NVDA", "NEE"],
-        "themes": ["AI data centers", "power bottlenecks"],
-        "agent_summary": "Management language around power availability can turn broad AI capex narratives into checkable deployment bottlenecks.",
-    },
-    {
-        "source_title": "Advanced packaging capacity remains a supply-chain gating item",
-        "source_url": "https://www.tsmc.com/english/investorRelations",
-        "source_type": "filing",
+        "source_title": "TSMC Q4 2025 earnings transcript",
+        "source_url": "https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2026-01/51d09df96cd89ac19d65af39032b038dc2896a24/TSMC%204Q25%20Transcript.pdf",
+        "source_type": "earnings_transcript",
+        "source_date": "2026-01-16",
         "tickers": ["TSM", "NVDA", "AMD"],
-        "themes": ["advanced packaging", "AI accelerators"],
-        "agent_summary": "Packaging availability is still a concrete evidence stream for accelerator supply and AI capex quality.",
+        "themes": ["advanced packaging", "AI accelerators", "Foundry 2.0"],
+        "agent_summary": "TSMC guided 2026 foundry growth around robust AI demand and called out leading-edge, specialty, and advanced packaging demand. This is a real evidence stream for whether AI supply bottlenecks move beyond GPUs.",
     },
     {
-        "source_title": "How Open USD Sent Circle Down 17%",
-        "source_url": "https://reports.tiger-research.com/p/how-open-usd-sent-circle-down-17-eng",
-        "source_type": "article",
+        "source_title": "Circle reports first quarter 2026 results",
+        "source_url": "https://www.circle.com/pressroom/circle-reports-first-quarter-2026-results",
+        "source_type": "earnings_release",
+        "source_date": "2026-05-11",
         "tickers": ["CRCL", "COIN"],
-        "themes": ["stablecoin reserve income", "market structure"],
-        "agent_summary": "Stablecoin reserve-sharing pressure is a useful real-world sample for scoreable revenue architecture claims.",
+        "themes": ["stablecoin reserve income", "USDC circulation", "distribution costs"],
+        "agent_summary": "Circle reported reserve income up 17% year over year, helped by higher average USDC in circulation and partly offset by a lower reserve return rate. Distribution and transaction costs rose alongside growth, making this a clean scoreable unit-economics sample.",
     },
     {
-        "source_title": "Why established exchanges are harder to displace than the market believes",
-        "source_url": "https://substack.com/home/post/p-204294860",
-        "source_type": "article",
-        "tickers": ["CME", "ICE"],
-        "themes": ["regulated exchanges", "crypto market structure"],
-        "agent_summary": "Exchange moat arguments are good thesis material because they collect regulation, clearing, settlement, and institutional-access evidence.",
+        "source_title": "BMO introduces tokenized cash and deposit platform with CME Group and Google Cloud",
+        "source_url": "https://www.cmegroup.com/media-room/press-releases/2026/3/24/bmo-introduces-tokenized-cash-and-deposit-platform-with-cme-group-and-google-cloud.html",
+        "source_type": "press_release",
+        "source_date": "2026-03-24",
+        "tickers": ["CME", "GOOGL"],
+        "themes": ["tokenized deposits", "24/7 settlement", "collateral mobility"],
+        "agent_summary": "BMO, CME Group, and Google Cloud described tokenized cash for 24/7 institutional settlement and margin workflows. This gives the agent a market-structure sample that can become a candidate or thesis WoW.",
     },
     {
-        "source_title": "Tesla investor relations autonomy update",
-        "source_url": "https://ir.tesla.com/",
-        "source_type": "website",
+        "source_title": "Tesla Q1 2026 update",
+        "source_url": "https://ir.tesla.com/_flysystem/s3/sec/000162828026026551/tsla-20260422-gen.pdf",
+        "source_type": "shareholder_update",
+        "source_date": "2026-04-22",
         "tickers": ["TSLA"],
-        "themes": ["robotaxi utilization", "autonomy"],
-        "agent_summary": "Autonomy optionality needs utilization and service-area evidence rather than launch headlines alone.",
+        "themes": ["robotaxi", "unsupervised autonomy", "inference latency"],
+        "agent_summary": "Tesla said it upgraded reinforcement learning, vision encoding, compiler iteration speed, and runtime latency for unsupervised autonomy. This is useful only if the user can translate launch language into utilization and safety evidence.",
+    },
+    {
+        "source_title": "Amazon signs data center energy pledge and details grid-cost commitments",
+        "source_url": "https://www.aboutamazon.com/news/policy-news-views/amazon-data-centers-power-costs-white-house-pledge",
+        "source_type": "company_update",
+        "source_date": "2026-03-01",
+        "tickers": ["AMZN"],
+        "themes": ["AI data centers", "grid upgrades", "power procurement"],
+        "agent_summary": "Amazon says it pays full data center energy costs, including new generation and grid upgrades, and points to 700-plus carbon-free projects delivering more than 40 GW. This grounds the AI power bottleneck in utility and ratepayer evidence.",
+    },
+    {
+        "source_title": "Constellation and Microsoft Crane Clean Energy Center agreement",
+        "source_url": "https://www.constellationenergy.com/about/locations/crane-clean-energy-center.html",
+        "source_type": "project_page",
+        "source_date": "2026-07-06",
+        "tickers": ["CEG", "MSFT"],
+        "themes": ["nuclear power", "AI data centers", "PPA"],
+        "agent_summary": "Constellation describes a large Microsoft PPA tied to restarting Three Mile Island Unit 1 as the Crane Clean Energy Center. This is a concrete power-supply evidence item for AI data center deployment.",
     },
 ]
 
@@ -158,7 +185,79 @@ def ensure_private_journal(journal_path: Path) -> list[Path]:
     return created
 
 
-def reading_log_for_day(market_date: date, *, offset: int = 0, count: int = 3) -> list[dict[str, Any]]:
+def reset_daily_wow_simulation(
+    *,
+    journal_path: Path | None = None,
+    investor_id: str = SIM_INVESTOR_ID,
+    rebuild_public: bool = True,
+) -> dict[str, Any]:
+    journal = journal_path or default_journal_path()
+    packet_ids = list(DailyWoWPacket.objects.filter(investor__investor_id=investor_id).values_list("id", flat=True))
+    raw_email_count = RawEmail.objects.filter(sender_email=SIM_EMAIL).count()
+    investor_count = Investor.objects.filter(investor_id=investor_id, email_private=SIM_EMAIL).count()
+
+    event_filter = Q(investor_id=investor_id) | Q(sender_email=SIM_EMAIL)
+    if packet_ids:
+        event_filter |= Q(entity_type="wow", entity_id__in=[str(packet_id) for packet_id in packet_ids])
+    ledger_event_count = LedgerEvent.objects.filter(event_filter).count()
+
+    LedgerEvent.objects.filter(event_filter).delete()
+    DailyWoWPacket.objects.filter(investor__investor_id=investor_id).delete()
+    RawEmail.objects.filter(sender_email=SIM_EMAIL).delete()
+    Investor.objects.filter(investor_id=investor_id, email_private=SIM_EMAIL).delete()
+
+    ledger_root = _ledger_artifact_root()
+    allowed_roots = [settings.BASE_DIR, settings.WKAP_PUBLIC_SITE_ROOT, ledger_root, journal]
+    removed_paths: list[str] = []
+
+    def remove(path: Path) -> None:
+        removed = _safe_remove_path(path, allowed_roots=allowed_roots)
+        if removed:
+            removed_paths.append(str(removed))
+
+    remove(settings.WKAP_PUBLIC_SITE_ROOT / "investors" / investor_id)
+    for packet_id in packet_ids:
+        remove(ledger_root / "manifests" / f"wow-{packet_id}.json")
+        remove(ledger_root / "timestamps" / f"wow-{packet_id}.json")
+        remove(ledger_root / "timestamps" / f"wow-{packet_id}.json.ots")
+    raw_email_dir = ledger_root / "raw-emails" / "wow-packets"
+    if raw_email_dir.exists():
+        for path in raw_email_dir.glob(f"wow-packet-{investor_id}-*.txt"):
+            remove(path)
+
+    daily_dir = journal / "daily"
+    if daily_dir.exists():
+        for marker in SIM_CASE_NAME_MARKERS:
+            for path in daily_dir.glob(f"*-{marker}*.md"):
+                remove(path)
+    remove(journal / "user-judgment-profile.md")
+    remove(journal / "simulation" / "daily-wow-pressure-test-report.md")
+
+    journal_blocks_removed = 0
+    for filename in ("receipts.md", "public-verification.md", "active-trackables.md", "pending-scoreables.md", "thesis-map.md"):
+        if _remove_generated_block(journal / filename, SIM_GENERATED_BLOCK_ID):
+            journal_blocks_removed += 1
+
+    if rebuild_public:
+        rebuild_indexes(run_id=uuid.uuid4())
+
+    return {
+        "investor_id": investor_id,
+        "sender_email": SIM_EMAIL,
+        "deleted": {
+            "daily_wow_packets": len(packet_ids),
+            "raw_emails": raw_email_count,
+            "ledger_events": ledger_event_count,
+            "investors": investor_count,
+            "journal_blocks": journal_blocks_removed,
+            "paths": len(removed_paths),
+        },
+        "removed_paths": removed_paths,
+        "public_indexes_rebuilt": rebuild_public,
+    }
+
+
+def reading_log_for_day(market_date: date, *, offset: int = 0, count: int = 7) -> list[dict[str, Any]]:
     readings = []
     for index in range(count):
         sample = READING_SAMPLES[(offset + index) % len(READING_SAMPLES)]
@@ -168,7 +267,7 @@ def reading_log_for_day(market_date: date, *, offset: int = 0, count: int = 3) -
                 "source_title": sample["source_title"],
                 "source_url": sample["source_url"],
                 "source_type": sample["source_type"],
-                "published_time": f"{market_date.isoformat()}T13:00:00Z",
+                "published_time": sample.get("source_date", market_date.isoformat()),
                 "tickers": sample["tickers"],
                 "themes": sample["themes"],
                 "reading_origin": "agent_suggested" if index % 2 else "user_browsed",
@@ -178,7 +277,36 @@ def reading_log_for_day(market_date: date, *, offset: int = 0, count: int = 3) -
     return readings
 
 
-def base_daily_options(market_date: date, *, author_id: str = SIM_INVESTOR_ID) -> list[dict[str, Any]]:
+def _reading_refs_for(
+    reading_log: list[dict[str, Any]],
+    *,
+    themes: tuple[str, ...],
+    tickers: tuple[str, ...],
+    limit: int = 2,
+) -> list[str]:
+    matched: list[str] = []
+    theme_terms = {theme.lower() for theme in themes}
+    ticker_terms = {ticker.lower() for ticker in tickers}
+    for item in reading_log:
+        item_themes = {str(theme).lower() for theme in item.get("themes", [])}
+        item_tickers = {str(ticker).lower() for ticker in item.get("tickers", [])}
+        if item_themes & theme_terms or item_tickers & ticker_terms:
+            matched.append(f"Reading Item {item['item_number']}")
+    if not matched:
+        matched = [f"Reading Item {item['item_number']}" for item in reading_log[:limit]]
+    return matched[:limit]
+
+
+def base_daily_options(
+    market_date: date,
+    *,
+    investor_id: str = SIM_INVESTOR_ID,
+    reading_log: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    readings = reading_log or reading_log_for_day(market_date)
+    ai_refs = _reading_refs_for(readings, themes=("AI infrastructure", "advanced packaging", "grid upgrades", "nuclear power"), tickers=("CRWV", "TSM", "AMZN", "CEG"))
+    circle_refs = _reading_refs_for(readings, themes=("stablecoin reserve income", "USDC circulation", "distribution costs"), tickers=("CRCL", "COIN"))
+    cme_refs = _reading_refs_for(readings, themes=("tokenized deposits", "24/7 settlement", "collateral mobility"), tickers=("CME", "GOOGL"))
     first_id = wow_id(market_date, 1)
     second_id = wow_id(market_date, 2)
     third_id = wow_id(market_date, 3)
@@ -191,17 +319,21 @@ def base_daily_options(market_date: date, *, author_id: str = SIM_INVESTOR_ID) -
                 "accuracy_endpoint_eligible": False,
                 "parent_wow_id": None,
                 "root_wow_id": first_id,
-                "claim": "AI infrastructure bottlenecks are shifting from GPU supply alone toward power and packaging constraints.",
-                "evidence_to_watch": ["utility interconnection queues", "advanced packaging lead times", "hyperscaler capex commentary"],
+                "claim": "AI infrastructure bottlenecks are becoming a combined capacity, packaging, and power problem rather than a simple GPU procurement story.",
+                "evidence_to_watch": [
+                    "CoreWeave capacity-contract updates",
+                    "TSMC advanced packaging and leading-edge capacity commentary",
+                    "data center power and grid-upgrade commitments",
+                ],
                 "review_cadence": "weekly",
                 "next_review_at": (market_date + timedelta(days=7)).isoformat(),
                 "trackable_status": "active_trackable",
-                "source_refs": ["Reading Item 1", "Reading Item 2"],
+                "source_refs": ai_refs,
                 "agent_facts": {"wow_type": "trackable_wow", "scoreable": False, "accuracy_endpoint_eligible": False},
             },
             option_number=1,
-            title="AI bottleneck evidence is moving into power and packaging",
-            why="This is concrete enough to monitor without forcing a binary prediction today.",
+            title="AI bottleneck evidence is moving into contracts, packaging, and power",
+            why="CoreWeave, TSMC, Amazon, and Constellation give the user real evidence streams to monitor without forcing a binary prediction today.",
         ),
         with_visible_fields(
             {
@@ -211,35 +343,34 @@ def base_daily_options(market_date: date, *, author_id: str = SIM_INVESTOR_ID) -
                 "accuracy_endpoint_eligible": True,
                 "parent_wow_id": None,
                 "root_wow_id": second_id,
-                "claim": "At least one hyperscaler will cite power availability or interconnection timing as an AI deployment bottleneck by 2026-09-30.",
-                "invalidate_test": "No hyperscaler cites power availability or interconnection timing as an AI deployment bottleneck by resolve_by.",
-                "resolve_by": "2026-09-30",
-                "resolution_source": "hyperscaler earnings transcripts",
+                "claim": "Circle's next reported reserve-income growth will be lower than average USDC-in-circulation growth if reserve return pressure remains the dominant offset.",
+                "invalidate_test": "Circle reports reserve-income growth equal to or above average USDC-in-circulation growth in its next quarterly results, or does not disclose comparable metrics.",
+                "resolve_by": "2026-08-31",
+                "resolution_source": "Circle quarterly results press release or investor transcript",
                 "signal_status": "pending_scoreable",
-                "source_refs": ["Reading Item 2"],
+                "source_refs": circle_refs,
                 "agent_facts": {"wow_type": "scoreable_signal", "scoreable": True, "accuracy_endpoint_eligible": True},
             },
             option_number=2,
-            title="Power constraints become a scoreable hyperscaler bottleneck",
-            why="The claim has a deadline, an invalidate test, and a public resolution source.",
+            title="Circle reserve-income growth becomes a scoreable unit-economics check",
+            why="The Q1 2026 release gives the user a real baseline, a deadline, an invalidate test, and a public resolution source.",
         ),
         with_visible_fields(
             {
                 "wow_id": third_id,
-                "wow_type": "candidate_wow",
+                "wow_type": "thesis_wow",
                 "scoreable": False,
                 "accuracy_endpoint_eligible": False,
                 "parent_wow_id": None,
                 "root_wow_id": third_id,
-                "observation": "Stablecoin reserve-income sharing may pressure headline revenue assumptions.",
-                "why_worth_watching": "It links Circle, Coinbase, exchanges, and payment infrastructure into one revenue-architecture question.",
-                "candidate_status": "active_candidate",
-                "source_refs": ["Reading Item 3"],
-                "agent_facts": {"wow_type": "candidate_wow", "scoreable": False, "accuracy_endpoint_eligible": False},
+                "thesis_claim": "Regulated market infrastructure can absorb tokenized cash and 24/7 settlement without surrendering the institutional clearing relationship to crypto-native venues.",
+                "thesis_status": "supported",
+                "source_refs": cme_refs,
+                "agent_facts": {"wow_type": "thesis_wow", "scoreable": False, "accuracy_endpoint_eligible": False},
             },
             option_number=3,
-            title="Stablecoin reserve-income sharing deserves preservation",
-            why="The observation is not fully testable yet, but it is specific enough to train future attention.",
+            title="CME tokenized cash is thesis evidence for regulated 24/7 settlement",
+            why="BMO, CME Group, and Google Cloud make this a real thesis update, but it still needs future adoption evidence before becoming scoreable.",
         ),
     ]
 
@@ -257,7 +388,7 @@ def with_visible_fields(item: dict[str, Any], *, option_number: int, title: str,
 
 def initial_daily_state(
     *,
-    author_id: str,
+    investor_id: str,
     market_date: date,
     journal_path: Path,
     reading_log: list[dict[str, Any]],
@@ -266,7 +397,7 @@ def initial_daily_state(
     return {
         "version": "v0.2",
         "market_date": market_date.isoformat(),
-        "author_id": author_id,
+        "investor_id": investor_id,
         "journal_path": str(journal_path),
         "state": "awaiting_user_choice",
         "reading_log": deepcopy(reading_log),
@@ -355,7 +486,7 @@ def mark_no_reply(state: dict[str, Any]) -> dict[str, Any]:
 
 def validate_daily_state(state: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    for field_name in ("version", "market_date", "author_id", "state", "reading_log", "wow_options", "selection"):
+    for field_name in ("version", "market_date", "investor_id", "state", "reading_log", "wow_options", "selection"):
         if field_name not in state:
             errors.append(f"daily_state missing required field: {field_name}")
     if errors:
@@ -380,11 +511,11 @@ def validate_daily_state(state: dict[str, Any]) -> list[str]:
 
 def packet_from_state(state: dict[str, Any]) -> dict[str, Any]:
     counts = _wow_type_counts(state["wow_options"])
-    packet_id = f"WKAP-{state['author_id']}-{state['market_date']}"
+    packet_id = f"WKAP-{state['investor_id']}-{state['market_date']}"
     selected = state["selection"]["selected_wow_id"]
     return {
         "packet_id": packet_id,
-        "author_id": state["author_id"],
+        "investor_id": state["investor_id"],
         "market_date": state["market_date"],
         "created_at": f"{state['market_date']}T21:00:00Z",
         "packet_spec_version": "v0.2",
@@ -399,7 +530,7 @@ def packet_from_state(state: dict[str, Any]) -> dict[str, Any]:
         },
         "agent_facts": {
             "packet_id": packet_id,
-            "author_id": state["author_id"],
+            "investor_id": state["investor_id"],
             "packet_spec_version": "v0.2",
             **counts,
         },
@@ -421,7 +552,7 @@ def packet_markdown(packet: dict[str, Any]) -> str:
 def lifecycle_transition_options(
     market_date: date,
     *,
-    author_id: str,
+    investor_id: str,
     transition_number: int,
     target_wow_type: str,
     previous_status: str,
@@ -435,7 +566,7 @@ def lifecycle_transition_options(
         {
             "wow_id": update_id,
             "wow_type": "status_update",
-            "author_id": author_id,
+            "investor_id": investor_id,
             "target_wow_type": target_wow_type,
             "target_wow_id": target_id,
             "target_root_wow_id": target_id,
@@ -444,7 +575,7 @@ def lifecycle_transition_options(
             "new_status": new_status,
             "update_summary": f"{target_wow_type} moved from {previous_status} to {new_status}.",
             "target_summary": f"{target_wow_type} lifecycle maintenance for {sample['themes'][0]}",
-            "evidence_summary": f"Realistic source sample supports {previous_status} to {new_status}: {sample['source_title']}.",
+            "evidence_summary": f"Real source evidence for this maintenance decision: {sample['source_title']} ({sample['source_url']}).",
             "scoreable": False,
             "accuracy_endpoint_eligible": False,
             "lineage_node": False,
@@ -467,9 +598,9 @@ def lifecycle_transition_options(
     if update_type == "resolution" and new_status in {"resolved_correct", "resolved_incorrect"}:
         update["resolution_source_used"] = sample["source_url"]
 
-    second = promotion_child_item(market_date, target_id=target_id, new_status=new_status) or base_daily_options(market_date, author_id=author_id)[1]
+    second = promotion_child_item(market_date, target_id=target_id, new_status=new_status) or base_daily_options(market_date, investor_id=investor_id)[1]
     second["option_number"] = 2
-    third = base_daily_options(market_date, author_id=author_id)[2]
+    third = base_daily_options(market_date, investor_id=investor_id)[2]
     third["option_number"] = 3
     return [update, second, third]
 
@@ -543,17 +674,17 @@ def run_daily_wow_simulation(
     *,
     journal_path: Path | None = None,
     start_date: date = date(2026, 7, 6),
-    author_id: str = SIM_INVESTOR_ID,
+    investor_id: str = SIM_INVESTOR_ID,
     publish: bool = False,
     write_journal: bool = True,
 ) -> dict[str, Any]:
     journal = journal_path or default_journal_path()
     created_paths = ensure_private_journal(journal) if write_journal else []
-    cases = build_simulation_cases(journal_path=journal, start_date=start_date, author_id=author_id)
+    cases = build_simulation_cases(journal_path=journal, start_date=start_date, investor_id=investor_id)
     run_id = uuid.uuid4()
     if publish:
         Investor.objects.update_or_create(
-            investor_id=author_id,
+            investor_id=investor_id,
             defaults={
                 "email_private": SIM_EMAIL,
                 "display_name": SIM_DISPLAY_NAME,
@@ -593,7 +724,7 @@ def run_daily_wow_simulation(
     return report
 
 
-def build_simulation_cases(*, journal_path: Path, start_date: date, author_id: str) -> list[SimulationCase]:
+def build_simulation_cases(*, journal_path: Path, start_date: date, investor_id: str) -> list[SimulationCase]:
     cases: list[SimulationCase] = []
     day = start_date
 
@@ -606,23 +737,25 @@ def build_simulation_cases(*, journal_path: Path, start_date: date, author_id: s
     ]
     for index, (name, replies) in enumerate(conversation_specs):
         market_date = day + timedelta(days=index)
+        reading_log = reading_log_for_day(market_date, offset=index)
         state = initial_daily_state(
-            author_id=author_id,
+            investor_id=investor_id,
             market_date=market_date,
             journal_path=journal_path,
-            reading_log=reading_log_for_day(market_date, offset=index),
-            wow_options=base_daily_options(market_date, author_id=author_id),
+            reading_log=reading_log,
+            wow_options=base_daily_options(market_date, investor_id=investor_id, reading_log=reading_log),
         )
         case = simulate_replies(name=name, market_date=market_date, state=state, replies=replies)
         cases.append(case)
 
     no_reply_date = day + timedelta(days=len(conversation_specs))
+    no_reply_reading_log = reading_log_for_day(no_reply_date, offset=5)
     no_reply_state = initial_daily_state(
-        author_id=author_id,
+        investor_id=investor_id,
         market_date=no_reply_date,
         journal_path=journal_path,
-        reading_log=reading_log_for_day(no_reply_date, offset=5),
-        wow_options=base_daily_options(no_reply_date, author_id=author_id),
+        reading_log=no_reply_reading_log,
+        wow_options=base_daily_options(no_reply_date, investor_id=investor_id, reading_log=no_reply_reading_log),
     )
     turns = [ConversationTurn("agent", render_daily_options_prompt(no_reply_state["wow_options"]), "awaiting_user_choice")]
     cases.append(SimulationCase("user_no_reply_private_only", no_reply_date, mark_no_reply(no_reply_state), turns))
@@ -635,17 +768,18 @@ def build_simulation_cases(*, journal_path: Path, start_date: date, author_id: s
                 market_date = lifecycle_start + timedelta(days=transition_index - 1)
                 options = lifecycle_transition_options(
                     market_date,
-                    author_id=author_id,
+                    investor_id=investor_id,
                     transition_number=transition_index,
                     target_wow_type=target_wow_type,
                     previous_status=previous_status,
                     new_status=new_status,
                 )
+                reading_log = reading_log_for_day(market_date, offset=transition_index, count=1)
                 state = initial_daily_state(
-                    author_id=author_id,
+                    investor_id=investor_id,
                     market_date=market_date,
                     journal_path=journal_path,
-                    reading_log=reading_log_for_day(market_date, offset=transition_index, count=1),
+                    reading_log=reading_log,
                     wow_options=options,
                 )
                 name = f"lifecycle_{target_wow_type}_{previous_status}_to_{new_status}"
@@ -727,7 +861,7 @@ def write_crm_summary_files(cases: list[SimulationCase], journal_path: Path) -> 
     published = [case for case in cases if case.published_url]
     _replace_generated_block(
         journal_path / "receipts.md",
-        "daily-wow-simulation",
+        SIM_GENERATED_BLOCK_ID,
         [
             "## Daily WoW Simulation Receipts",
             "",
@@ -739,7 +873,7 @@ def write_crm_summary_files(cases: list[SimulationCase], journal_path: Path) -> 
     )
     _replace_generated_block(
         journal_path / "public-verification.md",
-        "daily-wow-simulation",
+        SIM_GENERATED_BLOCK_ID,
         [
             "## Daily WoW Simulation Public Verification",
             "",
@@ -751,7 +885,7 @@ def write_crm_summary_files(cases: list[SimulationCase], journal_path: Path) -> 
     )
     _replace_generated_block(
         journal_path / "active-trackables.md",
-        "daily-wow-simulation",
+        SIM_GENERATED_BLOCK_ID,
         [
             "## Daily WoW Simulation Active Trackables",
             "",
@@ -760,7 +894,7 @@ def write_crm_summary_files(cases: list[SimulationCase], journal_path: Path) -> 
     )
     _replace_generated_block(
         journal_path / "pending-scoreables.md",
-        "daily-wow-simulation",
+        SIM_GENERATED_BLOCK_ID,
         [
             "## Daily WoW Simulation Pending Scoreables",
             "",
@@ -769,7 +903,7 @@ def write_crm_summary_files(cases: list[SimulationCase], journal_path: Path) -> 
     )
     _replace_generated_block(
         journal_path / "thesis-map.md",
-        "daily-wow-simulation",
+        SIM_GENERATED_BLOCK_ID,
         [
             "## Daily WoW Simulation Thesis Map",
             "",
@@ -789,6 +923,38 @@ def _replace_generated_block(path: Path, block_id: str, lines: list[str]) -> Non
     else:
         body = body.rstrip() + "\n\n" + block
     path.write_text(body, encoding="utf-8")
+
+
+def _remove_generated_block(path: Path, block_id: str) -> bool:
+    if not path.exists():
+        return False
+    start = f"<!-- {block_id}:start -->"
+    end = f"<!-- {block_id}:end -->"
+    body = path.read_text(encoding="utf-8")
+    pattern = re.compile(rf"\n?{re.escape(start)}.*?{re.escape(end)}\n?", flags=re.DOTALL)
+    body, count = pattern.subn("\n", body)
+    if not count:
+        return False
+    path.write_text(body.rstrip() + "\n", encoding="utf-8")
+    return True
+
+
+def _ledger_artifact_root() -> Path:
+    return Path(settings.WKAP_LEDGER_REPO_PATH) if settings.WKAP_LEDGER_REPO_PATH else settings.BASE_DIR / "ledger_artifacts"
+
+
+def _safe_remove_path(path: Path, *, allowed_roots: list[Path]) -> Path | None:
+    resolved = path.resolve()
+    allowed = [root.resolve() for root in allowed_roots]
+    if not any(resolved == root or root in resolved.parents for root in allowed):
+        raise RuntimeError(f"Refusing to remove path outside allowed roots: {resolved}")
+    if not resolved.exists():
+        return None
+    if resolved.is_dir():
+        shutil.rmtree(resolved)
+    else:
+        resolved.unlink()
+    return resolved
 
 
 def _trackable_summary_lines(cases: list[SimulationCase]) -> list[str]:
@@ -892,6 +1058,18 @@ def judgment_profile(cases: list[SimulationCase]) -> dict[str, Any]:
 
 def simulation_findings(cases: list[SimulationCase]) -> list[dict[str, str]]:
     findings = [
+        {
+            "severity": "P1",
+            "title": "Synthetic reading fixtures made the user judgment flow hard to evaluate",
+            "status": "fixed_by_real_source_basket",
+            "fix_plan": "Daily readings now use public source samples from CoreWeave, TSMC, Circle, CME, Tesla, Amazon, and Constellation, and options resolve their source_refs against the day's reading log.",
+        },
+        {
+            "severity": "P1",
+            "title": "Old local simulation data could pollute reruns",
+            "status": "fixed_by_reset_command",
+            "fix_plan": "The simulator command now supports --reset and --reset-only to remove w0998 packets, raw emails, simulator ledger events, generated journal files, public pages, manifests, and raw email artifacts before rerunning.",
+        },
         {
             "severity": "P1",
             "title": "No dedicated Daily WoW conversation simulator existed",

@@ -62,7 +62,7 @@ class ParsedWoWPacket:
     format_version: str
     submitted_at: datetime
     packet_id: str = ""
-    author_id: str = ""
+    investor_id: str = ""
     packet_spec_version: str = ""
     packet_spec_url: str = ""
     skill_version: str = ""
@@ -104,10 +104,10 @@ def parse_radar(raw_email: RawEmail) -> ParsedRadar:
     return ParsedRadar(market_date=market_date, title=title.strip(), body_text=body.strip())
 
 
-def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
+def parse_wow(raw_email: RawEmail, *, assigned_investor_id: str = "") -> ParsedWoWPacket:
     spec = current_spec()
     text = _normalize_wow_text(raw_email.raw_body)
-    structured = _parse_structured_wow(text, raw_email)
+    structured = _parse_structured_wow(text, raw_email, assigned_investor_id=assigned_investor_id)
     if structured:
         return structured
     market_date = _date(_date_from_subject(raw_email.subject) or _standalone_date(text), default=raw_email.received_at.date())
@@ -207,7 +207,7 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
     )
 
 
-def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | None:
+def _parse_structured_wow(text: str, raw_email: RawEmail, *, assigned_investor_id: str = "") -> ParsedWoWPacket | None:
     block = _structured_block(text)
     if not block:
         return None
@@ -226,15 +226,13 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
         default=raw_email.received_at.date(),
     )
     packet_spec_version = str(packet.get("packet_spec_version") or packet.get("spec_version") or "v0.2")
-    author_id = str(packet.get("author_id") or "").strip()
-    if not author_id:
-        raise ParseError("Structured WoW Packet requires author_id.")
+    investor_id = _structured_packet_investor_id(packet, assigned_investor_id=assigned_investor_id)
     wow_items = packet.get("wow_items") or []
     if not isinstance(wow_items, list) or not wow_items:
         raise ParseError("Structured WoW Packet requires at least one wow_items entry.")
     if len(wow_items) != 3:
         raise ParseError("Structured WoW Packet must include exactly 3 wow_items entries.")
-    _validate_structured_wow_items(wow_items, packet_author_id=author_id)
+    _validate_structured_wow_items(wow_items, packet_investor_id=investor_id, assigned_investor_id=assigned_investor_id)
 
     reading_items = _structured_reading_items(packet.get("reading_log") or packet.get("reading_items") or [])
     if len(reading_items) > 10:
@@ -287,7 +285,7 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
     human_view = packet.get("human_view") if isinstance(packet.get("human_view"), dict) else {}
     agent_facts = packet.get("agent_facts") if isinstance(packet.get("agent_facts"), dict) else {}
     counts = _wow_type_counts(wow_items)
-    raw_packet_json = _json_safe(packet)
+    raw_packet_json = _canonical_parsed_packet_json(packet, investor_id=investor_id)
     validation = _json_safe(packet.get("validation_notes") if isinstance(packet.get("validation_notes"), dict) else {})
     validation.setdefault("schema_valid", True)
     validation.setdefault("warnings", [])
@@ -296,8 +294,8 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
         market_date=market_date,
         format_version="wow_packet_v0.2",
         submitted_at=raw_email.received_at or timezone.now(),
-        packet_id=str(packet.get("packet_id") or f"WKAP-{author_id}-{market_date}").strip(),
-        author_id=author_id,
+        packet_id=str(packet.get("packet_id") or f"WKAP-{investor_id}-{market_date}").strip(),
+        investor_id=investor_id,
         packet_spec_version=packet_spec_version,
         packet_spec_url=str(packet.get("packet_spec_url") or "https://wkap.ai/specs/wow-packet-latest.md"),
         skill_version=str(packet.get("skill_version") or ""),
@@ -305,7 +303,7 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
         human_title=str(human_view.get("title") or packet.get("title") or "Daily WoW Packet"),
         human_summary=str(human_view.get("summary") or packet.get("summary") or ""),
         raw_packet_json=raw_packet_json,
-        agent_facts_json=_json_safe({**agent_facts, **counts, "packet_spec_version": packet_spec_version}),
+        agent_facts_json=_canonical_parsed_agent_facts(agent_facts, counts=counts, packet_spec_version=packet_spec_version, investor_id=investor_id),
         validation_results_json=validation,
         wow_items_json=_json_safe(wow_items),
         wow_count=counts["wow_count"],
@@ -354,23 +352,89 @@ def _structured_reading_items(items) -> list[ParsedReadingLogItem]:
     return parsed
 
 
-def _validate_structured_wow_items(items: list[dict], *, packet_author_id: str = "") -> None:
+def _canonical_parsed_packet_json(packet: dict, *, investor_id: str) -> dict:
+    payload = _json_safe(packet)
+    payload.pop("author_id", None)
+    payload["investor_id"] = investor_id
+    if isinstance(payload.get("agent_facts"), dict):
+        payload["agent_facts"].pop("author_id", None)
+        payload["agent_facts"]["investor_id"] = investor_id
+    for item in payload.get("wow_items") or []:
+        if isinstance(item, dict):
+            item.pop("author_id", None)
+            if isinstance(item.get("agent_facts"), dict):
+                item["agent_facts"].pop("author_id", None)
+            if str(item.get("wow_type") or "") == "status_update":
+                item["investor_id"] = str(item.get("investor_id") or investor_id)
+    return payload
+
+
+def _canonical_parsed_agent_facts(agent_facts: dict, *, counts: dict, packet_spec_version: str, investor_id: str) -> dict:
+    payload = _json_safe({**agent_facts, **counts, "packet_spec_version": packet_spec_version})
+    payload.pop("author_id", None)
+    payload["investor_id"] = investor_id
+    return payload
+
+
+def _structured_packet_investor_id(packet: dict, *, assigned_investor_id: str = "") -> str:
+    assigned = str(assigned_investor_id or "").strip().lower()
+    supplied = {
+        "investor_id": str(packet.get("investor_id") or "").strip(),
+        "author_id": str(packet.get("author_id") or "").strip(),
+    }
+    public_values = {field: value.lower() for field, value in supplied.items() if _is_public_investor_id(value)}
+    if assigned:
+        for field, value in public_values.items():
+            if value != assigned:
+                raise ParseError(
+                    f"Structured WoW Packet {field} must match sender-assigned investor_id: {assigned}"
+                )
+        return assigned
+    if public_values:
+        unique_values = set(public_values.values())
+        if len(unique_values) > 1:
+            raise ParseError("Structured WoW Packet investor_id conflicts with legacy author_id.")
+        return next(iter(unique_values))
+    investor_id = supplied["investor_id"] or supplied["author_id"]
+    if not investor_id:
+        raise ParseError("Structured WoW Packet requires investor_id.")
+    return investor_id
+
+
+def _is_public_investor_id(value: str) -> bool:
+    return bool(re.match(r"^w\d{4}$", str(value or "").strip(), flags=re.IGNORECASE))
+
+
+def _public_wow_owner_id(value: str) -> str:
+    match = re.match(r"^WOW-(w\d{4})-\d{4}-\d{2}-\d{2}-\d{3}$", str(value or "").strip(), flags=re.IGNORECASE)
+    return match.group(1).lower() if match else ""
+
+
+def _validate_structured_wow_items(items: list[dict], *, packet_investor_id: str = "", assigned_investor_id: str = "") -> None:
+    assigned = str(assigned_investor_id or "").strip().lower()
     for index, item in enumerate(items, start=1):
         if not isinstance(item, dict):
             raise ParseError(f"Structured WoW item {index} must be an object.")
         wow_id = str(item.get("wow_id") or "").strip()
         if not wow_id:
             raise ParseError(f"Structured WoW item {index} missing wow_id.")
+        if assigned:
+            _validate_public_wow_ids_belong_to_sender(item, wow_id=wow_id, assigned_investor_id=assigned)
         wow_type = str(item.get("wow_type") or "").strip() or "candidate_wow"
         if wow_type not in VALID_WOW_TYPES:
             raise ParseError(f"Structured WoW item {wow_id} has invalid wow_type: {wow_type}")
         if wow_type == "scoreable_signal" and str(item.get("signal_status") or "").strip() == "pending":
             item["signal_status"] = "pending_scoreable"
         if wow_type == "status_update":
-            item_author_id = str(item.get("author_id") or "").strip()
-            if item_author_id and packet_author_id and item_author_id != packet_author_id:
+            item_investor_id = str(item.get("investor_id") or item.get("author_id") or "").strip()
+            if (
+                item_investor_id
+                and packet_investor_id
+                and _is_public_investor_id(item_investor_id)
+                and item_investor_id.lower() != packet_investor_id.lower()
+            ):
                 raise ParseError(
-                    f"status_update {wow_id} author_id must match packet author_id: {packet_author_id}"
+                    f"status_update {wow_id} investor_id must match packet investor_id: {packet_investor_id}"
                 )
             missing = [
                 field
@@ -410,6 +474,13 @@ def _validate_structured_wow_items(items: list[dict], *, packet_author_id: str =
         parent_wow_id = item.get("parent_wow_id")
         if parent_wow_id in (None, "") and root_wow_id != wow_id:
             raise ParseError(f"Structured WoW item {wow_id} root_wow_id must equal wow_id when parent_wow_id is null.")
+
+
+def _validate_public_wow_ids_belong_to_sender(item: dict, *, wow_id: str, assigned_investor_id: str) -> None:
+    for field in ("wow_id", "parent_wow_id", "root_wow_id", "target_wow_id", "target_root_wow_id"):
+        owner_id = _public_wow_owner_id(str(item.get(field) or ""))
+        if owner_id and owner_id != assigned_investor_id:
+            raise ParseError(f"{field} on {wow_id} must use sender investor_id: {assigned_investor_id}")
 
 
 def _validate_required_wow_type_fields(item: dict, wow_id: str, wow_type: str) -> None:

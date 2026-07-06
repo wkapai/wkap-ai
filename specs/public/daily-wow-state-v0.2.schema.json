@@ -6,7 +6,7 @@
   "required": [
     "version",
     "market_date",
-    "author_id",
+    "investor_id",
     "state",
     "reading_log",
     "wow_options",
@@ -21,7 +21,7 @@
       "type": "string",
       "format": "date"
     },
-    "author_id": {
+    "investor_id": {
       "type": "string",
       "minLength": 1
     },

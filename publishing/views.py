@@ -492,7 +492,6 @@ def wow_submission(request, investor_id, market_date):
                 {"name": "received_at_et", "value": received_at_et_display},
                 {"name": "format_version", "value": submission.format_version},
                 {"name": "packet_id", "value": submission.packet_id},
-                {"name": "author_id", "value": submission.author_id},
                 {"name": "packet_spec_version", "value": submission.packet_spec_version},
                 {"name": "packet_spec_url", "value": submission.packet_spec_url},
                 {"name": "skill_version", "value": submission.skill_version},

@@ -1,4 +1,4 @@
----
+﻿---
 name: wkap-wow
 description: "Use when helping a user run the WKAP Investor Log / Daily WoW workflow: preparing Worth Watching Workout packets, maintaining a private WoW Journal, classifying wow_type lifecycle items, tracking candidate/trackable/scoreable/thesis/status_update records, collecting the completed daily choice, and submitting completed packets to WKAP Ledger."
 ---
@@ -51,7 +51,7 @@ When installing this skill or setting up a recurring WKAP task, use defaults and
 - Private journal: create or use local Markdown files in `WKAP WoW Journal/` in the active workspace by default. In this repo, that is `C:\Users\ASUS\Documents\wkap\WKAP WoW Journal`.
 - If the journal folder or required files are missing, create them before the first prepared packet.
 - Agent memory: may be used as a cache, but must not be the only durable journal when local files are available.
-- `author_id`: use the known WKAP investor ID if available. If unknown, use a stable local draft identity and do not block setup. Update the mapping after WKAP assigns or confirms a public investor ID.
+- `investor_id`: use the known WKAP investor ID if available. If unknown, use a stable local draft identity and do not block setup. Update the mapping after WKAP assigns or confirms a public investor ID.
 - Send time: infer the daily send time from the user's behavior pattern after their usual investment research window. Ask only if it cannot be inferred.
 - Research sources: default to agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and useful agent-found market items.
 - Completion: default to collecting the user's selection/pass plus required reason. That daily choice completes the Daily WoW Packet. If the user does not reply, save privately as no-reply and submit nothing publicly.
@@ -178,7 +178,7 @@ Keep the agent CRM and WKAP Public Ledger synchronized. Every public lifecycle i
 - local Private WoW Journal tracking files
 - public WKAP WoW page and agent-readable facts
 
-Use stable IDs as the sync keys: `packet_id`, `author_id`, `wow_id`, `root_wow_id`, `parent_wow_id`, `target_wow_id`, `target_root_wow_id`, and `market_date`.
+Use stable IDs as the sync keys: `packet_id`, `investor_id`, `wow_id`, `root_wow_id`, `parent_wow_id`, `target_wow_id`, `target_root_wow_id`, and `market_date`.
 
 After public submission, update the local CRM files with the public URL, receipt/public verification status, and any lifecycle transition. A day is not publicly done until it appears on WKAP Ledger.
 

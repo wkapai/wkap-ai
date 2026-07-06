@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import shutil
 import uuid
@@ -273,7 +273,7 @@ class Command(BaseCommand):
         update_item = {
             "wow_id": update_id,
             "wow_type": "status_update",
-            "author_id": DEMO_INVESTOR_ID,
+            "investor_id": DEMO_INVESTOR_ID,
             "target_wow_type": target.wow_type,
             "target_wow_id": target.wow_id,
             "target_root_wow_id": target.wow_id,
@@ -342,7 +342,7 @@ class Command(BaseCommand):
     ) -> dict:
         return {
             "packet_id": f"WKAP-{DEMO_INVESTOR_ID}-{market_date}",
-            "author_id": DEMO_INVESTOR_ID,
+            "investor_id": DEMO_INVESTOR_ID,
             "market_date": market_date.isoformat(),
             "created_at": f"{market_date}T21:00:00-04:00",
             "packet_spec_version": "v0.2",
@@ -352,7 +352,7 @@ class Command(BaseCommand):
             "human_view": {"title": title, "summary": summary},
             "agent_facts": {
                 "packet_id": f"WKAP-{DEMO_INVESTOR_ID}-{market_date}",
-                "author_id": DEMO_INVESTOR_ID,
+                "investor_id": DEMO_INVESTOR_ID,
                 "packet_spec_version": "v0.2",
             },
             "reading_log": [

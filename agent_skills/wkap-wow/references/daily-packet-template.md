@@ -1,4 +1,4 @@
-# Daily WoW Packet Template
+﻿# Daily WoW Packet Template
 
 ```markdown
 # WKAP Daily WoW Packet
@@ -8,8 +8,8 @@ Human summary:
 
 ```yaml
 packet:
-  packet_id: WKAP-[author_id]-[YYYY-MM-DD]
-  author_id: [WKAP investor ID if known, otherwise stable user/agent identity slug]
+  packet_id: WKAP-[investor_id]-[YYYY-MM-DD]
+  investor_id: [WKAP investor ID if known, otherwise stable user/agent identity slug]
   market_date: YYYY-MM-DD
   created_at: YYYY-MM-DDTHH:MM:SSZ
   packet_spec_version: v0.2
@@ -22,8 +22,8 @@ packet:
     summary:
     top_wows: []
   agent_facts:
-    packet_id: WKAP-[author_id]-[YYYY-MM-DD]
-    author_id: [same as above]
+    packet_id: WKAP-[investor_id]-[YYYY-MM-DD]
+    investor_id: [same as above]
     packet_spec_version: v0.2
     wow_count: 0
     scoreable_count: 0

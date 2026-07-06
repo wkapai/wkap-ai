@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 
@@ -105,12 +105,12 @@ def _daily_state_schema(source: dict) -> dict:
         "$id": "https://wkap.ai/specs/daily-wow-state-v0.2.schema.json",
         "title": "WKAP Daily WoW State v0.2",
         "type": "object",
-        "required": ["version", "market_date", "author_id", "state", "reading_log", "wow_options", "selection"],
+        "required": ["version", "market_date", "investor_id", "state", "reading_log", "wow_options", "selection"],
         "additionalProperties": False,
         "properties": {
             "version": {"const": version},
             "market_date": {"type": "string", "format": "date"},
-            "author_id": {"type": "string", "minLength": 1},
+            "investor_id": {"type": "string", "minLength": 1},
             "journal_path": {"type": "string"},
             "state": {"type": "string", "enum": daily_state["states"]},
             "reading_log": {

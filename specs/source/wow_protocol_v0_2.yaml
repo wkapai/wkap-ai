@@ -1,4 +1,4 @@
-protocol_version: v0.2
+﻿protocol_version: v0.2
 urls:
   wow_packet_latest: https://wkap.ai/specs/wow-packet-latest.md
   wow_crm_latest: https://wkap.ai/specs/wow-crm-latest.json

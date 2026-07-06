@@ -620,7 +620,6 @@ def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
             {
                 "format_version": artifact.format_version,
                 "packet_id": artifact.packet_id,
-                "author_id": artifact.author_id,
                 "packet_spec_version": artifact.packet_spec_version,
                 "packet_spec_url": artifact.packet_spec_url,
                 "skill_version": artifact.skill_version,
@@ -719,7 +718,6 @@ def _timestamp_target_payload(entity_type: str, artifact) -> dict[str, Any]:
             {
                 "format_version": artifact.format_version,
                 "packet_id": artifact.packet_id,
-                "author_id": artifact.author_id,
                 "packet_spec_version": artifact.packet_spec_version,
                 "investor_id": artifact.investor.investor_id,
                 "raw_email_sha256": artifact.raw_email_sha256,
@@ -1023,7 +1021,6 @@ def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status:
         {"name": "received_at_et", "value": received_at_et.strftime("%Y-%m-%d %H:%M ET")},
         {"name": "format_version", "value": submission.format_version},
         {"name": "packet_id", "value": submission.packet_id},
-        {"name": "author_id", "value": submission.author_id},
         {"name": "packet_spec_version", "value": submission.packet_spec_version},
         {"name": "packet_spec_url", "value": submission.packet_spec_url},
         {"name": "skill_version", "value": submission.skill_version},

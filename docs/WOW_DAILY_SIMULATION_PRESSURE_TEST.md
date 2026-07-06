@@ -1,17 +1,18 @@
-# Daily WoW Conversation Pressure Test
+﻿# Daily WoW Conversation Pressure Test
 
 ## Purpose
 
 This pressure test simulates the daily user conversation after Daily WoW setup:
 
-1. Load realistic market-reading samples.
-2. Present exactly 3 WoW options.
-3. Normalize messy user replies into Daily WoW State v0.2.
-4. Ask only for missing required fields.
-5. Generate a structured v0.2 packet.
-6. Save private journal records.
-7. Optionally publish completed packets to the local WKAP ledger.
-8. Update local CRM/training files from the result.
+1. Delete stale local simulation data when requested.
+2. Load real public market-reading samples.
+3. Present exactly 3 WoW options.
+4. Normalize messy user replies into Daily WoW State v0.2.
+5. Ask only for missing required fields.
+6. Generate a structured v0.2 packet.
+7. Save private journal records.
+8. Optionally publish completed packets to the local WKAP ledger.
+9. Update local CRM/training files from the result.
 
 The implementation lives in:
 
@@ -21,17 +22,43 @@ The implementation lives in:
 
 ## Local Command
 
+Delete prior local simulator data only:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py simulate_daily_wow_conversations --reset-only --json
+```
+
 Dry run with private journal output:
 
 ```powershell
 .\.venv\Scripts\python.exe manage.py simulate_daily_wow_conversations --start-date 2026-07-06 --json
 ```
 
-Publish completed simulated packets to the local ledger:
+Delete old simulator data, then publish completed simulated packets to the local ledger:
 
 ```powershell
-.\.venv\Scripts\python.exe manage.py simulate_daily_wow_conversations --start-date 2026-07-06 --publish --json
+.\.venv\Scripts\python.exe manage.py simulate_daily_wow_conversations --reset --start-date 2026-07-06 --publish --json
 ```
+
+The reset is scoped to simulator-owned data: investor `w0998`, sender `wkap-daily-wow-sim@example.com`, generated `daily-wow-simulation` journal blocks, generated daily case files, local public investor pages, WoW manifests, timestamps, and raw email artifacts for the matching packet ids.
+
+## Real Source Basket
+
+The default daily reading log uses public, traceable source samples:
+
+- CoreWeave and Meta expanded AI infrastructure agreement: `https://www.coreweave.com/news/coreweave-and-meta-announce-21-billion-expanded-ai-infrastructure-agreement`
+- TSMC Q4 2025 earnings transcript: `https://investor.tsmc.com/english/encrypt/files/encrypt_file/reports/2026-01/51d09df96cd89ac19d65af39032b038dc2896a24/TSMC%204Q25%20Transcript.pdf`
+- Circle Q1 2026 results: `https://www.circle.com/pressroom/circle-reports-first-quarter-2026-results`
+- BMO, CME Group, and Google Cloud tokenized cash platform: `https://www.cmegroup.com/media-room/press-releases/2026/3/24/bmo-introduces-tokenized-cash-and-deposit-platform-with-cme-group-and-google-cloud.html`
+- Tesla Q1 2026 update: `https://ir.tesla.com/_flysystem/s3/sec/000162828026026551/tsla-20260422-gen.pdf`
+- Amazon data center energy pledge: `https://www.aboutamazon.com/news/policy-news-views/amazon-data-centers-power-costs-white-house-pledge`
+- Constellation Crane Clean Energy Center: `https://www.constellationenergy.com/about/locations/crane-clean-energy-center.html`
+
+The three daily options are built from that basket:
+
+- Trackable: AI infrastructure bottlenecks across capacity contracts, TSMC packaging, and data center power.
+- Scoreable: Circle reserve-income growth versus USDC circulation growth by the next quarterly result.
+- Thesis: CME tokenized cash as evidence that regulated market infrastructure can absorb 24/7 settlement.
 
 ## Coverage
 
@@ -49,6 +76,18 @@ The lifecycle cases cover every allowed transition in `ledger/wow_lifecycle_rule
 - `thesis_wow`: active, supported, weakened, retired.
 
 ## Problems Found And Fixes
+
+### P1: Old Local Test Data Polluted Reruns
+
+Problem: Repeated local publish runs left `w0998` packets, raw emails, ledger events, generated journal files, public pages, manifests, and raw email artifacts in place. A new run could look successful while still depending on stale local state.
+
+Fix: Added `reset_daily_wow_simulation()` plus `--reset` and `--reset-only` command options. The reset safely deletes only simulator-owned data and guards filesystem deletion to allowed roots.
+
+### P1: Fake Fixtures Hid Whether The Flow Made Sense
+
+Problem: The earlier market-reading samples were plausible but synthetic. That made it hard to judge whether daily choices, pass reasons, and lifecycle updates felt like real investor work.
+
+Fix: Replaced the sample set with public source data from CoreWeave, TSMC, Circle, CME, Tesla, Amazon, and Constellation. The option builder now resolves `source_refs` against the current reading log, and tests assert those links stay grounded.
 
 ### P1: No Daily WoW Conversation Simulator
 
@@ -70,7 +109,7 @@ Fix: Type-label matching now runs before ordinal fallback, and generic "one/two/
 
 ### P1: Status Update Author Mismatch Could Parse
 
-Problem: A structured `status_update` with an explicit `author_id` different from the packet `author_id` was not rejected before publish.
+Problem: A structured `status_update` with an explicit `investor_id` different from the packet `investor_id` was not rejected before publish.
 
 Fix: `ledger.parsers._validate_structured_wow_items()` now rejects explicit status update author mismatches.
 
@@ -107,6 +146,22 @@ Generated blocks in CRM summary files are delimited with:
 This makes reruns idempotent without wiping hand-written journal content.
 
 ## Verification
+
+Initial stale-data reset result:
+
+```text
+Deleted 32 packets, 32 raw emails, 1,344 simulator ledger events, 5 generated journal blocks, and 100 generated paths.
+```
+
+Latest real-source publish run:
+
+```text
+Cases: 33
+Completed packets: 32
+Published packets: 32
+Lifecycle transitions covered: 27
+Case errors: 0
+```
 
 Targeted simulator tests:
 

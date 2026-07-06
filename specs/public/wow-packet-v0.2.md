@@ -1,4 +1,4 @@
-# WKAP WoW Packet Spec v0.2
+﻿# WKAP WoW Packet Spec v0.2
 
 ## Metadata
 
@@ -27,7 +27,7 @@ If Markdown and JSON specs disagree, follow the JSON execution contract, record 
 agent_facts:
   protocol: wkap_wow_packet
   spec_version: v0.2
-  required_identity_field: author_id
+  required_identity_field: investor_id
   valid_wow_types:
     - candidate_wow
     - trackable_wow
@@ -50,7 +50,7 @@ Minimum public packet skeleton:
 ```yaml
 packet:
   packet_id: string
-  author_id: string
+  investor_id: string
   created_at: ISO timestamp
   packet_spec_version: v0.2
   packet_spec_url: https://wkap.ai/specs/wow-packet-v0.2.md
@@ -63,7 +63,7 @@ packet:
     top_wows: list
   agent_facts:
     packet_id: string
-    author_id: string
+    investor_id: string
     packet_spec_version: string
     wow_count: integer
     scoreable_count: integer
@@ -423,7 +423,7 @@ status_update:
   previous_status: string
   new_status: string
   created_at: ISO timestamp
-  author_id: string
+  investor_id: string
   source_refs: list
   update_summary: string
   scoreable: false
@@ -574,7 +574,7 @@ Do not use `pending_scoreable` as the `new_status` of a status update. A promoti
 
 ## Status Update Authority
 
-In v0.2, a `status_update` is valid only if its `author_id` matches the target WoW author_id.
+In v0.2, a `status_update` is valid only if its `investor_id` matches the target WoW investor_id.
 
 Third-party status updates, third-party annotations, and WKAP adjudication are deferred.
 
@@ -652,7 +652,7 @@ Agents should reconcile public status using both WKAP receipt email and WKAP pub
 ```yaml
 packet:
   packet_id: string
-  author_id: string
+  investor_id: string
   market_date: ISO date
   created_at: ISO timestamp
   reading_log:
@@ -708,7 +708,7 @@ v0.2 - Initial public draft
 
 - Added canonical Markdown source-of-truth files.
 - Added 302 latest-to-versioned redirect model.
-- Added required `author_id`.
+- Added required `investor_id`.
 - Added WoW type taxonomy.
 - Added `status_update` as a valid non-scoreable `wow_type`.
 - Added `scoreable_signal` requirements.
@@ -720,7 +720,7 @@ v0.2 - Initial public draft
 - Added unresolved grace window rule.
 - Added v0.2 resolution authority: author-declared against `resolution_source`.
 - Added v0.2 status updates as subsequent packet items referencing `target_wow_id`.
-- Added status update authority: `author_id` must match target WoW `author_id`.
+- Added status update authority: `investor_id` must match target WoW `investor_id`.
 - Added status update lineage exemption.
 - Added append-only state model.
 - Added minimal lineage fields: `parent_wow_id` and `root_wow_id`.

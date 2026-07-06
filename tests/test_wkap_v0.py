@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import base64
@@ -129,7 +129,7 @@ AI infrastructure is moving from broad narrative into testable supply-chain bott
 ```yaml
 packet:
   packet_id: WKAP-w0202-2026-06-29
-  author_id: w0202
+  investor_id: w0202
   market_date: 2026-06-29
   created_at: 2026-06-29T21:00:00Z
   packet_spec_version: v0.2
@@ -144,7 +144,7 @@ packet:
       - WOW-w0202-2026-06-29-001
   agent_facts:
     packet_id: WKAP-w0202-2026-06-29
-    author_id: w0202
+    investor_id: w0202
     packet_spec_version: v0.2
     wow_count: 3
     scoreable_count: 1
@@ -237,7 +237,7 @@ packet:
 ```yaml
 packet:
   packet_id: WKAP-w0202-2026-07-01
-  author_id: w0202
+  investor_id: w0202
   market_date: 2026-07-01
   created_at: 2026-07-01T21:00:00Z
   packet_spec_version: v0.2
@@ -249,7 +249,7 @@ packet:
     summary: New utility evidence promotes yesterday's AI power bottleneck from trackable to scoreable.
   agent_facts:
     packet_id: WKAP-w0202-2026-07-01
-    author_id: w0202
+    investor_id: w0202
     packet_spec_version: v0.2
   reading_log:
     - item_number: 1
@@ -268,7 +268,7 @@ packet:
   wow_items:
     - wow_id: WOW-w0202-2026-07-01-001
       wow_type: status_update
-      author_id: w0202
+      investor_id: w0202
       target_wow_type: trackable_wow
       target_wow_id: WOW-w0202-2026-06-29-001
       target_root_wow_id: WOW-w0202-2026-06-29-001
@@ -383,7 +383,7 @@ packet:
 ```yaml
 packet:
   packet_id: {packet_id}
-  author_id: w0202
+  investor_id: w0202
   market_date: {market_date}
   created_at: {market_date}T21:00:00Z
   packet_spec_version: v0.2
@@ -395,7 +395,7 @@ packet:
     summary: Daily lifecycle update for {theme}.
   agent_facts:
     packet_id: {packet_id}
-    author_id: w0202
+    investor_id: w0202
     packet_spec_version: v0.2
   reading_log:
     - item_number: 1
@@ -412,7 +412,7 @@ packet:
   wow_items:
     - wow_id: {wow_id}
       wow_type: status_update
-      author_id: w0202
+      investor_id: w0202
       target_wow_type: {target_wow_type}
       target_wow_id: {target_id}
       target_root_wow_id: {target_id}
@@ -528,7 +528,7 @@ packet:
 ```yaml
 packet:
   packet_id: WKAP-w0202-2026-06-30
-  author_id: w0202
+  investor_id: w0202
   market_date: 2026-06-30
   created_at: 2026-06-30T21:00:00Z
   packet_spec_version: v0.2
@@ -540,7 +540,7 @@ packet:
     summary: Preserve one thesis, one context note, and one candidate from real market reading.
   agent_facts:
     packet_id: WKAP-w0202-2026-06-30
-    author_id: w0202
+    investor_id: w0202
     packet_spec_version: v0.2
   reading_log:
     - item_number: 1
@@ -644,7 +644,7 @@ packet:
 ```yaml
 packet:
   packet_id: WKAP-w0202-{market_date}
-  author_id: w0202
+  investor_id: w0202
   market_date: {market_date}
   created_at: {market_date}T21:00:00Z
   packet_spec_version: v0.2
@@ -656,7 +656,7 @@ packet:
     summary: Append-only lifecycle update for an existing public WoW signal.
   agent_facts:
     packet_id: WKAP-w0202-{market_date}
-    author_id: w0202
+    investor_id: w0202
     packet_spec_version: v0.2
   reading_log:
     - item_number: 1
@@ -675,7 +675,7 @@ packet:
   wow_items:
     - wow_id: WOW-w0202-{market_date}-{selected_suffix}
       wow_type: status_update
-      author_id: w0202
+      investor_id: w0202
       target_wow_type: {target_wow_type}
       target_wow_id: {target_wow_id}
       target_root_wow_id: {target_wow_id}
@@ -1073,19 +1073,19 @@ packet:
 
         self.assertEqual(parsed.format_version, "wow_packet_v0.2")
         self.assertEqual(parsed.packet_spec_version, "v0.2")
-        self.assertEqual(parsed.author_id, "w0202")
+        self.assertEqual(parsed.investor_id, "w0202")
         self.assertEqual(parsed.scoreable_count, 1)
         self.assertEqual(parsed.trackable_count, 1)
         self.assertEqual(parsed.candidate_count, 1)
         self.assertEqual(parsed.selected_wow_id, "WOW-2026-06-29-001")
         self.assertEqual(packet.format_version, "wow_packet_v0.2")
-        self.assertEqual(packet.author_id, "w0202")
+        self.assertEqual(packet.investor.investor_id, "w0202")
         self.assertEqual(packet.packet_spec_version, "v0.2")
         self.assertEqual(packet.wow_count, 3)
         self.assertEqual(packet.scoreable_count, 1)
         self.assertEqual(packet.trackable_count, 1)
         self.assertEqual(packet.candidate_count, 1)
-        self.assertEqual(packet.raw_packet_json["author_id"], "w0202")
+        self.assertEqual(packet.raw_packet_json["investor_id"], "w0202")
         self.assertEqual(packet.wow_items_json[1]["wow_type"], "scoreable_signal")
 
         response = self.client.get("/investors/w0202/wows/wow-w0202-2026-06-29.html")
@@ -1097,6 +1097,95 @@ packet:
         self.assertContains(response, "candidate_wow")
         self.assertContains(response, "packet_spec_version")
         self.assertContains(response, "scoreable_count")
+
+    def test_first_structured_wow_submission_without_investor_id_gets_assigned_investor_id(self):
+        run_id = "00000000-0000-0000-0000-000000000041"
+        body = self.structured_wow_packet_body()
+        body = body.replace("  packet_id: WKAP-w0202-2026-06-29", "  packet_id: WKAP-local-draft-asus-2026-06-29")
+        body = body.replace("    packet_id: WKAP-w0202-2026-06-29", "    packet_id: WKAP-local-draft-asus-2026-06-29")
+        body = body.replace("  investor_id: w0202\n", "", 1)
+        body = body.replace("    investor_id: w0202\n", "", 1)
+        body = body.replace("WOW-w0202-", "WOW-")
+        raw = self.raw_email(
+            sender="first-wow@example.com",
+            subject="Daily WoW Packet - 2026-06-29 - First Agent",
+            body=body,
+        )
+
+        packet = create_wow_submission(raw, run_id=run_id)
+
+        self.assertEqual(packet.investor.investor_id, "w0202")
+        self.assertEqual(packet.packet_id, "WKAP-w0202-2026-06-29")
+        self.assertEqual(packet.raw_packet_json["investor_id"], "w0202")
+        self.assertEqual(packet.raw_packet_json["packet_id"], "WKAP-w0202-2026-06-29")
+        self.assertEqual(packet.agent_facts_json["investor_id"], "w0202")
+        self.assertEqual(packet.wow_items_json[0]["wow_id"], "WOW-w0202-2026-06-29-001")
+        self.assertEqual(packet.raw_packet_json["selection"]["selected_wow_id"], "WOW-w0202-2026-06-29-001")
+        self.assertTrue(
+            LedgerEvent.objects.filter(
+                event_name="wow_lifecycle_item_logged",
+                entity_type="wow",
+                entity_id=str(packet.id),
+                details__wow_id="WOW-w0202-2026-06-29-001",
+            ).exists()
+        )
+
+    def test_first_structured_wow_submission_accepts_draft_investor_id(self):
+        run_id = "00000000-0000-0000-0000-000000000042"
+        body = self.structured_wow_packet_body()
+        body = body.replace("WKAP-w0202-2026-06-29", "WKAP-local-draft-asus-2026-06-29")
+        body = body.replace("investor_id: w0202", "investor_id: local-draft-asus")
+        body = body.replace("WOW-w0202-", "WOW-")
+        raw = self.raw_email(
+            sender="draft-author@example.com",
+            subject="Daily WoW Packet - 2026-06-29 - Draft Agent",
+            body=body,
+        )
+
+        packet = create_wow_submission(raw, run_id=run_id)
+
+        self.assertEqual(packet.investor.investor_id, "w0202")
+        self.assertEqual(packet.packet_id, "WKAP-w0202-2026-06-29")
+        self.assertEqual(packet.raw_packet_json["investor_id"], "w0202")
+        self.assertEqual(packet.agent_facts_json["investor_id"], "w0202")
+        self.assertEqual(packet.wow_items_json[1]["wow_id"], "WOW-w0202-2026-06-29-002")
+
+    def test_structured_wow_packet_accepts_legacy_author_id_identity_alias(self):
+        body = self.structured_wow_packet_body()
+        body = body.replace("  investor_id: w0202", "  author_id: w0202", 1)
+        body = body.replace("    investor_id: w0202", "    author_id: w0202", 1)
+        body = body.replace("      agent_facts:\n        wow_type: trackable_wow", "      agent_facts:\n        author_id: w0202\n        wow_type: trackable_wow", 1)
+        raw = self.raw_email(sender="structured@example.com", subject="Daily WoW Packet - 2026-06-29 - Structured Agent", body=body)
+
+        parsed = parse_wow(raw)
+
+        self.assertEqual(parsed.investor_id, "w0202")
+        self.assertNotIn("author_id", json.dumps(parsed.raw_packet_json))
+        self.assertNotIn("author_id", json.dumps(parsed.agent_facts_json))
+
+    def test_public_wow_intake_rejects_conflicting_public_investor_id(self):
+        run_id = "00000000-0000-0000-0000-000000000043"
+        body = self.structured_wow_packet_body().replace("  investor_id: w0202", "  investor_id: w0203", 1)
+        raw = self.raw_email(
+            sender="conflicting-investor@example.com",
+            subject="Daily WoW Packet - 2026-06-29 - Conflicting Agent",
+            body=body,
+        )
+
+        with self.assertRaisesMessage(ParseError, "sender-assigned investor_id"):
+            create_wow_submission(raw, run_id=run_id)
+
+    def test_status_update_target_must_belong_to_sender_investor_id(self):
+        run_id = "00000000-0000-0000-0000-000000000044"
+        body = self.structured_status_update_packet_body().replace("target_wow_id: WOW-w0202-", "target_wow_id: WOW-w0203-")
+        raw = self.raw_email(
+            sender="cross-investor-status@example.com",
+            subject="Daily WoW Packet - 2026-07-01 - Cross Investor Agent",
+            body=body,
+        )
+
+        with self.assertRaisesMessage(ParseError, "target_wow_id"):
+            create_wow_submission(raw, run_id=run_id)
 
     def test_structured_wow_packet_requires_type_specific_fields(self):
         body = self.structured_wow_packet_body().replace(
@@ -1923,7 +2012,7 @@ packet:
 
         self.assertIn("# WKAP WoW Packet Spec v0.2", body)
         self.assertNotIn("canonical_hash", body)
-        self.assertIn("author_id", body)
+        self.assertIn("investor_id", body)
         self.assertNotIn("contributor_id", body)
         for wow_type in ["candidate_wow", "trackable_wow", "scoreable_signal", "thesis_wow", "status_update"]:
             self.assertIn(wow_type, body)
@@ -2023,7 +2112,7 @@ packet:
         self.assertIn("The agent must not decide that a completed daily choice should stay private", body)
         self.assertIn('A prose list of "top private WoWs" is not a valid WKAP WoW output by itself', body)
         self.assertIn("select WoW 1", body)
-        self.assertIn("Do not block private setup on WKAP `author_id`", body)
+        self.assertIn("Do not block private setup on WKAP `investor_id`", body)
         self.assertIn("Default completion flow is assumed", body)
         self.assertIn("The Private WoW Journal must be stored in durable user-owned storage", body)
         self.assertIn("If the agent has local filesystem access, it must use a local Markdown folder by default", body)
