@@ -58,7 +58,7 @@
               <summary>fields</summary>
               <dl class="wow-type-fields">
                 {% for row in signal.type_rows %}
-                  <div>
+                  <div class="wow-type-field wow-type-field-{{ row.field }}">
                     <dt>{{ row.label }}</dt>
                     <dd data-field="{{ row.field }}">{{ row.value }}</dd>
                   </div>

@@ -25,6 +25,12 @@ MARKDOWN_RESOURCES = {
     "wkap_wow_codex_skill": "agent_skills/wkap-wow/SKILL.md",
 }
 
+JSON_RESOURCES = {
+    "wow_crm_v0_1": "specs/public/wow-crm-v0.1.json",
+    "wow_intake_flow_v0_1": "specs/public/wow-intake-flow-v0.1.json",
+    "daily_wow_state_v0_1": "specs/public/daily-wow-state-v0.1.schema.json",
+}
+
 
 def _json_ld(payload: dict) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
@@ -214,6 +220,9 @@ def submit_to_ledger(request):
     packet_spec_url = "https://wkap.ai/specs/wow-packet-latest.md"
     wow_skill_url = "https://wkap.ai/skills/wkap-wow-skill-latest.md"
     codex_skill_url = "https://wkap.ai/skills/wkap-wow-codex/SKILL.md"
+    crm_spec_url = "https://wkap.ai/specs/wow-crm-latest.json"
+    intake_flow_url = "https://wkap.ai/specs/wow-intake-flow-latest.json"
+    daily_state_schema_url = "https://wkap.ai/specs/daily-wow-state-latest.schema.json"
     return render(
         request,
         "publishing/submit_to_ledger.html",
@@ -229,6 +238,9 @@ def submit_to_ledger(request):
                 {"name": "packet_type", "value": "Daily WoW Packet"},
                 {"name": "max_reading_items", "value": str(spec.get("schema_data", {}).get("reading_log_rules", {}).get("max_items", 10))},
                 {"name": "wow_packet_spec_latest_url", "value": packet_spec_url},
+                {"name": "wow_crm_spec_latest_url", "value": crm_spec_url},
+                {"name": "wow_intake_flow_latest_url", "value": intake_flow_url},
+                {"name": "daily_wow_state_schema_latest_url", "value": daily_state_schema_url},
                 {"name": "wkap_wow_skill_latest_url", "value": wow_skill_url},
                 {"name": "wkap_wow_codex_skill_url", "value": codex_skill_url},
                 {"name": "private_journal_required", "value": "true"},
@@ -241,6 +253,9 @@ def submit_to_ledger(request):
             ],
             crawl_links=[
                 {"rel": "protocol", "href": "/specs/wow-packet-latest.md", "label": "wow-packet-spec"},
+                {"rel": "protocol", "href": "/specs/wow-crm-latest.json", "label": "wow-crm-spec"},
+                {"rel": "protocol", "href": "/specs/wow-intake-flow-latest.json", "label": "wow-intake-flow"},
+                {"rel": "protocol", "href": "/specs/daily-wow-state-latest.schema.json", "label": "daily-wow-state-schema"},
                 {"rel": "help", "href": "/skills/wkap-wow-skill-latest.md", "label": "wkap-wow-skill"},
                 {"rel": "alternate", "href": "/skills/wkap-wow-codex/SKILL.md", "label": "wkap-wow-codex-skill"},
             ],
@@ -267,6 +282,14 @@ def markdown_resource(request, resource_key: str):
         raise Http404("Unknown Markdown resource.")
     path = settings.BASE_DIR / relative_path
     return HttpResponse(path.read_text(encoding="utf-8"), content_type="text/markdown; charset=utf-8")
+
+
+def json_resource(request, resource_key: str):
+    relative_path = JSON_RESOURCES.get(resource_key)
+    if not relative_path:
+        raise Http404("Unknown JSON resource.")
+    path = settings.BASE_DIR / relative_path
+    return HttpResponse(path.read_text(encoding="utf-8"), content_type="application/json; charset=utf-8")
 
 
 def markdown_latest_redirect(request, target_path: str):

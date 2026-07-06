@@ -11,8 +11,19 @@ Before preparing or submitting a packet, read:
 
 - https://wkap.ai/skills/wkap-wow-skill-latest.md
 - https://wkap.ai/specs/wow-packet-latest.md
+- https://wkap.ai/specs/wow-crm-latest.json
+- https://wkap.ai/specs/wow-intake-flow-latest.json
+- https://wkap.ai/specs/daily-wow-state-latest.schema.json
 
-Use the latest public spec when it conflicts with bundled references.
+Use the latest public JSON specs as the execution contract when they conflict with bundled references or Markdown prose.
+
+## Strict Intake Program Rule
+
+During user data collection, behave like an intake program, not a free-form advisor. The user may reply in natural language, but you must normalize that reply into the Daily WoW State object, validate it against the intake flow and CRM specs, then ask only for missing required fields.
+
+Do not invent required user fields. Do not pick for the user. Do not decide that a completed valid daily packet should remain private because it is imperfect or low confidence. The normal successful workout result is a published Daily WoW Packet on WKAP Ledger.
+
+The daily choice flow is fixed: prepare exactly 3 options, ask the user to pick 1, 2, 3, or pass, collect `reason_for_selection` for a selected option, collect `closest_rejected_wow`, `reason_for_pass`, and `missing_evidence` for a pass, then save privately and submit publicly. `closest_rejected_wow` must be one of today's 3 `wow_id` values. Selection/pass plus required fields is submission approval; do not ask for a second approval unless the user explicitly interrupts submission.
 
 ## Core Workflow
 

@@ -1,0 +1,71 @@
+{
+  "protocol": "wkap-wow-intake-flow",
+  "version": "v0.1",
+  "latest_url": "https://wkap.ai/specs/wow-intake-flow-latest.json",
+  "crm_spec_url": "https://wkap.ai/specs/wow-crm-latest.json",
+  "goal": "Make every agent behave like the same intake program during Daily WoW data collection while still accepting natural conversation as input.",
+  "states": {
+    "setup": {
+      "required_action": "install_skill_and_prepare_private_journal",
+      "next": ["collecting_reading_log"]
+    },
+    "collecting_reading_log": {
+      "required_action": "collect top daily investment readings from user activity and agent-found sources",
+      "limits": {"max_reading_items": 10},
+      "next": ["draft_options"]
+    },
+    "draft_options": {
+      "required_action": "generate exactly 3 WoW choices from today's readings and existing CRM state",
+      "allowed_option_kinds": ["new_wow_signal", "existing_wow_status_update"],
+      "next": ["awaiting_user_choice"]
+    },
+    "awaiting_user_choice": {
+      "prompt_template": "Pick one WoW: 1, 2, 3, or pass.",
+      "accepted_inputs": ["1", "2", "3", "pass", "natural language equivalent"],
+      "normalization_required": true,
+      "next": ["awaiting_selection_reason", "awaiting_pass_fields"]
+    },
+    "awaiting_selection_reason": {
+      "prompt_template": "Why did you select this WoW?",
+      "required_fields": ["reason_for_selection"],
+      "forbidden_fields": ["reason_for_pass", "closest_rejected_wow", "missing_evidence"],
+      "next": ["ready_to_submit"]
+    },
+    "awaiting_pass_fields": {
+      "prompt_template": "Which of today's 3 WoWs came closest, why pass, and what evidence is missing?",
+      "required_fields": ["closest_rejected_wow", "reason_for_pass", "missing_evidence"],
+      "closest_rejected_wow_rule": "must be one of today's 3 wow_id values",
+      "next": ["ready_to_submit"]
+    },
+    "ready_to_submit": {
+      "required_action": "generate structured Daily WoW Packet, validate it against CRM and intake specs, save privately, submit publicly",
+      "approval_rule": "the user's selection/pass plus required reason is approval",
+      "next": ["submitted", "not_submitted_format_error"]
+    },
+    "submitted": {
+      "required_action": "reconcile receipt, public WKAP URL, raw email artifact, proof state, and local private CRM files",
+      "next": ["verified"]
+    },
+    "verified": {
+      "required_action": "record public URL and lifecycle effects in private journal"
+    },
+    "user_no_reply": {
+      "required_action": "save private daily draft only; submit nothing publicly"
+    },
+    "not_submitted_format_error": {
+      "required_action": "save private error and ask only for missing/invalid required fields"
+    }
+  },
+  "normalization_rules": {
+    "agent_may_map_natural_language_choice_to_option": true,
+    "agent_may_not_invent_required_user_reason": true,
+    "agent_may_not_choose_for_user": true,
+    "agent_asks_smallest_missing_question": true,
+    "agent_must_not_replace_pass_with_private_keep_decision": true
+  },
+  "submission_rules": {
+    "daily_public_work_is_done_only_when_packet_is_published_on_wkap_ledger": true,
+    "valid_completed_daily_choice_should_be_submitted": true,
+    "agent_does_not_decide_valid_packet_is_too_weak_to_publish": true
+  }
+}

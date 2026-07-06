@@ -936,14 +936,14 @@ code {
 }
 
 .wow-type-details {
-  margin: 1px 0 0;
-  padding-top: 1px;
-  border-top: 1px solid rgba(20, 35, 66, 0.06);
+  border-top: 1px solid rgba(20, 35, 66, 0.08);
+  margin: 6px 0 0;
+  padding-top: 5px;
 }
 
 .wow-type-details summary {
   display: inline-flex;
-  color: rgba(10, 13, 18, 0.38);
+  color: rgba(10, 13, 18, 0.4);
   cursor: pointer;
   font-size: 8px;
   font-weight: 700;
@@ -958,22 +958,21 @@ code {
 }
 
 .wow-type-fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px 8px;
-  margin: 3px 0 0;
+  display: grid;
+  gap: 4px 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 4px 0 0;
   padding-top: 0;
   border-top: 0;
-  font-size: 8px;
-  line-height: 1.15;
+  font-size: 11px;
+  line-height: 1.28;
 }
 
 .wow-type-fields div {
-  display: inline-flex;
   align-items: baseline;
-  gap: 3px;
+  display: grid;
+  gap: 1px;
   min-width: 0;
-  max-width: 100%;
 }
 
 .wow-type-fields dt,
@@ -984,22 +983,37 @@ code {
 }
 
 .wow-type-fields dt {
-  color: rgba(10, 13, 18, 0.62);
-  font-weight: 800;
+  color: rgba(10, 13, 18, 0.42);
+  font-size: 8px;
+  font-weight: 650;
+  line-height: 1;
   text-transform: uppercase;
 }
 
 .wow-type-fields dt::after {
-  content: ":";
+  content: "";
 }
 
 .wow-type-fields dd {
+  color: rgba(31, 41, 55, 0.86);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.28;
   min-width: 0;
-  max-width: min(360px, 100%);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: rgba(31, 41, 55, 0.68);
+  overflow-wrap: anywhere;
+}
+
+.wow-type-field-claim,
+.wow-type-field-invalidate_test,
+.wow-type-field-resolution_source,
+.wow-type-field-evidence_to_watch,
+.wow-type-field-update_summary,
+.wow-type-field-evidence_summary,
+.wow-type-field-source_refs,
+.wow-type-field-observation,
+.wow-type-field-why_worth_watching,
+.wow-type-field-thesis_claim {
+  grid-column: 1 / -1;
 }
 
 .body-copy p,

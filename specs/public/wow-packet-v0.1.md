@@ -7,8 +7,17 @@ spec_version: v0.1
 spec_url: https://wkap.ai/specs/wow-packet-v0.1.md  
 latest_spec_url: https://wkap.ai/specs/wow-packet-latest.md  
 recommended_agent_skill: https://wkap.ai/skills/wkap-wow-skill-latest.md
+crm_spec: https://wkap.ai/specs/wow-crm-latest.json
+intake_flow: https://wkap.ai/specs/wow-intake-flow-latest.json
+daily_state_schema: https://wkap.ai/specs/daily-wow-state-latest.schema.json
 
 This Markdown file is the canonical public source of truth for WKAP WoW Packet v0.1.
+
+The machine-readable CRM, intake flow, and daily state JSON specs define the strict agent execution contract for data collection, required fields, and lifecycle transitions:
+
+- https://wkap.ai/specs/wow-crm-latest.json
+- https://wkap.ai/specs/wow-intake-flow-latest.json
+- https://wkap.ai/specs/daily-wow-state-latest.schema.json
 
 ## Agent Facts
 

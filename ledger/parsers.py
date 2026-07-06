@@ -18,6 +18,15 @@ class ParseError(ValueError):
     pass
 
 
+WOW_TYPE_REQUIRED_FIELDS = {
+    "candidate_wow": ("observation", "why_worth_watching", "candidate_status", "source_refs"),
+    "trackable_wow": ("claim", "evidence_to_watch", "review_cadence", "next_review_at", "trackable_status", "source_refs"),
+    "scoreable_signal": ("claim", "invalidate_test", "resolve_by", "resolution_source", "signal_status", "source_refs"),
+    "thesis_wow": ("thesis_claim", "thesis_status", "source_refs"),
+    "context_note": ("observation", "context_status", "source_refs"),
+}
+
+
 @dataclass(frozen=True)
 class ParsedRadar:
     market_date: date
@@ -156,6 +165,8 @@ def parse_wow(raw_email: RawEmail) -> ParsedWoWPacket:
         known_ids = {wow.wow_id for wow in suggested_wows}
         if selected_wow_id not in known_ids:
             raise ParseError(f"selected_wow_id does not match a suggested WoW: {selected_wow_id}")
+        if not _first_field(selection_fields, "reason_for_selection", "user_note", "note").strip():
+            raise ParseError("Selection missing required field: reason_for_selection")
         used_pass_fields = [name for name, value in pass_fields.items() if value]
         if used_pass_fields:
             raise ParseError(
@@ -241,6 +252,8 @@ def _parse_structured_wow(text: str, raw_email: RawEmail) -> ParsedWoWPacket | N
         known_ids = {wow.wow_id for wow in suggested_wows}
         if selected_wow_id not in known_ids:
             raise ParseError(f"selected_wow_id does not match a structured WoW item: {selected_wow_id}")
+        if not reason_for_selection:
+            raise ParseError("Selection missing required field: reason_for_selection")
         used_pass_fields = [
             name
             for name, value in {
@@ -383,12 +396,27 @@ def _validate_structured_wow_items(items: list[dict]) -> None:
             if transition_error:
                 raise ParseError(f"status_update {wow_id} invalid transition: {transition_error}")
             continue
+        _validate_required_wow_type_fields(item, wow_id, wow_type)
         root_wow_id = str(item.get("root_wow_id") or "").strip()
         if not root_wow_id:
             raise ParseError(f"Structured WoW item {wow_id} missing root_wow_id.")
         parent_wow_id = item.get("parent_wow_id")
         if parent_wow_id in (None, "") and root_wow_id != wow_id:
             raise ParseError(f"Structured WoW item {wow_id} root_wow_id must equal wow_id when parent_wow_id is null.")
+
+
+def _validate_required_wow_type_fields(item: dict, wow_id: str, wow_type: str) -> None:
+    missing = [field for field in WOW_TYPE_REQUIRED_FIELDS.get(wow_type, ()) if not _has_value(item.get(field))]
+    if missing:
+        raise ParseError(f"{wow_type} {wow_id} missing required fields: {', '.join(missing)}")
+
+
+def _has_value(value) -> bool:
+    if isinstance(value, list):
+        return any(_has_value(item) for item in value)
+    if isinstance(value, dict):
+        return bool(value)
+    return bool(str(value or "").strip())
 
 
 def _validate_closest_rejected_wow(value: str, suggested_wows: list[ParsedAgentSuggestedWoW]) -> None:

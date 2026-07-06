@@ -177,6 +177,7 @@ packet:
         - utility interconnection queues
       review_cadence: daily
       next_review_at: 2026-06-30
+      trackable_status: active_trackable
       source_refs:
         - Reading Item 1
       agent_facts:
@@ -208,6 +209,7 @@ packet:
       root_wow_id: WOW-w0202-2026-06-29-003
       observation: AI hardware discussions increasingly mention grid equipment.
       why_worth_watching: It may broaden the AI supply-chain basket.
+      candidate_status: active_candidate
       source_refs:
         - Reading Item 1
       agent_facts:
@@ -311,6 +313,7 @@ packet:
       parent_wow_id: null
       root_wow_id: WOW-w0202-2026-07-01-003
       observation: Power names may become part of the AI infrastructure basket.
+      context_status: active_context
       source_refs:
         - Reading Item 1
       agent_facts:
@@ -442,6 +445,7 @@ packet:
       parent_wow_id: null
       root_wow_id: WOW-w0202-{market_date}-003
       observation: Market context remains relevant but not scoreable today.
+      context_status: active_context
       source_refs:
         - Reading Item 1
       agent_facts:
@@ -601,6 +605,7 @@ packet:
       root_wow_id: WOW-w0202-2026-06-30-003
       observation: Stablecoin reserve-income sharing may become a repeated fintech valuation debate.
       why_worth_watching: It links Circle, Coinbase, exchanges, and payment infrastructure into one revenue-architecture question.
+      candidate_status: active_candidate
       source_refs:
         - Reading Item 1
       agent_facts:
@@ -714,6 +719,7 @@ packet:
       root_wow_id: WOW-w0202-{market_date}-003
       observation: A related but weaker market observation remains below selection bar.
       why_worth_watching: It may matter later but has less direct evidence today.
+      candidate_status: active_candidate
       source_refs:
         - Reading Item 1
       agent_facts:
@@ -1034,6 +1040,16 @@ packet:
 
         self.assertEqual(parsed.reason_for_selection, "Focus on the supplier evidence.")
 
+    def test_wow_packet_parser_requires_reason_for_selected_wow(self):
+        body = self.wow_packet_body().replace(
+            "reason_for_selection: Focus on the supplier evidence.",
+            "reason_for_selection:",
+        )
+        raw = self.raw_email(subject="Daily WoW Packet - 2026-06-29 - Missing Reason Agent", body=body)
+
+        with self.assertRaisesMessage(ParseError, "reason_for_selection"):
+            parse_wow(raw)
+
     def test_structured_wow_packet_v01_parses_and_stores_lifecycle_payload(self):
         run_id = "00000000-0000-0000-0000-000000000040"
         raw = self.raw_email(sender="structured@example.com", subject="Daily WoW Packet - 2026-06-29 - Structured Agent", body=self.structured_wow_packet_body())
@@ -1067,6 +1083,26 @@ packet:
         self.assertContains(response, "candidate_wow")
         self.assertContains(response, "packet_spec_version")
         self.assertContains(response, "scoreable_count")
+
+    def test_structured_wow_packet_requires_type_specific_fields(self):
+        body = self.structured_wow_packet_body().replace(
+            "trackable_status: active_trackable",
+            "trackable_status:",
+        )
+        raw = self.raw_email(sender="structured@example.com", subject="Daily WoW Packet - 2026-06-29 - Structured Agent", body=body)
+
+        with self.assertRaisesMessage(ParseError, "trackable_wow"):
+            parse_wow(raw)
+
+    def test_structured_wow_packet_requires_scoreable_resolution_fields(self):
+        body = self.structured_wow_packet_body().replace(
+            "resolution_source: hyperscaler earnings transcripts",
+            "resolution_source:",
+        )
+        raw = self.raw_email(sender="structured@example.com", subject="Daily WoW Packet - 2026-06-29 - Structured Agent", body=body)
+
+        with self.assertRaisesMessage(ParseError, "scoreable_signal"):
+            parse_wow(raw)
 
     def test_repaired_wow_publishes_and_receipt_reminds_setup_format(self):
         run_id = "00000000-0000-0000-0000-000000000028"
@@ -1584,6 +1620,10 @@ packet:
         self.assertContains(setup_response, "Set up WKAP WoW for me.")
         self.assertContains(setup_response, "Install WKAP WoW Skill as a durable skill")
         self.assertContains(setup_response, "Use this universal skill as the source of truth")
+        self.assertContains(setup_response, "The skill must follow these machine-readable WKAP specs exactly")
+        self.assertContains(setup_response, "https://wkap.ai/specs/wow-crm-latest.json")
+        self.assertContains(setup_response, "https://wkap.ai/specs/wow-intake-flow-latest.json")
+        self.assertContains(setup_response, "https://wkap.ai/specs/daily-wow-state-latest.schema.json")
         self.assertContains(setup_response, "If you are Codex, install this Codex-native skill")
         self.assertContains(setup_response, "verify the install by checking for a local wkap-wow/SKILL.md file")
         self.assertContains(setup_response, "Tell me whether the install is verified")
@@ -1613,6 +1653,9 @@ packet:
         self.assertContains(setup_response, "<span>Copy</span>")
         self.assertNotContains(setup_response, "skill install")
         self.assertContains(setup_response, "wow_packet_spec_latest_url")
+        self.assertContains(setup_response, "wow_crm_spec_latest_url")
+        self.assertContains(setup_response, "wow_intake_flow_latest_url")
+        self.assertContains(setup_response, "daily_wow_state_schema_latest_url")
         self.assertContains(setup_response, "wkap_wow_skill_latest_url")
         self.assertContains(setup_response, "https://wkap.ai/specs/wow-packet-latest.md")
         self.assertContains(setup_response, "https://wkap.ai/skills/wkap-wow-skill-latest.md")
@@ -1629,22 +1672,43 @@ packet:
 
     def test_wow_protocol_markdown_routes_are_public_and_redirect_latest(self):
         packet = self.client.get("/specs/wow-packet-v0.1.md")
+        crm = self.client.get("/specs/wow-crm-v0.1.json")
+        intake = self.client.get("/specs/wow-intake-flow-v0.1.json")
+        daily_state = self.client.get("/specs/daily-wow-state-v0.1.schema.json")
         skill = self.client.get("/skills/wkap-wow-skill-v0.1.md")
         codex_skill = self.client.get("/skills/wkap-wow-codex/SKILL.md")
         packet_latest = self.client.get("/specs/wow-packet-latest.md")
+        crm_latest = self.client.get("/specs/wow-crm-latest.json")
+        intake_latest = self.client.get("/specs/wow-intake-flow-latest.json")
+        daily_state_latest = self.client.get("/specs/daily-wow-state-latest.schema.json")
         skill_latest = self.client.get("/skills/wkap-wow-skill-latest.md")
 
         self.assertEqual(packet.status_code, 200)
+        self.assertEqual(crm.status_code, 200)
+        self.assertEqual(intake.status_code, 200)
+        self.assertEqual(daily_state.status_code, 200)
         self.assertEqual(skill.status_code, 200)
         self.assertEqual(codex_skill.status_code, 200)
         self.assertEqual(packet.headers["Content-Type"], "text/markdown; charset=utf-8")
+        self.assertEqual(crm.headers["Content-Type"], "application/json; charset=utf-8")
+        self.assertEqual(intake.headers["Content-Type"], "application/json; charset=utf-8")
+        self.assertEqual(daily_state.headers["Content-Type"], "application/json; charset=utf-8")
         self.assertEqual(skill.headers["Content-Type"], "text/markdown; charset=utf-8")
         self.assertEqual(codex_skill.headers["Content-Type"], "text/markdown; charset=utf-8")
+        self.assertEqual(json.loads(crm.content)["selection_rules"]["daily_options_required"], 3)
+        self.assertIn("awaiting_user_choice", json.loads(intake.content)["states"])
+        self.assertIn("wow_options", json.loads(daily_state.content)["required"])
         self.assertContains(codex_skill, "name: wkap-wow")
         self.assertContains(codex_skill, "Private WoW Journal")
         self.assertContains(codex_skill, "status_update")
         self.assertEqual(packet_latest.status_code, 302)
         self.assertEqual(packet_latest.headers["Location"], "/specs/wow-packet-v0.1.md")
+        self.assertEqual(crm_latest.status_code, 302)
+        self.assertEqual(crm_latest.headers["Location"], "/specs/wow-crm-v0.1.json")
+        self.assertEqual(intake_latest.status_code, 302)
+        self.assertEqual(intake_latest.headers["Location"], "/specs/wow-intake-flow-v0.1.json")
+        self.assertEqual(daily_state_latest.status_code, 302)
+        self.assertEqual(daily_state_latest.headers["Location"], "/specs/daily-wow-state-v0.1.schema.json")
         self.assertEqual(skill_latest.status_code, 302)
         self.assertEqual(skill_latest.headers["Location"], "/skills/wkap-wow-skill-v0.1.md")
 
@@ -1683,6 +1747,10 @@ packet:
         self.assertIn("Future packet formats will change", body)
         self.assertIn("version-aware", body)
         self.assertIn("https://wkap.ai/skills/wkap-wow-skill-latest.md", body)
+        self.assertIn("https://wkap.ai/specs/wow-crm-latest.json", body)
+        self.assertIn("https://wkap.ai/specs/wow-intake-flow-latest.json", body)
+        self.assertIn("https://wkap.ai/specs/daily-wow-state-latest.schema.json", body)
+        self.assertIn("strict agent execution contract", body)
         self.assertIn("reading_log_max_items: 10", body)
         self.assertIn("suggested_wow_count: 3", body)
         self.assertIn("reason_for_pass", body)
@@ -1700,6 +1768,15 @@ packet:
         self.assertIn("# WKAP WoW Skill v0.1", body)
         self.assertNotIn("canonical_hash", body)
         self.assertIn("https://wkap.ai/specs/wow-packet-latest.md", body)
+        self.assertIn("https://wkap.ai/specs/wow-crm-latest.json", body)
+        self.assertIn("https://wkap.ai/specs/wow-intake-flow-latest.json", body)
+        self.assertIn("https://wkap.ai/specs/daily-wow-state-latest.schema.json", body)
+        self.assertIn("machine-readable CRM, intake, and daily state JSON specs are the execution contract", body)
+        self.assertIn("Strict Intake Program Rule", body)
+        self.assertIn("behave like an intake program", body)
+        self.assertIn("normalize the reply into the Daily WoW State object", body)
+        self.assertIn("Do not invent required user fields", body)
+        self.assertIn("The daily choice flow is fixed", body)
         self.assertIn("fetch the latest WoW Packet Spec daily", body)
         self.assertIn("refresh the spec at least every 30 days", body)
         self.assertIn("setup_mode: low_friction_defaults_first", body)
@@ -1760,6 +1837,12 @@ packet:
         body = response.content.decode()
 
         self.assertIn("Apply setup defaults first; do not start with a long interview", body)
+        self.assertIn("https://wkap.ai/specs/wow-crm-latest.json", body)
+        self.assertIn("https://wkap.ai/specs/wow-intake-flow-latest.json", body)
+        self.assertIn("https://wkap.ai/specs/daily-wow-state-latest.schema.json", body)
+        self.assertIn("Strict Intake Program Rule", body)
+        self.assertIn("behave like an intake program", body)
+        self.assertIn("Selection/pass plus required fields is submission approval", body)
         self.assertIn("C:\\Users\\ASUS\\Documents\\wkap\\WKAP WoW Journal", body)
         self.assertIn("If the journal folder or required files are missing, create them before the first prepared packet", body)
         self.assertIn("Codex Local Journal Layout", body)

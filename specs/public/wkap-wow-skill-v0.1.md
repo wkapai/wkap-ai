@@ -7,8 +7,11 @@ skill_version: v0.1
 skill_url: https://wkap.ai/skills/wkap-wow-skill-v0.1.md  
 latest_skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md  
 current_wow_packet_spec: https://wkap.ai/specs/wow-packet-latest.md
+current_wow_crm_spec: https://wkap.ai/specs/wow-crm-latest.json
+current_wow_intake_flow: https://wkap.ai/specs/wow-intake-flow-latest.json
+current_daily_wow_state_schema: https://wkap.ai/specs/daily-wow-state-latest.schema.json
 
-This Markdown file is the canonical public source of truth for WKAP WoW Skill v0.1.
+This Markdown file is the canonical public operating manual for WKAP WoW Skill v0.1. The machine-readable CRM, intake, and daily state JSON specs are the execution contract. If this Markdown and the JSON specs disagree, follow the JSON specs and record the mismatch privately.
 
 ## Agent Facts
 
@@ -17,6 +20,9 @@ agent_facts:
   skill: wkap_wow_skill
   skill_version: v0.1
   current_wow_packet_spec: https://wkap.ai/specs/wow-packet-latest.md
+  current_wow_crm_spec: https://wkap.ai/specs/wow-crm-latest.json
+  current_wow_intake_flow: https://wkap.ai/specs/wow-intake-flow-latest.json
+  current_daily_wow_state_schema: https://wkap.ai/specs/daily-wow-state-latest.schema.json
   default_spec_fetch: daily
   minimum_fallback_refresh_days: 30
   private_journal_required: true
@@ -75,7 +81,38 @@ Current WoW Packet Spec:
 
 https://wkap.ai/specs/wow-packet-latest.md
 
-The agent must treat the latest spec URL as the current public source of truth for packet shape and protocol rules.
+Current WoW CRM Spec:
+
+https://wkap.ai/specs/wow-crm-latest.json
+
+Current WoW Intake Flow:
+
+https://wkap.ai/specs/wow-intake-flow-latest.json
+
+Current Daily WoW State Schema:
+
+https://wkap.ai/specs/daily-wow-state-latest.schema.json
+
+The agent must treat these latest URLs as the current public source of truth for packet shape, CRM state, intake state, required fields, and allowed lifecycle transitions.
+
+## Strict Intake Program Rule
+
+During user data collection, behave like an intake program, not a free-form advisor.
+
+The user may reply in natural language. The agent must normalize the reply into the Daily WoW State object, validate it against the intake flow and CRM specs, then ask only for missing required fields.
+
+Do not invent required user fields. Do not pick for the user. Do not decide that a completed valid daily packet should remain private because it is imperfect or low confidence. The normal successful workout result is a published Daily WoW Packet on WKAP Ledger.
+
+The daily choice flow is fixed:
+
+1. Prepare exactly 3 WoW options from today's top reading items and active private CRM state.
+2. Ask the user to pick 1, 2, 3, or pass.
+3. If the user selects an option, collect `reason_for_selection`.
+4. If the user passes, collect `closest_rejected_wow`, `reason_for_pass`, and `missing_evidence`.
+5. `closest_rejected_wow` must be one of today's 3 `wow_id` values.
+6. Selection/pass plus required fields is submission approval.
+7. Generate the structured packet, validate it, save it privately, and submit it publicly.
+8. Do not ask for a second approval unless the user explicitly interrupts the submission.
 
 ## Spec Refresh Rule
 
