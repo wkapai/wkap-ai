@@ -248,6 +248,30 @@ The user selection/pass plus required reason completes the Daily WoW Packet and 
 
 Do not ask the user to edit the packet, approve the packet text, or request more research as part of the default routine. If the user explicitly asks to edit or research more, follow that instruction, then return to the same selection/pass plus reason flow.
 
+## Fast Choice Slate Rule
+
+The agent must separate the user-facing choice slate from the final ledger packet.
+
+Before user judgment, generate only a lightweight `DailyWoWChoiceSlate`:
+
+```yaml
+choice_slate:
+  market_date: YYYY-MM-DD
+  options:
+    - option_number: 1
+      visible_type_label: trackable | scoreable | thesis | status update | candidate
+      plain_english_title: short title
+      why_worth_watching: one or two sentences
+      evidence_to_watch: concise evidence list
+    - option_number: 2
+    - option_number: 3
+  prompt: "Pick one WoW: 1, 2, 3, or pass."
+```
+
+Do not build, print, or validate the full packet YAML before the user has made a selection/pass and provided the required reason. Keep reading-log selection, source refs, `wow_id`, lineage, and CRM state internally while showing only the slate. The first user-facing slate should be concise and should target under 10 seconds whenever recent reading context is already available.
+
+After choice plus reason exists, generate the final v0.2 Daily WoW Packet, save it privately, submit it publicly, and reconcile asynchronously.
+
 ## Daily Suggestion Display Contract
 
 Before asking the user to pick 1, 2, 3, or pass, the agent MUST show exactly 3 numbered options.

@@ -70,12 +70,36 @@ Ask the user only for information that is required and cannot be inferred or saf
 ## Strict Daily Workout
 
 - Show exactly 3 WoW signal options, numbered 1-3.
+- Show a fast lightweight choice slate first. Do not generate the full structured Daily WoW Packet before the user has selected 1, 2, 3, or pass.
+- The first user-facing slate should be concise and should target under 10 seconds whenever recent reading context is already available.
 - Any of the 3 options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, a promotion, a resolution, or a maintenance event.
 - Require `selected_wow_id` and `reason_for_selection` when the user selects an option.
 - Require `selected_wow_id: none`, `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence` when the user passes.
 - For a pass, `closest_rejected_wow` must be the `wow_id` of one of today's 3 suggested WoW signals, not a free-text rejected idea.
 - Do not run a default edit/research/confirmation loop. If the user asks for edits or more research, complete that request, then return to selection/pass plus reason.
 - Selection/pass plus reason completes the Daily WoW Packet and triggers submission to WKAP Ledger.
+
+## Fast Choice Slate Rule
+
+The agent must separate the user-facing choice slate from the final ledger packet.
+
+Before user judgment, generate only a lightweight `DailyWoWChoiceSlate`:
+
+```yaml
+choice_slate:
+  market_date: YYYY-MM-DD
+  options:
+    - option_number: 1
+      visible_type_label: trackable | scoreable | thesis | status update | candidate
+      plain_english_title: short title
+      why_worth_watching: one or two sentences
+      evidence_to_watch: concise evidence list
+    - option_number: 2
+    - option_number: 3
+  prompt: "Pick one WoW: 1, 2, 3, or pass."
+```
+
+Do not build, print, or validate the full packet YAML before the user has made a selection/pass and provided the required reason. Keep reading-log selection, source refs, `wow_id`, lineage, and CRM state internally while showing only the slate. After choice plus reason exists, generate the final v0.2 Daily WoW Packet, save it privately, submit it publicly, and reconcile asynchronously.
 
 ## Daily Suggestion Display Contract
 
