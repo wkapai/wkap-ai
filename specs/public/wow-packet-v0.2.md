@@ -81,7 +81,7 @@ packet:
   reading_log: list
   wow_items: list
   selection:
-    selected_wow_id: string | none
+    selected_wow_id: string | literal "none"
     reason_for_selection: string | null
     reason_for_pass: string | null
     closest_rejected_wow: string | null
@@ -121,7 +121,7 @@ daily_workout_contract:
     - selected_wow_id
     - reason_for_selection
   pass_requires:
-    - selected_wow_id: none
+    - selected_wow_id literal string "none"
     - reason_for_pass
     - closest_rejected_wow
     - missing_evidence
@@ -130,6 +130,8 @@ daily_workout_contract:
 The agent prepares the options. The user performs the judgment by selecting one of the 3 WoW signals or passing. User selection/pass plus the required reason completes the Daily WoW Packet and triggers submission to WKAP Ledger.
 
 The agent must remove or summarize private/confidential material and keep sensitive details in the Private WoW Journal.
+
+The pass sentinel is the literal string `"none"`, not YAML null. Final packets must include all five `selection` keys. For a selected WoW, include pass-only keys and set them to YAML null or an empty value; do not omit them.
 
 Any of the 3 daily options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, an evidence-only update, a promotion, a resolution, or a maintenance event.
 
@@ -379,6 +381,8 @@ trackable_status:
 
 A trackable must eventually become promoted_scoreable, killed, or stale. A trackable that never promotes, dies, or receives timely reviews becomes visible dead weight in the ledger.
 
+Propose `stale` only when a candidate or trackable has passed `next_review_at` or missed two expected review cycles without material confirming evidence, and today's review finds it no longer merits active monitoring. Fresh material evidence may revive stale items through the allowed `stale -> active_*` transition.
+
 ## Signal Resolution Statuses
 
 ```yaml
@@ -614,9 +618,18 @@ evidence_only_update:
   new_status: same as previous_status
   update_type: evidence
   note: Use when today's reading strengthens, weakens, or clarifies an existing item without changing its lifecycle state.
+
+thesis_status_change:
+  target_wow_type: thesis_wow
+  previous_status: active_thesis | supported | weakened
+  new_status: supported | weakened | retired
+  update_type: thesis_update
+  note: Use thesis_update only when status changes; use evidence when the thesis remains in the same status.
 ```
 
 Do not use `pending_scoreable` as the `new_status` of a promotion status update. A promotion status update marks the prior candidate or trackable as `promoted_scoreable`; the new scoreable child item carries `signal_status: pending_scoreable`. `pending_scoreable` is valid only as an evidence-only same-status update when `previous_status` is also `pending_scoreable`.
+
+Same-status updates must use `update_type: evidence`. `update_type: evidence` must not change status.
 
 ## Status Update Authority
 
@@ -717,7 +730,7 @@ packet:
       source_refs: list
       agent_facts: object
   selection:
-    selected_wow_id: string | none
+    selected_wow_id: string | literal "none"
     reason_for_selection: string | null
     reason_for_pass: string | null
     closest_rejected_wow: string | null

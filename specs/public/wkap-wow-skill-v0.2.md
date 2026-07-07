@@ -128,11 +128,11 @@ The daily choice flow is fixed:
 
 ## Spec Refresh Rule
 
-Default behavior: fetch the latest WoW Packet Spec daily before preparing a Daily WoW Packet.
+Default behavior: fetch all current WKAP WoW latest URLs daily before preparing a Daily WoW Packet: WoW Packet Spec, WoW CRM Spec, WoW Intake Flow, and Daily WoW State Schema.
 
 Minimum fallback for non-daily agents: refresh the spec at least every 30 days.
 
-The agent should record the spec version, requested latest URL, resolved versioned URL, and, when available, the fetched content SHA256 for each prepared packet.
+The agent should record the spec version, requested latest URL, resolved versioned URL, and, when available, the fetched content SHA256 for each prepared packet and skill/spec fetch.
 
 ## Scheduling Fallback
 
@@ -267,12 +267,14 @@ selected:
     missing_evidence: null
 
 passed:
+  selected_wow_id: "none"
   required:
-    - selected_wow_id: none
     - reason_for_pass
     - closest_rejected_wow
     - missing_evidence
 ```
+
+The pass sentinel is the literal string `"none"`, not YAML null. Final packets must include all five `selection` keys. For a selected WoW, include pass-only keys and set them to YAML null or an empty value; do not omit them.
 
 For a pass, `closest_rejected_wow` must be the `wow_id` of one of today's 3 suggested WoW signals. Do not invent a new prose rejected idea at selection time.
 
@@ -610,6 +612,7 @@ thesis_supported_or_weakened:
   previous_status: active_thesis | supported | weakened
   new_status: supported | weakened | retired
   update_type: thesis_update
+  note: Use thesis_update only when status changes; use update_type evidence when the thesis remains in the same status.
 
 ```
 
@@ -648,9 +651,11 @@ After a successful public submission, update the local CRM files with the public
 
 Status changes must be append-only.
 
-The agent maintenance loop prepares `status_update` items for resolution, promotion, killed, stale, voided, invalid_test, or other updates.
+The agent maintenance loop prepares `status_update` items for resolution, promotion, killed, stale, voided, invalid_test, evidence, or other updates.
 
 The agent should prepare unresolved-to-voided `status_update` items after the default 30-day unresolved grace window when a scoreable signal remains unjudgeable.
+
+For `candidate_wow` and `trackable_wow`, propose `stale` only when the item has passed `next_review_at` or missed two expected review cycles without material confirming evidence, and today's review finds it no longer merits active monitoring. Fresh material evidence may revive stale items through the allowed `stale -> active_*` transition.
 
 Status updates reference `target_wow_type`, `target_wow_id`, and `target_root_wow_id`. They are not new market calls and not lineage nodes.
 
@@ -701,7 +706,7 @@ status_update_required_fields:
   - evidence_summary
 ```
 
-The agent must not invent transitions outside the allowed table. If evidence strengthens or weakens an item but does not change lifecycle state, use `update_type: evidence` and keep `new_status` equal to `previous_status`.
+The agent must not invent transitions outside the allowed table. If evidence strengthens or weakens an item but does not change lifecycle state, use `update_type: evidence` and keep `new_status` equal to `previous_status`. Same-status updates must use `update_type: evidence`; `update_type: evidence` must not change status.
 
 The local CRM files must store enough information for the next run to reconstruct current state without reading every old packet from scratch:
 

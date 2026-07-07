@@ -1966,6 +1966,9 @@ packet:
         daily_state = self.client.get("/specs/daily-wow-state-v0.2.schema.json")
         skill = self.client.get("/skills/wkap-wow-skill-v0.2.md")
         codex_skill = self.client.get("/skills/wkap-wow-codex/SKILL.md")
+        codex_packet_template = self.client.get("/skills/wkap-wow-codex/references/daily-packet-template.md")
+        codex_private_template = self.client.get("/skills/wkap-wow-codex/references/private-journal-template.md")
+        codex_packet_snapshot = self.client.get("/skills/wkap-wow-codex/references/wow-packet-v0.2.md")
         packet_latest = self.client.get("/specs/wow-packet-latest.md")
         crm_latest = self.client.get("/specs/wow-crm-latest.json")
         intake_latest = self.client.get("/specs/wow-intake-flow-latest.json")
@@ -1978,18 +1981,28 @@ packet:
         self.assertEqual(daily_state.status_code, 200)
         self.assertEqual(skill.status_code, 200)
         self.assertEqual(codex_skill.status_code, 200)
+        self.assertEqual(codex_packet_template.status_code, 200)
+        self.assertEqual(codex_private_template.status_code, 200)
+        self.assertEqual(codex_packet_snapshot.status_code, 200)
         self.assertEqual(packet.headers["Content-Type"], "text/markdown; charset=utf-8")
         self.assertEqual(crm.headers["Content-Type"], "application/json; charset=utf-8")
         self.assertEqual(intake.headers["Content-Type"], "application/json; charset=utf-8")
         self.assertEqual(daily_state.headers["Content-Type"], "application/json; charset=utf-8")
         self.assertEqual(skill.headers["Content-Type"], "text/markdown; charset=utf-8")
         self.assertEqual(codex_skill.headers["Content-Type"], "text/markdown; charset=utf-8")
+        self.assertEqual(codex_packet_template.headers["Content-Type"], "text/markdown; charset=utf-8")
+        self.assertEqual(codex_private_template.headers["Content-Type"], "text/markdown; charset=utf-8")
+        self.assertEqual(codex_packet_snapshot.headers["Content-Type"], "text/markdown; charset=utf-8")
         self.assertEqual(json.loads(crm.content)["selection_rules"]["daily_options_required"], 3)
         self.assertIn("awaiting_user_choice", json.loads(intake.content)["states"])
         self.assertIn("wow_options", json.loads(daily_state.content)["required"])
         self.assertContains(codex_skill, "name: wkap-wow")
         self.assertContains(codex_skill, "Private WoW Journal")
         self.assertContains(codex_skill, "status_update")
+        self.assertContains(codex_packet_template, 'selected_wow_id: "none"')
+        self.assertContains(codex_packet_template, 'literal string `"none"`')
+        self.assertContains(codex_private_template, "Do not hardcode a machine-specific path")
+        self.assertContains(codex_packet_snapshot, 'literal string `"none"`')
         self.assertEqual(packet_latest.status_code, 302)
         self.assertEqual(packet_latest.headers["Location"], "/specs/wow-packet-v0.2.md")
         self.assertEqual(crm_latest.status_code, 302)
@@ -2000,7 +2013,7 @@ packet:
         self.assertEqual(daily_state_latest.headers["Location"], "/specs/daily-wow-state-v0.2.schema.json")
         self.assertEqual(skill_latest.status_code, 302)
         self.assertEqual(skill_latest.headers["Location"], "/skills/wkap-wow-skill-v0.2.md")
-        for response in (packet, skill, codex_skill):
+        for response in (packet, skill, codex_skill, codex_packet_template, codex_private_template, codex_packet_snapshot):
             self.assertFalse(response.content.startswith(b"\xef\xbb\xbf"))
 
     def test_wow_protocol_generated_specs_are_in_sync(self):
@@ -2034,6 +2047,15 @@ packet:
         self.assertIn("pending_scoreable", crm["allowed_status_transitions"]["scoreable_signal"]["pending_scoreable"])
         self.assertIn("evidence", crm["update_type_to_new_status"])
         self.assertIn("active_trackable", crm["update_type_to_new_status"]["evidence"])
+        self.assertEqual(crm["same_status_update_rule"], "If new_status equals previous_status, update_type must be evidence. If update_type is evidence, new_status must equal previous_status.")
+        self.assertIn("missed two expected review cycles", crm["stale_rule"])
+        self.assertEqual(crm["selection_rules"]["pass"]["selected_wow_id"], "none")
+        self.assertEqual(crm["selection_rules"]["pass"]["selected_wow_id_semantics"], "literal_string_not_yaml_null")
+        self.assertEqual(
+            crm["selection_rules"]["final_packet_selection_keys_required"],
+            ["selected_wow_id", "reason_for_selection", "reason_for_pass", "closest_rejected_wow", "missing_evidence"],
+        )
+        self.assertEqual(crm["selection_rules"]["pass_only_fields_for_selected_wow"], "include_as_null_or_empty")
 
     def test_wow_intake_and_state_schema_require_visible_daily_options(self):
         intake = json.loads(self.client.get("/specs/wow-intake-flow-v0.2.json").content)
@@ -2145,6 +2167,10 @@ packet:
         self.assertIn("signal_status: pending_scoreable", body)
         self.assertIn("evidence_only_update", body)
         self.assertIn("update_type: evidence", body)
+        self.assertIn('The pass sentinel is the literal string `"none"`, not YAML null', body)
+        self.assertIn("Final packets must include all five `selection` keys", body)
+        self.assertIn("Same-status updates must use `update_type: evidence`", body)
+        self.assertIn("Propose `stale` only when a candidate or trackable has passed `next_review_at`", body)
 
     def test_wkap_wow_skill_markdown_contains_private_journal_contract(self):
         response = self.client.get("/skills/wkap-wow-skill-v0.2.md")
@@ -2164,7 +2190,7 @@ packet:
         self.assertIn("normalize the reply into the Daily WoW State object", body)
         self.assertIn("Do not invent required user fields", body)
         self.assertIn("The daily choice flow is fixed", body)
-        self.assertIn("fetch the latest WoW Packet Spec daily", body)
+        self.assertIn("fetch all current WKAP WoW latest URLs daily", body)
         self.assertIn("refresh the spec at least every 30 days", body)
         self.assertIn("setup_mode: low_friction_defaults_first", body)
         self.assertIn("ask_user_only_when_blocked: true", body)
@@ -2263,17 +2289,27 @@ packet:
         self.assertIn("Strict Intake Program Rule", body)
         self.assertIn("behave like an intake program", body)
         self.assertIn("Selection/pass plus required fields completes the Daily WoW Packet", body)
-        self.assertIn("C:\\Users\\ASUS\\Documents\\wkap\\WKAP WoW Journal", body)
+        self.assertNotIn("C:\\Users", body)
+        self.assertNotIn("ASUS", body)
+        self.assertNotIn("For this repo", body)
+        self.assertNotIn("In this repo", body)
+        self.assertIn("`WKAP WoW Journal/` in the active workspace by default", body)
+        self.assertIn("<active-workspace>/WKAP WoW Journal/", body)
         self.assertIn("If the journal folder or required files are missing, create them before the first prepared packet", body)
         self.assertIn("daily WoW", body)
         self.assertIn("resolved US trading date", body)
         self.assertIn("America/New_York", body)
         self.assertIn("ledger@wkap.ai", body)
         self.assertIn("Daily WoW Packet - {market_date} - {investor_id_or_agent_label}", body)
+        self.assertIn('literal string `"none"`', body)
         self.assertIn("update_type: evidence", body)
         self.assertIn("new_status` equal to `previous_status", body)
-        self.assertIn("Codex Local Journal Layout", body)
-        self.assertIn("Daily packets go in `daily\\YYYY-MM-DD.md`", body)
+        self.assertIn("Same-status updates must use `update_type: evidence`", body)
+        self.assertIn("Use `stale` for a candidate or trackable only when it has passed `next_review_at`", body)
+        self.assertIn("Codex Journal Layout", body)
+        self.assertNotIn("Codex Local Journal Layout", body)
+        self.assertNotIn("daily\\", body)
+        self.assertIn("Daily packets go in `daily/YYYY-MM-DD.md`", body)
         self.assertIn("tell the user the journal path and whether the local files were created or already existed", body)
         self.assertIn("use a stable local draft identity and do not block setup", body)
         self.assertIn("infer the daily send time from the user's behavior pattern", body)
@@ -2297,6 +2333,11 @@ packet:
         self.assertIn("WoW Type Decision Rules", body)
         self.assertIn("Agent CRM Operating Loop", body)
         self.assertIn("Do not use `pending_scoreable` as a `status_update.new_status`", body)
+        self.assertIn("https://wkap.ai/skills/wkap-wow-codex/references/daily-packet-template.md", body)
+        self.assertIn("https://wkap.ai/skills/wkap-wow-codex/references/private-journal-template.md", body)
+        self.assertIn("https://wkap.ai/skills/wkap-wow-codex/references/wow-packet-v0.2.md", body)
+        self.assertIn("fall back to `https://wkap.ai/specs/wow-packet-latest.md`", body)
+        self.assertNotIn("read `references/", body)
 
     def test_pages_expose_agent_search_metadata(self):
         run_id = "00000000-0000-0000-0000-000000000009"
@@ -2539,6 +2580,46 @@ packet:
         self.assertEqual(status_update["update_type"], "evidence")
         self.assertEqual(status_update["previous_status"], "active_trackable")
         self.assertEqual(status_update["new_status"], "active_trackable")
+
+    def test_same_status_update_requires_evidence_update_type(self):
+        body = self.structured_target_update_packet_body(
+            market_date="2026-07-02",
+            target_wow_id="WOW-w0202-2026-06-30-001",
+            target_wow_type="thesis_wow",
+            previous_status="supported",
+            new_status="supported",
+            update_type="thesis_update",
+        )
+        raw = self.raw_email(
+            sender="bad-same-status-update@example.com",
+            subject="Daily WoW Packet - 2026-07-02 - Bad Evidence Agent",
+            body=body,
+        )
+
+        with self.assertRaises(ParseError) as exc:
+            parse_wow(raw)
+
+        self.assertIn("same-status updates must use update_type evidence", str(exc.exception))
+
+    def test_evidence_update_type_cannot_change_status(self):
+        body = self.structured_target_update_packet_body(
+            market_date="2026-07-02",
+            target_wow_id="WOW-w0202-2026-06-29-001",
+            target_wow_type="trackable_wow",
+            previous_status="active_trackable",
+            new_status="promoted_scoreable",
+            update_type="evidence",
+        )
+        raw = self.raw_email(
+            sender="bad-evidence-transition@example.com",
+            subject="Daily WoW Packet - 2026-07-02 - Bad Evidence Agent",
+            body=body,
+        )
+
+        with self.assertRaises(ParseError) as exc:
+            parse_wow(raw)
+
+        self.assertIn("update_type evidence requires new_status to equal previous_status", str(exc.exception))
 
     def test_one_investor_lifecycle_crm_covers_all_allowed_status_transitions(self):
         investor_sender = "one-crm-investor@example.com"

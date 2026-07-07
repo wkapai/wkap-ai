@@ -50,7 +50,7 @@ The daily choice flow is fixed: prepare exactly 3 options, ask the user to pick 
 
 When installing this skill or setting up a recurring WKAP task, use defaults and infer behavior before asking questions.
 
-- Private journal: create or use local Markdown files in `WKAP WoW Journal/` in the active workspace by default. In this repo, that is `C:\Users\ASUS\Documents\wkap\WKAP WoW Journal`.
+- Private journal: create or use local Markdown files in `WKAP WoW Journal/` in the active workspace by default. If no writable workspace exists, use the nearest user-owned durable Markdown store and tell the user where it is.
 - If the journal folder or required files are missing, create them before the first prepared packet.
 - Agent memory: may be used as a cache, but must not be the only durable journal when local files are available.
 - `investor_id`: use the known WKAP investor ID if available. If unknown, use a stable local draft identity and do not block setup. Update the mapping after WKAP assigns or confirms a public investor ID.
@@ -79,7 +79,7 @@ Ask the user only for information that is required and cannot be inferred or saf
 - Do not force a fixed type mix. The 3 options must be the highest-value choices for today's evidence and CRM state, not one item from each `wow_type`; repeated types are valid when they are the best choices.
 - Any of the 3 options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, an evidence-only update, a promotion, a resolution, or a maintenance event.
 - Require `selected_wow_id` and `reason_for_selection` when the user selects an option.
-- Require `selected_wow_id: none`, `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence` when the user passes.
+- Require `selected_wow_id` to be the literal string `"none"`, plus `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence`, when the user passes.
 - For a pass, `closest_rejected_wow` must be the `wow_id` of one of today's 3 suggested WoW signals, not a free-text rejected idea.
 - Do not run a default edit/research/confirmation loop. If the user asks for edits or more research, complete that request, then return to selection/pass plus reason.
 - Selection/pass plus reason completes the Daily WoW Packet and triggers submission to WKAP Ledger. After the user gives the completed choice/pass response, immediately acknowledge that the choice is accepted, then save, submit, and reconcile asynchronously; the user should not need to wait for packet generation, ledger send, receipt reconciliation, or public URL verification.
@@ -198,9 +198,13 @@ Status update playbook:
 - `scoreable_signal unresolved -> resolved_correct | resolved_incorrect | invalid_test | unresolved | voided`: use `update_type: evidence` for same-status evidence updates, otherwise use the matching `update_type` and include evidence.
 - `candidate_wow`, `trackable_wow`, or `thesis_wow` same-status evidence update: use `update_type: evidence`, set `new_status` equal to `previous_status`, and include `evidence_summary`.
 - `candidate_wow` or `trackable_wow -> killed | stale`: use `update_type: killed` or `stale`.
-- `thesis_wow -> supported | weakened | retired`: use `update_type: thesis_update`.
+- `thesis_wow -> supported | weakened | retired`: use `update_type: thesis_update` only when the status changes; use `update_type: evidence` when the thesis remains in the same status.
 
 Do not use `pending_scoreable` as a `status_update.new_status`. A promotion update marks the old item as `promoted_scoreable`; the new child scoreable starts with `signal_status: pending_scoreable`.
+
+Same-status updates must use `update_type: evidence`. `update_type: evidence` must not change status.
+
+Use `stale` for a candidate or trackable only when it has passed `next_review_at` or missed two expected review cycles without material confirming evidence, and today's review finds it no longer merits active monitoring.
 
 ## Lifecycle Sync Contract
 
@@ -214,13 +218,13 @@ Use stable IDs as the sync keys: `packet_id`, `investor_id`, `wow_id`, `root_wow
 
 After public submission, update the local CRM files with the public URL, receipt/public verification status, and any lifecycle transition. A day is not publicly done until it appears on WKAP Ledger.
 
-## Codex Local Journal Layout
+## Codex Journal Layout
 
-For this repo, create/use:
+For Codex workspaces with filesystem access, create/use this workspace-relative layout:
 
 ```text
-C:\Users\ASUS\Documents\wkap\WKAP WoW Journal\
-  daily\
+<active-workspace>/WKAP WoW Journal/
+  daily/
   active-trackables.md
   pending-scoreables.md
   thesis-map.md
@@ -228,7 +232,7 @@ C:\Users\ASUS\Documents\wkap\WKAP WoW Journal\
   public-verification.md
 ```
 
-Daily packets go in `daily\YYYY-MM-DD.md`.
+Daily packets go in `daily/YYYY-MM-DD.md`.
 
 After setup, tell the user the journal path and whether the local files were created or already existed.
 
@@ -252,7 +256,7 @@ Use the subject convention:
 Daily WoW Packet - {market_date} - {investor_id_or_agent_label}
 ```
 
-Use Markdown with one fenced YAML block in the email body. `references/daily-packet-template.md` shows the packet shape.
+Use Markdown with one fenced YAML block in the email body. The packet template is available at `https://wkap.ai/skills/wkap-wow-codex/references/daily-packet-template.md`. If that reference is unavailable, use `https://wkap.ai/specs/wow-packet-latest.md`.
 
 The YAML block is the canonical public packet artifact. Keep it valid YAML and include a top-level `packet:` object.
 
@@ -260,6 +264,7 @@ Attachments are optional and non-canonical unless a later public spec defines th
 
 ## Reference Files
 
-- For the packet template, read `references/daily-packet-template.md`.
-- For private journal structure, read `references/private-journal-template.md`.
-- For the v0.2 protocol snapshot, read `references/wow-packet-v0.2.md`.
+- Packet template: `https://wkap.ai/skills/wkap-wow-codex/references/daily-packet-template.md`.
+- Private journal structure: `https://wkap.ai/skills/wkap-wow-codex/references/private-journal-template.md`.
+- v0.2 protocol snapshot: `https://wkap.ai/skills/wkap-wow-codex/references/wow-packet-v0.2.md`.
+- If these Codex reference URLs are unavailable, fall back to `https://wkap.ai/specs/wow-packet-latest.md`, `https://wkap.ai/specs/wow-crm-latest.json`, `https://wkap.ai/specs/wow-intake-flow-latest.json`, and `https://wkap.ai/specs/daily-wow-state-latest.schema.json`.

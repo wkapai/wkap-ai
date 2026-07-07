@@ -53,6 +53,8 @@ crm:
     thesis_update: [supported, weakened, retired]
     evidence: [active_candidate, active_trackable, pending_scoreable, active_thesis, stale, supported, weakened, unresolved]
     other: []
+  same_status_update_rule: "If new_status equals previous_status, update_type must be evidence. If update_type is evidence, new_status must equal previous_status."
+  stale_rule: "For candidate_wow or trackable_wow, propose stale only when the item has passed next_review_at or missed two expected review cycles without material confirming evidence, and today's review finds it no longer merits active monitoring. Fresh material evidence may revive stale items through the allowed stale -> active transition."
   selection_rules:
     daily_options_required: 3
     daily_suggestion_display:
@@ -75,9 +77,12 @@ crm:
       selected_wow_id_must_be_one_of_today_options: true
       pass_fields_must_be_blank: [reason_for_pass, closest_rejected_wow, missing_evidence]
     pass:
-      selected_wow_id: none
+      selected_wow_id: "none"
+      selected_wow_id_semantics: literal_string_not_yaml_null
       required_fields: [reason_for_pass, closest_rejected_wow, missing_evidence]
       closest_rejected_wow_must_be_one_of_today_options: true
+    final_packet_selection_keys_required: [selected_wow_id, reason_for_selection, reason_for_pass, closest_rejected_wow, missing_evidence]
+    pass_only_fields_for_selected_wow: include_as_null_or_empty
     selection_or_pass_plus_required_reason_completes_packet: true
     agent_must_not_run_second_confirmation_loop: true
   backend_behavior:

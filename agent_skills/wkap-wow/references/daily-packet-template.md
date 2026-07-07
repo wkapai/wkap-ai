@@ -1,4 +1,4 @@
-﻿# Daily WoW Packet Template
+# Daily WoW Packet Template
 
 ```markdown
 # WKAP Daily WoW Packet
@@ -40,11 +40,11 @@ packet:
   reading_log: []
   wow_items: []
   selection:
-    selected_wow_id: none
-    reason_for_selection:
-    reason_for_pass:
-    closest_rejected_wow:
-    missing_evidence:
+    selected_wow_id: "none"
+    reason_for_selection: null
+    reason_for_pass: null
+    closest_rejected_wow: null
+    missing_evidence: null
   validation_notes:
     schema_valid: true
     missing_fields: []
@@ -67,9 +67,12 @@ Rules:
 - Use `status_update` only for append-only updates to existing WoWs, including evidence-only updates that keep the same status.
 - Every `status_update` must include `target_wow_type`, `target_wow_id`, `target_root_wow_id`, `update_type`, `previous_status`, and `new_status`.
 - Every status transition must follow the allowed Agent CRM status table in the public skill/spec.
+- Same-status updates must use `update_type: evidence`. `update_type: evidence` must not change status.
+- Use `stale` only when a candidate or trackable has passed review timing without material confirming evidence and today's review finds it no longer merits active monitoring.
 - Do not use `pending_scoreable` as a promotion `status_update.new_status`; promotion updates use `promoted_scoreable`, while the new child scoreable signal starts with `signal_status: pending_scoreable`. `pending_scoreable` is valid only for evidence-only same-status updates.
 - User selection/pass plus required reason completes the Daily WoW Packet and triggers submission.
 - The agent must remove or summarize private/confidential material and keep sensitive details in the Private WoW Journal.
-- If `selected_wow_id` is not `none`, leave pass-only fields blank.
-- If `selected_wow_id` is `none`, fill `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence`.
+- The pass sentinel is the literal string `"none"`, not YAML null.
+- Always include all five `selection` keys. If `selected_wow_id` is not `"none"`, set pass-only fields to YAML null or an empty value.
+- If `selected_wow_id` is `"none"`, fill `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence`.
 - On pass days, `closest_rejected_wow` must be one of today's suggested `wow_id` values, not prose.

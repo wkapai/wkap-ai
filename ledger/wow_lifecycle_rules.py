@@ -122,6 +122,10 @@ def validate_status_transition(
     update_allowed = UPDATE_TYPE_TO_NEW_STATUS.get(update_type)
     if update_allowed is None:
         return f"update_type must be one of: {', '.join(sorted(UPDATE_TYPE_TO_NEW_STATUS))}"
+    if new_status == previous_status and update_type != "evidence":
+        return f"same-status updates must use update_type evidence, not {update_type}"
+    if update_type == "evidence" and new_status != previous_status:
+        return "update_type evidence requires new_status to equal previous_status"
     if update_allowed and new_status not in update_allowed:
         return f"update_type {update_type} does not allow new_status {new_status}"
     return ""

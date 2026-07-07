@@ -2,11 +2,7 @@
 
 Recommended user-owned Markdown structure:
 
-Default first. Use local Markdown files in `WKAP WoW Journal/` in the active workspace or user documents area unless the user asks for a different path. Create the folder and required files if missing. When running in this repo, use:
-
-```text
-C:\Users\ASUS\Documents\wkap\WKAP WoW Journal
-```
+Default first. Use local Markdown files in `WKAP WoW Journal/` in the active workspace or user documents area unless the user asks for a different path. Create the folder and required files if missing. Do not hardcode a machine-specific path; resolve the final path from the active workspace or another user-owned durable location.
 
 ```text
 WKAP WoW Journal/
@@ -31,8 +27,15 @@ daily_packet_record:
   local_journal_entry_id:
   prepared_at:
   packet_spec_version: v0.2
+  packet_spec_url_requested:
+  packet_spec_url_resolved:
+  skill_url_requested:
+  skill_url_resolved:
+  packet_spec_content_sha256:
+  skill_content_sha256:
   skill_version: v0.2
-  private_status: prepared_private
+  selection_status: incomplete
+  private_status: incomplete_private
   submission_status: not_submitted
   receipt_status: no_receipt
   public_status: not_public

@@ -34,7 +34,11 @@ Status updates must follow the allowed Agent CRM status transition table in the 
 
 Evidence-only status updates use `update_type: evidence` and keep `new_status` equal to `previous_status`.
 
+Same-status updates must use `update_type: evidence`. `update_type: evidence` must not change status. For thesis WoWs, use `thesis_update` only when the status changes; use `evidence` when the thesis remains in the same status.
+
 Do not use `pending_scoreable` as a promotion `status_update.new_status`. A promotion update marks the old candidate or trackable as `promoted_scoreable`; the new child scoreable starts with `signal_status: pending_scoreable`. `pending_scoreable` is valid only for evidence-only same-status updates.
+
+Use `stale` for a candidate or trackable only when it has passed `next_review_at` or missed two expected review cycles without material confirming evidence, and today's review finds it no longer merits active monitoring.
 
 Every public lifecycle item or status update must reconcile across WKAP backend `LedgerEvent` lifecycle logs, the public WoW page/agent facts, and the local Private WoW Journal CRM files.
 
@@ -48,8 +52,10 @@ Daily workout rule:
 4. User selects 1, 2, 3, or passes.
 5. Selection requires `reason_for_selection`.
 6. Pass requires `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence`.
-7. On pass days, `closest_rejected_wow` must be one of today's suggested `wow_id` values.
-8. Selection/pass plus required reason completes the Daily WoW Packet and triggers submission to WKAP Ledger.
+7. On pass days, `selected_wow_id` is the literal string `"none"`, not YAML null.
+8. Always include all five selection keys: `selected_wow_id`, `reason_for_selection`, `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence`. For a selected WoW, set pass-only keys to YAML null or an empty value.
+9. On pass days, `closest_rejected_wow` must be one of today's suggested `wow_id` values.
+10. Selection/pass plus required reason completes the Daily WoW Packet and triggers submission to WKAP Ledger.
 
 Daily suggestion display rule:
 

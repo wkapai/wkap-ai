@@ -27,6 +27,9 @@ MARKDOWN_RESOURCES = {
     "wow_packet_v0_2": "specs/public/wow-packet-v0.2.md",
     "wkap_wow_skill_v0_2": "specs/public/wkap-wow-skill-v0.2.md",
     "wkap_wow_codex_skill": "agent_skills/wkap-wow/SKILL.md",
+    "wkap_wow_codex_daily_packet_template": "agent_skills/wkap-wow/references/daily-packet-template.md",
+    "wkap_wow_codex_private_journal_template": "agent_skills/wkap-wow/references/private-journal-template.md",
+    "wkap_wow_codex_packet_snapshot": "agent_skills/wkap-wow/references/wow-packet-v0.2.md",
 }
 
 JSON_RESOURCES = {

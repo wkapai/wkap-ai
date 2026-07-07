@@ -77,6 +77,8 @@ def _crm_spec(source: dict) -> dict:
         "wow_types": crm["wow_types"],
         "allowed_status_transitions": crm["allowed_status_transitions"],
         "update_type_to_new_status": crm["update_type_to_new_status"],
+        "same_status_update_rule": crm["same_status_update_rule"],
+        "stale_rule": crm["stale_rule"],
         "selection_rules": crm["selection_rules"],
         "backend_behavior": crm["backend_behavior"],
     }
