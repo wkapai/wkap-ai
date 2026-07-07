@@ -87,6 +87,7 @@
   "allowed_status_transitions": {
     "candidate_wow": {
       "active_candidate": [
+        "active_candidate",
         "promoted_trackable",
         "promoted_scoreable",
         "killed",
@@ -94,22 +95,26 @@
       ],
       "stale": [
         "active_candidate",
-        "killed"
+        "killed",
+        "stale"
       ]
     },
     "trackable_wow": {
       "active_trackable": [
+        "active_trackable",
         "promoted_scoreable",
         "killed",
         "stale"
       ],
       "stale": [
         "active_trackable",
-        "killed"
+        "killed",
+        "stale"
       ]
     },
     "scoreable_signal": {
       "pending_scoreable": [
+        "pending_scoreable",
         "resolved_correct",
         "resolved_incorrect",
         "unresolved",
@@ -120,21 +125,25 @@
         "resolved_correct",
         "resolved_incorrect",
         "invalid_test",
+        "unresolved",
         "voided"
       ]
     },
     "thesis_wow": {
       "active_thesis": [
+        "active_thesis",
         "supported",
         "weakened",
         "retired"
       ],
       "supported": [
+        "supported",
         "weakened",
         "retired"
       ],
       "weakened": [
         "supported",
+        "weakened",
         "retired"
       ]
     }
@@ -165,6 +174,16 @@
       "supported",
       "weakened",
       "retired"
+    ],
+    "evidence": [
+      "active_candidate",
+      "active_trackable",
+      "pending_scoreable",
+      "active_thesis",
+      "stale",
+      "supported",
+      "weakened",
+      "unresolved"
     ],
     "other": []
   },

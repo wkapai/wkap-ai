@@ -15,8 +15,14 @@ packet:
   packet_spec_version: v0.2
   packet_spec_url: https://wkap.ai/specs/wow-packet-v0.2.md
   packet_spec_latest_url: https://wkap.ai/specs/wow-packet-latest.md
+  packet_spec_url_requested: https://wkap.ai/specs/wow-packet-latest.md
+  packet_spec_url_resolved: https://wkap.ai/specs/wow-packet-v0.2.md
+  packet_spec_content_sha256:
   skill_version: v0.2
   skill_url: https://wkap.ai/skills/wkap-wow-skill-latest.md
+  skill_url_requested: https://wkap.ai/skills/wkap-wow-skill-latest.md
+  skill_url_resolved: https://wkap.ai/skills/wkap-wow-skill-v0.2.md
+  skill_content_sha256:
   human_view:
     title:
     summary:
@@ -57,11 +63,11 @@ Rules:
 - Store `wow_id` internally, but do not show it in the default user-facing choice prompt unless the user asks for technical details.
 - The user chooses by number only: `Pick one WoW: 1, 2, 3, or pass.`
 - For `scoreable_signal`, visibly show `invalidate_test`, `resolve_by`, and `resolution_source`.
-- Default scope is one Daily WoW Packet for the current US market day, not a weekly review.
-- Use `status_update` only for append-only updates to existing WoWs.
+- Default scope is one Daily WoW Packet for the resolved US trading date, not a weekly review.
+- Use `status_update` only for append-only updates to existing WoWs, including evidence-only updates that keep the same status.
 - Every `status_update` must include `target_wow_type`, `target_wow_id`, `target_root_wow_id`, `update_type`, `previous_status`, and `new_status`.
 - Every status transition must follow the allowed Agent CRM status table in the public skill/spec.
-- Do not use `pending_scoreable` as `status_update.new_status`; promotion updates use `promoted_scoreable`, while the new child scoreable signal starts with `signal_status: pending_scoreable`.
+- Do not use `pending_scoreable` as a promotion `status_update.new_status`; promotion updates use `promoted_scoreable`, while the new child scoreable signal starts with `signal_status: pending_scoreable`. `pending_scoreable` is valid only for evidence-only same-status updates.
 - User selection/pass plus required reason completes the Daily WoW Packet and triggers submission.
 - The agent must remove or summarize private/confidential material and keep sensitive details in the Private WoW Journal.
 - If `selected_wow_id` is not `none`, leave pass-only fields blank.

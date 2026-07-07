@@ -1,4 +1,4 @@
-﻿---
+---
 name: wkap-wow
 description: "Use when helping a user run the WKAP Investor Log / Daily WoW workflow: preparing Worth Watching Workout packets, maintaining a private WoW Journal, classifying wow_type lifecycle items, tracking candidate/trackable/scoreable/thesis/status_update records, collecting the completed daily choice, and submitting completed packets to WKAP Ledger."
 ---
@@ -19,6 +19,8 @@ Use the latest public JSON specs as the execution contract when they conflict wi
 
 If Markdown and JSON specs disagree, follow the JSON execution contract, record the mismatch in the Private WoW Journal, show the mismatch to the user, and include `spec_mismatch_detected` plus mismatch details in the next packet `validation_notes`.
 
+Record both requested latest URLs and resolved versioned URLs for the skill and packet spec. When practical, also record fetched content SHA256 values.
+
 ## Strict Intake Program Rule
 
 During user data collection, behave like an intake program, not a free-form advisor. The user may reply in natural language, but you must normalize that reply into the Daily WoW State object, validate it against the intake flow and CRM specs, then ask only for missing required fields.
@@ -36,7 +38,7 @@ The daily choice flow is fixed: prepare exactly 3 options, ask the user to pick 
 3. Save every prepared Daily WoW Packet privately, including no-reply, rejected, pass, draft, and submitted days.
 4. Classify every WoW item with `wow_type`: `candidate_wow`, `trackable_wow`, `scoreable_signal`, `thesis_wow`, or `status_update`.
 5. Track private lifecycle state: candidates, active trackables, pending scoreable signals, thesis children, due reviews, and status updates.
-6. Select up to 10 reading items most worth preserving for the current US market day.
+6. Select up to 10 reading items most worth preserving for the resolved US trading date.
 7. Suggest exactly 3 WoW signals with `wow_type`, source refs, and lineage/status fields where applicable.
 8. Ask the user to choose exactly one: select 1, select 2, select 3, or pass.
 9. Ask for the required reason: `reason_for_selection` when selecting, or `reason_for_pass` when passing.
@@ -52,7 +54,7 @@ When installing this skill or setting up a recurring WKAP task, use defaults and
 - If the journal folder or required files are missing, create them before the first prepared packet.
 - Agent memory: may be used as a cache, but must not be the only durable journal when local files are available.
 - `investor_id`: use the known WKAP investor ID if available. If unknown, use a stable local draft identity and do not block setup. Update the mapping after WKAP assigns or confirms a public investor ID.
-- Send time: infer the daily send time from the user's behavior pattern after their usual investment research window. Ask only if it cannot be inferred.
+- Send time: if autonomous scheduling is available, infer the daily send time from the user's behavior pattern after their usual investment research window. If autonomous scheduling is not available, run when the user says `daily WoW` or at the start of the first agent session on a US market day when recent research context is available.
 - Research sources: default to agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and useful agent-found market items.
 - Completion: default to collecting the user's selection/pass plus required reason. That daily choice completes the Daily WoW Packet. If the user does not reply, save privately as no-reply and submit nothing publicly.
 
@@ -60,7 +62,8 @@ Ask the user only for information that is required and cannot be inferred or saf
 
 ## Daily Packet Guardrails
 
-- Default scope is one Daily WoW Packet for the current US market day.
+- Default scope is one Daily WoW Packet for the resolved US trading date.
+- Resolve `market_date` in `America/New_York`: use the current US trading date at prepare time; before the next US trading session opens, use the most recent US trading date unless the user asks for the next session; weekend or US holiday research rolls into the next US trading date unless the user asks for a catch-up packet.
 - Do not produce a past-7-day summary, weekly review, or general private research memo unless the user explicitly asks for that.
 - Recent history may be used as context, but the output must be today's structured Daily WoW Packet.
 - A prose list of top private WoWs is not enough. Save and show the full v0.2 packet structure.
@@ -74,7 +77,7 @@ Ask the user only for information that is required and cannot be inferred or saf
 - The first user-facing slate should be concise and should target under 10 seconds whenever recent reading context is already available.
 - Hard latency limit: if the agent cannot serve the first 3-option slate within 30 seconds, it must show the best available slate from current evidence and mark deeper research as pending; do not block the user's daily choice on full packet generation or extra research.
 - Do not force a fixed type mix. The 3 options must be the highest-value choices for today's evidence and CRM state, not one item from each `wow_type`; repeated types are valid when they are the best choices.
-- Any of the 3 options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, a promotion, a resolution, or a maintenance event.
+- Any of the 3 options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, an evidence-only update, a promotion, a resolution, or a maintenance event.
 - Require `selected_wow_id` and `reason_for_selection` when the user selects an option.
 - Require `selected_wow_id: none`, `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence` when the user passes.
 - For a pass, `closest_rejected_wow` must be the `wow_id` of one of today's 3 suggested WoW signals, not a free-text rejected idea.
@@ -164,7 +167,7 @@ invalid_if:
 - Use `scoreable_signal` only when the claim has `invalidate_test`, `resolve_by`, and `resolution_source`; default `signal_status` is `pending_scoreable`.
 - Use `thesis_wow` for a broader thesis that can collect child WoWs over time.
 - Use `candidate_wow` as the minimum type for any public or private WoW item. If something is only broad context, keep it in the reading log or Private WoW Journal notes instead of making it a WoW item.
-- Use `status_update` only when today's reading changes the CRM state of an existing WoW.
+- Use `status_update` when today's reading changes the CRM state of an existing WoW or adds evidence without changing state.
 - If unsure, choose the less scoreable type. Do not force weak ideas into `scoreable_signal`.
 
 ## Tracking Review
@@ -191,8 +194,9 @@ Status update playbook:
 - `candidate_wow active_candidate -> promoted_trackable`: use `update_type: promotion`; create/reference the promoted trackable.
 - `candidate_wow active_candidate -> promoted_scoreable`: use `update_type: promotion`; create/reference a child `scoreable_signal` with `signal_status: pending_scoreable`.
 - `trackable_wow active_trackable -> promoted_scoreable`: use `update_type: promotion`; create/reference a child `scoreable_signal` with `signal_status: pending_scoreable`.
-- `scoreable_signal pending_scoreable -> resolved_correct | resolved_incorrect | unresolved | invalid_test | voided`: use the matching `update_type` and include evidence.
-- `scoreable_signal unresolved -> resolved_correct | resolved_incorrect | invalid_test | voided`: use the matching `update_type` and include evidence.
+- `scoreable_signal pending_scoreable -> pending_scoreable | resolved_correct | resolved_incorrect | unresolved | invalid_test | voided`: use `update_type: evidence` for same-status evidence updates, otherwise use the matching `update_type` and include evidence.
+- `scoreable_signal unresolved -> resolved_correct | resolved_incorrect | invalid_test | unresolved | voided`: use `update_type: evidence` for same-status evidence updates, otherwise use the matching `update_type` and include evidence.
+- `candidate_wow`, `trackable_wow`, or `thesis_wow` same-status evidence update: use `update_type: evidence`, set `new_status` equal to `previous_status`, and include `evidence_summary`.
 - `candidate_wow` or `trackable_wow -> killed | stale`: use `update_type: killed` or `stale`.
 - `thesis_wow -> supported | weakened | retired`: use `update_type: thesis_update`.
 
@@ -242,9 +246,17 @@ After setup, tell the user the journal path and whether the local files were cre
 
 Send completed packets to `ledger@wkap.ai`.
 
-Use the Markdown + fenced YAML format in `references/daily-packet-template.md`.
+Use the subject convention:
+
+```text
+Daily WoW Packet - {market_date} - {investor_id_or_agent_label}
+```
+
+Use Markdown with one fenced YAML block in the email body. `references/daily-packet-template.md` shows the packet shape.
 
 The YAML block is the canonical public packet artifact. Keep it valid YAML and include a top-level `packet:` object.
+
+Attachments are optional and non-canonical unless a later public spec defines them. Reconcile both the WKAP receipt email and public WKAP URL after sending.
 
 ## Reference Files
 

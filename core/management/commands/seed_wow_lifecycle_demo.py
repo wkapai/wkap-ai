@@ -187,7 +187,7 @@ class Command(BaseCommand):
                         target=target,
                         previous_status=previous_status,
                         new_status=new_status,
-                        update_type=self._update_type_for(new_status, target.wow_type),
+                        update_type=self._update_type_for(new_status, target.wow_type, previous_status=previous_status),
                         run_id=run_id,
                         title=f"{target.theme}: {previous_status} to {new_status}",
                     )
@@ -481,7 +481,9 @@ class Command(BaseCommand):
             "agent_facts": {"wow_type": "candidate_wow", "scoreable": False, "accuracy_endpoint_eligible": False},
         }
 
-    def _update_type_for(self, new_status: str, wow_type: str) -> str:
+    def _update_type_for(self, new_status: str, wow_type: str, *, previous_status: str = "") -> str:
+        if previous_status and new_status == previous_status:
+            return "evidence"
         if new_status in {"promoted_trackable", "promoted_scoreable"}:
             return "promotion"
         if new_status in {"resolved_correct", "resolved_incorrect", "unresolved"}:

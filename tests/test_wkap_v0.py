@@ -1901,22 +1901,20 @@ packet:
         self.assertContains(setup_response, "published Daily WoW Packets, public and agent-readable")
         self.assertContains(setup_response, "Copy &amp; Paste This Agent Prompt")
         self.assertContains(setup_response, "Set up WKAP WoW for me.")
-        self.assertContains(setup_response, "Install WKAP WoW Skill as a durable skill")
-        self.assertContains(setup_response, "Use this universal skill as the source of truth")
+        self.assertContains(setup_response, "Fetch and install this durable WKAP WoW Skill")
         self.assertContains(setup_response, "If you are Codex, install this Codex-native skill")
         self.assertContains(setup_response, "verify the install by checking for a local wkap-wow/SKILL.md file")
-        self.assertContains(setup_response, "Tell me whether the install is verified")
         self.assertNotContains(setup_response, "Read and follow:")
         self.assertContains(setup_response, "adapt the universal WKAP WoW Skill to your native format and install it")
-        self.assertContains(setup_response, "Follow the skill defaults for my Private WoW Journal")
-        self.assertContains(setup_response, "tell me where it is stored")
+        self.assertContains(setup_response, "After installation, follow the installed skill and the latest JSON specs it references")
+        self.assertContains(setup_response, "Tell me whether the install is verified and where my Private WoW Journal is stored")
         self.assertNotContains(setup_response, "Store my private WoW Journal in agent memory or ask me for a local file path")
-        self.assertContains(setup_response, "When I do daily investor research in an agent-accessible browser")
+        self.assertNotContains(setup_response, "When I do daily investor research in an agent-accessible browser")
         self.assertNotContains(setup_response, "Connect your sources")
-        self.assertContains(setup_response, "Based on my behavior pattern, infer when I usually finish most of my daily market investment research")
-        self.assertContains(setup_response, "set the Daily WoW Packet send time after that")
-        self.assertContains(setup_response, "If you cannot infer it, ask me")
-        self.assertContains(setup_response, "Run the daily workflow exactly as the installed WKAP WoW Skill specifies")
+        self.assertNotContains(setup_response, "Based on my behavior pattern, infer when I usually finish most of my daily market investment research")
+        self.assertNotContains(setup_response, "set the Daily WoW Packet send time after that")
+        self.assertNotContains(setup_response, "If you cannot infer it, ask me")
+        self.assertNotContains(setup_response, "Run the daily workflow exactly as the installed WKAP WoW Skill specifies")
         self.assertNotContains(setup_response, "existing WoW signal status update")
         self.assertNotContains(setup_response, "Once per US market day, suggest exactly 3 WoW signals")
         self.assertNotContains(setup_response, "ask for my reason_for_selection")
@@ -1943,11 +1941,23 @@ packet:
         self.assertContains(setup_response, "public_submission_requires_completed_daily_choice")
         self.assertContains(setup_response, "user_decision_completes_packet")
         self.assertContains(setup_response, "required_wow_options")
-        self.assertContains(setup_response, "current_submission_format")
-        self.assertContains(setup_response, "protocol_reference_version")
+        self.assertContains(setup_response, "protocol_format_version")
+        self.assertNotContains(setup_response, "current_submission_format")
+        self.assertNotContains(setup_response, "protocol_reference_version")
         self.assertNotContains(setup_response, "Before preparing any Daily WoW Packet, read:")
         self.assertNotContains(setup_response, "```yaml")
         self.assertNotContains(setup_response, "wow_type: trackable_wow")
+
+    def test_setup_page_links_latest_live_wow_example_when_available(self):
+        raw = self.raw_email(sender="example-wow@example.com", subject="Daily WoW Packet - 2026-06-29 - Example Agent", body=self.wow_packet_body())
+        packet = create_wow_submission(raw, run_id="00000000-0000-0000-0000-000000000029")
+
+        response = self.client.get("/submit-to-wkap-ledger.html")
+
+        expected_path = f"/investors/{packet.investor.investor_id}/wows/wow-{packet.investor.investor_id}-{packet.market_date}.html"
+        self.assertContains(response, "View a live example Daily WoW Packet")
+        self.assertContains(response, expected_path)
+        self.assertContains(response, "example_daily_wow_packet_url")
 
     def test_wow_protocol_markdown_routes_are_public_and_redirect_latest(self):
         packet = self.client.get("/specs/wow-packet-v0.2.md")
@@ -1990,6 +2000,8 @@ packet:
         self.assertEqual(daily_state_latest.headers["Location"], "/specs/daily-wow-state-v0.2.schema.json")
         self.assertEqual(skill_latest.status_code, 302)
         self.assertEqual(skill_latest.headers["Location"], "/skills/wkap-wow-skill-v0.2.md")
+        for response in (packet, skill, codex_skill):
+            self.assertFalse(response.content.startswith(b"\xef\xbb\xbf"))
 
     def test_wow_protocol_generated_specs_are_in_sync(self):
         out = StringIO()
@@ -2018,6 +2030,10 @@ packet:
         self.assertEqual(display["wow_id_visibility"], "internal_only_by_default")
         self.assertIn("visible_type_label", display["required_visible_fields"])
         self.assertEqual(display["type_labels"]["scoreable_signal"], "Scoreable")
+        self.assertIn("active_trackable", crm["allowed_status_transitions"]["trackable_wow"]["active_trackable"])
+        self.assertIn("pending_scoreable", crm["allowed_status_transitions"]["scoreable_signal"]["pending_scoreable"])
+        self.assertIn("evidence", crm["update_type_to_new_status"])
+        self.assertIn("active_trackable", crm["update_type_to_new_status"]["evidence"])
 
     def test_wow_intake_and_state_schema_require_visible_daily_options(self):
         intake = json.loads(self.client.get("/specs/wow-intake-flow-v0.2.json").content)
@@ -2054,6 +2070,10 @@ packet:
         self.assertNotIn("context" + "_note", combined)
         self.assertNotIn("active_context", combined)
         self.assertNotIn("context_update", combined)
+        self.assertNotIn("why_pass: null", combined)
+        self.assertNotIn("user_rejected", combined)
+        self.assertNotIn("no_pick", combined)
+        self.assertNotIn("draft_saved", combined)
         self.assertNotRegex(combined, r"(?m)^\s*-\s*promoted\s*$")
         self.assertNotRegex(combined, r"(?m)^\s*-\s*pending\s*$")
 
@@ -2101,6 +2121,14 @@ packet:
         self.assertIn("spec_mismatch_detected", body)
         self.assertIn("reading_log_max_items: 10", body)
         self.assertIn("suggested_wow_count: 3", body)
+        self.assertIn("ledger@wkap.ai", body)
+        self.assertIn("subject_template: \"Daily WoW Packet - {market_date} - {investor_id_or_agent_label}\"", body)
+        self.assertIn("Market Date Rule", body)
+        self.assertIn("America/New_York", body)
+        self.assertIn("packet_spec_url_requested", body)
+        self.assertIn("packet_spec_url_resolved", body)
+        self.assertIn("skill_url_requested", body)
+        self.assertIn("skill_url_resolved", body)
         self.assertIn("Daily Suggestion Display Contract", body)
         self.assertIn("visible_type_label", body)
         self.assertIn("plain_english_title", body)
@@ -2115,6 +2143,8 @@ packet:
         self.assertIn("candidate_to_scoreable", body)
         self.assertIn("Do not use `pending_scoreable` as the `new_status`", body)
         self.assertIn("signal_status: pending_scoreable", body)
+        self.assertIn("evidence_only_update", body)
+        self.assertIn("update_type: evidence", body)
 
     def test_wkap_wow_skill_markdown_contains_private_journal_contract(self):
         response = self.client.get("/skills/wkap-wow-skill-v0.2.md")
@@ -2140,18 +2170,29 @@ packet:
         self.assertIn("ask_user_only_when_blocked: true", body)
         self.assertIn("durable_private_journal_required: true", body)
         self.assertIn("agent_memory_cache_only: true", body)
+        self.assertIn("submission_email: ledger@wkap.ai", body)
+        self.assertIn("submission_subject_template", body)
+        self.assertIn("record_requested_and_resolved_urls: true", body)
         self.assertIn("The agent should not start with a long interview", body)
         self.assertIn("use a stable local draft identity", body)
         self.assertIn("infer from the user's behavior pattern", body)
+        self.assertIn("autonomous scheduling is unavailable", body)
+        self.assertIn("daily WoW", body)
         self.assertIn("agent-accessible browser activity", body)
-        self.assertIn("default_packet_scope: one Daily WoW Packet for the current US market day", body)
+        self.assertIn("default_packet_scope: one Daily WoW Packet for the resolved US trading date", body)
         self.assertIn("weekly_review_requires_explicit_user_request: true", body)
-        self.assertIn("The default WKAP WoW run is one Daily WoW Packet for the current US market day", body)
+        self.assertIn("The default WKAP WoW run is one Daily WoW Packet for the resolved US trading date", body)
+        self.assertIn("Market Date Rule", body)
+        self.assertIn("America/New_York", body)
         self.assertIn("Do not summarize the user's past 7 days", body)
         self.assertIn("Suggest exactly 3 WoW signals for the user to choose from", body)
         self.assertIn("reason_for_pass", body)
+        self.assertNotIn("why_pass: null", body)
         self.assertIn("The user selection/pass plus required reason completes the Daily WoW Packet", body)
         self.assertIn("Do not ask for a second confirmation", body)
+        self.assertIn("Send completed packets to `ledger@wkap.ai`", body)
+        self.assertIn("Daily WoW Packet - {market_date} - {investor_id_or_agent_label}", body)
+        self.assertIn("one fenced YAML block", body)
         self.assertIn("Fast Choice Slate Rule", body)
         self.assertIn("DailyWoWChoiceSlate", body)
         self.assertIn("Do not build, print, or validate the full packet YAML before the user has made a selection/pass", body)
@@ -2204,6 +2245,9 @@ packet:
         self.assertIn("candidate_to_trackable", body)
         self.assertIn("trackable_to_scoreable", body)
         self.assertIn("Do not use `pending_scoreable` as the `new_status`", body)
+        self.assertIn("evidence_only_update", body)
+        self.assertIn("update_type: evidence", body)
+        self.assertIn("selection_status: selected | pass | user_no_reply | incomplete", body)
         self.assertIn("crm_record_minimum_fields", body)
 
     def test_codex_wkap_wow_skill_uses_low_friction_defaults(self):
@@ -2221,13 +2265,20 @@ packet:
         self.assertIn("Selection/pass plus required fields completes the Daily WoW Packet", body)
         self.assertIn("C:\\Users\\ASUS\\Documents\\wkap\\WKAP WoW Journal", body)
         self.assertIn("If the journal folder or required files are missing, create them before the first prepared packet", body)
+        self.assertIn("daily WoW", body)
+        self.assertIn("resolved US trading date", body)
+        self.assertIn("America/New_York", body)
+        self.assertIn("ledger@wkap.ai", body)
+        self.assertIn("Daily WoW Packet - {market_date} - {investor_id_or_agent_label}", body)
+        self.assertIn("update_type: evidence", body)
+        self.assertIn("new_status` equal to `previous_status", body)
         self.assertIn("Codex Local Journal Layout", body)
         self.assertIn("Daily packets go in `daily\\YYYY-MM-DD.md`", body)
         self.assertIn("tell the user the journal path and whether the local files were created or already existed", body)
         self.assertIn("use a stable local draft identity and do not block setup", body)
         self.assertIn("infer the daily send time from the user's behavior pattern", body)
         self.assertIn("agent-accessible browser activity", body)
-        self.assertIn("Default scope is one Daily WoW Packet for the current US market day", body)
+        self.assertIn("Default scope is one Daily WoW Packet for the resolved US trading date", body)
         self.assertIn("Do not produce a past-7-day summary, weekly review, or general private research memo", body)
         self.assertIn("A prose list of top private WoWs is not enough", body)
         self.assertIn("Do not decide to keep a completed daily choice private", body)
@@ -2467,6 +2518,28 @@ packet:
 
         self.assertIn("trackable_wow cannot transition from active_trackable to resolved_correct", str(exc.exception))
 
+    def test_evidence_only_status_update_can_keep_existing_status(self):
+        body = self.structured_target_update_packet_body(
+            market_date="2026-07-02",
+            target_wow_id="WOW-w0202-2026-06-29-001",
+            target_wow_type="trackable_wow",
+            previous_status="active_trackable",
+            new_status="active_trackable",
+            update_type="evidence",
+        )
+        raw = self.raw_email(
+            sender="evidence-update@example.com",
+            subject="Daily WoW Packet - 2026-07-02 - Evidence Update Agent",
+            body=body,
+        )
+
+        parsed = parse_wow(raw)
+
+        status_update = parsed.wow_items_json[0]
+        self.assertEqual(status_update["update_type"], "evidence")
+        self.assertEqual(status_update["previous_status"], "active_trackable")
+        self.assertEqual(status_update["new_status"], "active_trackable")
+
     def test_one_investor_lifecycle_crm_covers_all_allowed_status_transitions(self):
         investor_sender = "one-crm-investor@example.com"
         created_packets = []
@@ -2481,7 +2554,7 @@ packet:
                         target_wow_type=target_wow_type,
                         previous_status=previous_status,
                         new_status=new_status,
-                        update_type=self._update_type_for_new_status(new_status),
+                        update_type=self._update_type_for_new_status(new_status, previous_status=previous_status),
                     )
                     raw = self.raw_email(
                         sender=investor_sender,
@@ -2493,7 +2566,7 @@ packet:
                         "target_wow_type": target_wow_type,
                         "target_wow_id": f"WOW-w0202-2026-06-29-{update_index:03d}",
                         "target_root_wow_id": f"WOW-w0202-2026-06-29-{update_index:03d}",
-                        "update_type": self._update_type_for_new_status(new_status),
+                        "update_type": self._update_type_for_new_status(new_status, previous_status=previous_status),
                         "previous_status": previous_status,
                         "new_status": new_status,
                     }
@@ -2520,7 +2593,9 @@ packet:
             self.assertEqual(response.status_code, 200)
             self._assert_outside_agent_can_reconstruct_transition(response, expected)
 
-    def _update_type_for_new_status(self, new_status: str) -> str:
+    def _update_type_for_new_status(self, new_status: str, *, previous_status: str = "") -> str:
+        if previous_status and new_status == previous_status:
+            return "evidence"
         if new_status in {"promoted_trackable", "promoted_scoreable", "pending_scoreable"}:
             return "promotion"
         if new_status in {"resolved_correct", "resolved_incorrect", "unresolved"}:

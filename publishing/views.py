@@ -221,6 +221,12 @@ def home(request):
 def submit_to_ledger(request):
     canonical_url = f"{settings.WKAP_BASE_URL}/submit-to-wkap-ledger.html"
     spec = current_spec()
+    example_packet = DailyWoWPacket.objects.select_related("investor").order_by("-created_at", "-id").first()
+    example_packet_url = (
+        wow_url(example_packet.investor.investor_id, example_packet.market_date)
+        if example_packet
+        else ""
+    )
     packet_spec_url = "https://wkap.ai/specs/wow-packet-latest.md"
     wow_skill_url = "https://wkap.ai/skills/wkap-wow-skill-latest.md"
     codex_skill_url = "https://wkap.ai/skills/wkap-wow-codex/SKILL.md"
@@ -251,8 +257,8 @@ def submit_to_ledger(request):
                 {"name": "public_submission_requires_completed_daily_choice", "value": "true"},
                 {"name": "user_decision_completes_packet", "value": "true"},
                 {"name": "required_wow_options", "value": str(spec.get("schema_data", {}).get("suggested_wow_rules", {}).get("required_count", 3))},
-                {"name": "current_submission_format", "value": spec["format_version"]},
-                {"name": "protocol_reference_version", "value": "v0.2"},
+                {"name": "protocol_format_version", "value": spec["format_version"]},
+                {"name": "example_daily_wow_packet_url", "value": example_packet_url},
                 {"name": "canonical_url", "value": canonical_url},
             ],
             crawl_links=[
@@ -276,6 +282,7 @@ def submit_to_ledger(request):
                     {"@type": "HowToStep", "name": "Select WoW 1, 2, 3, or pass with the required reason"},
                 ],
             },
+            example_packet_url=example_packet_url,
         ),
     )
 

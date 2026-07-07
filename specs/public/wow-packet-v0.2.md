@@ -1,4 +1,4 @@
-﻿# WKAP WoW Packet Spec v0.2
+# WKAP WoW Packet Spec v0.2
 
 ## Metadata
 
@@ -51,12 +51,19 @@ Minimum public packet skeleton:
 packet:
   packet_id: string
   investor_id: string
+  market_date: ISO date
   created_at: ISO timestamp
   packet_spec_version: v0.2
   packet_spec_url: https://wkap.ai/specs/wow-packet-v0.2.md
   packet_spec_latest_url: https://wkap.ai/specs/wow-packet-latest.md
+  packet_spec_url_requested: string | null
+  packet_spec_url_resolved: string | null
+  packet_spec_content_sha256: string | null
   skill_version: string | null
   skill_url: string | null
+  skill_url_requested: string | null
+  skill_url_resolved: string | null
+  skill_content_sha256: string | null
   human_view:
     title: string
     summary: string
@@ -87,6 +94,14 @@ packet:
 
 Persistent identity is required. No persistent identity, no durable calibration record.
 
+When an agent fetches a `latest` URL, it should record both the requested latest URL and the resolved versioned URL. When practical, it should also record the fetched content SHA256 for the skill and packet spec.
+
+## Market Date Rule
+
+A Daily WoW Packet resolves `market_date` in `America/New_York`.
+
+If the current date is a US trading day, use that trading date at packet preparation time. Before the next US trading session opens, use the most recent US trading date unless the user explicitly asks to prepare the next session's packet. Weekend or US market-holiday research rolls into the next US trading date unless the user explicitly asks for a catch-up packet for the most recent trading date.
+
 ## Daily Workout Contract
 
 A Daily WoW Packet represents one market-day workout.
@@ -116,11 +131,26 @@ The agent prepares the options. The user performs the judgment by selecting one 
 
 The agent must remove or summarize private/confidential material and keep sensitive details in the Private WoW Journal.
 
-Any of the 3 daily options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, a promotion, a resolution, or a maintenance event.
+Any of the 3 daily options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, an evidence-only update, a promotion, a resolution, or a maintenance event.
 
 When the user passes, `closest_rejected_wow` MUST be the `wow_id` of one of today's 3 suggested WoW signals. It is not a free-text idea field; put the idea text inside the suggested WoW item.
 
 If the user does not provide a choice or required reason, the packet is incomplete for public submission. Save it privately as no-reply or incomplete, and ask only for the missing required field.
+
+## Public Submission Rules
+
+Completed packets are submitted to WKAP Ledger by email:
+
+```yaml
+submission:
+  channel: email
+  to: ledger@wkap.ai
+  subject_template: "Daily WoW Packet - {market_date} - {investor_id_or_agent_label}"
+  body_format: Markdown with one fenced YAML block
+  canonical_artifact: fenced YAML block containing top-level packet
+```
+
+The fenced YAML block is canonical for public parsing. Attachments are optional and non-canonical unless a later spec defines them. After sending, agents should reconcile both the WKAP receipt email and the public WKAP URL.
 
 ## Daily Suggestion Display Contract
 
@@ -239,7 +269,7 @@ thesis_wow:
   scoreable: false
 
 status_update:
-  use_when: Today's reading changes the CRM state of an existing WoW.
+  use_when: Today's reading changes the CRM state of an existing WoW or adds evidence without changing state.
   required_target_fields:
     - target_wow_type
     - target_wow_id
@@ -419,7 +449,7 @@ status_update:
   target_wow_type: candidate_wow | trackable_wow | scoreable_signal | thesis_wow
   target_wow_id: string
   target_root_wow_id: string
-  update_type: resolution | promotion | killed | stale | voided | invalid_test | thesis_update | other
+  update_type: resolution | promotion | killed | stale | voided | invalid_test | thesis_update | evidence | other
   previous_status: string
   new_status: string
   created_at: ISO timestamp
@@ -474,6 +504,7 @@ Allowed status transitions:
 allowed_status_transitions:
   candidate_wow:
     active_candidate:
+      - active_candidate
       - promoted_trackable
       - promoted_scoreable
       - killed
@@ -481,16 +512,20 @@ allowed_status_transitions:
     stale:
       - active_candidate
       - killed
+      - stale
   trackable_wow:
     active_trackable:
+      - active_trackable
       - promoted_scoreable
       - killed
       - stale
     stale:
       - active_trackable
       - killed
+      - stale
   scoreable_signal:
     pending_scoreable:
+      - pending_scoreable
       - resolved_correct
       - resolved_incorrect
       - unresolved
@@ -500,17 +535,21 @@ allowed_status_transitions:
       - resolved_correct
       - resolved_incorrect
       - invalid_test
+      - unresolved
       - voided
   thesis_wow:
     active_thesis:
+      - active_thesis
       - supported
       - weakened
       - retired
     supported:
+      - supported
       - weakened
       - retired
     weakened:
       - supported
+      - weakened
       - retired
 ```
 
@@ -568,9 +607,16 @@ scoreable_voided:
   previous_status: pending_scoreable | unresolved
   new_status: voided
   update_type: voided
+
+evidence_only_update:
+  target_wow_type: candidate_wow | trackable_wow | scoreable_signal | thesis_wow
+  previous_status: active_candidate | active_trackable | pending_scoreable | active_thesis | stale | supported | weakened | unresolved
+  new_status: same as previous_status
+  update_type: evidence
+  note: Use when today's reading strengthens, weakens, or clarifies an existing item without changing its lifecycle state.
 ```
 
-Do not use `pending_scoreable` as the `new_status` of a status update. A promotion status update marks the prior candidate or trackable as `promoted_scoreable`; the new scoreable child item carries `signal_status: pending_scoreable`.
+Do not use `pending_scoreable` as the `new_status` of a promotion status update. A promotion status update marks the prior candidate or trackable as `promoted_scoreable`; the new scoreable child item carries `signal_status: pending_scoreable`. `pending_scoreable` is valid only as an evidence-only same-status update when `previous_status` is also `pending_scoreable`.
 
 ## Status Update Authority
 

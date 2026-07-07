@@ -20,7 +20,7 @@ Type decision shortcuts:
 - `trackable_wow`: concrete pattern to monitor with evidence/cadence, but not binary.
 - `scoreable_signal`: falsifiable claim with `invalidate_test`, `resolve_by`, and `resolution_source`; default `signal_status: pending_scoreable`.
 - `thesis_wow`: broader thesis with child WoWs.
-- `status_update`: append-only CRM state change for an existing WoW.
+- `status_update`: append-only CRM state or evidence update for an existing WoW.
 
 Every WoW item must start at least as `candidate_wow`. Broad context belongs in the reading log or Private WoW Journal notes, not as its own WoW type.
 
@@ -32,7 +32,9 @@ Status updates are append-only maintenance events. They use `target_wow_type`, `
 
 Status updates must follow the allowed Agent CRM status transition table in the public skill/spec.
 
-Do not use `pending_scoreable` as `status_update.new_status`. A promotion update marks the old candidate or trackable as `promoted_scoreable`; the new child scoreable starts with `signal_status: pending_scoreable`.
+Evidence-only status updates use `update_type: evidence` and keep `new_status` equal to `previous_status`.
+
+Do not use `pending_scoreable` as a promotion `status_update.new_status`. A promotion update marks the old candidate or trackable as `promoted_scoreable`; the new child scoreable starts with `signal_status: pending_scoreable`. `pending_scoreable` is valid only for evidence-only same-status updates.
 
 Every public lifecycle item or status update must reconcile across WKAP backend `LedgerEvent` lifecycle logs, the public WoW page/agent facts, and the local Private WoW Journal CRM files.
 

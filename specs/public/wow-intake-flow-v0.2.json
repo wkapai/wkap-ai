@@ -4,6 +4,40 @@
   "latest_url": "https://wkap.ai/specs/wow-intake-flow-latest.json",
   "crm_spec_url": "https://wkap.ai/specs/wow-crm-latest.json",
   "goal": "Make every agent behave like the same intake program during Daily WoW data collection while still accepting natural conversation as input.",
+  "market_date_rule": {
+    "timezone": "America/New_York",
+    "default": "Use the current US trading date at packet preparation time.",
+    "off_hours": "Before the next US trading session opens, use the most recent US trading date unless the user explicitly asks to prepare the next session's packet.",
+    "weekend_or_holiday": "Roll research into the next US trading date unless the user explicitly asks for a catch-up packet for the most recent trading date."
+  },
+  "scheduling": {
+    "autonomous_supported": "Schedule the daily workflow after the user's inferred investment research window.",
+    "autonomous_not_supported": "Run the workflow when the user says daily WoW, and at the start of the first agent session on a US market day when recent research context is available.",
+    "no_silent_cron_promise": true
+  },
+  "submission": {
+    "channel": "email",
+    "to": "ledger@wkap.ai",
+    "subject_template": "Daily WoW Packet - {market_date} - {investor_id_or_agent_label}",
+    "body_format": "Markdown with one fenced YAML block.",
+    "canonical_artifact": "The fenced YAML block is canonical and must contain top-level packet:.",
+    "attachments": "Optional and non-canonical unless a later spec defines them.",
+    "reconcile": [
+      "receipt_email",
+      "public_wkap_url"
+    ]
+  },
+  "artifact_integrity": {
+    "record_requested_and_resolved_urls": true,
+    "recommended_fields": [
+      "skill_url_requested",
+      "skill_url_resolved",
+      "packet_spec_url_requested",
+      "packet_spec_url_resolved",
+      "skill_content_sha256",
+      "packet_spec_content_sha256"
+    ]
+  },
   "states": {
     "setup": {
       "required_action": "install_skill_and_prepare_private_journal",

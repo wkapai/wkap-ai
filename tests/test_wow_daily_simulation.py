@@ -211,7 +211,12 @@ class DailyWoWSimulationTests(TestCase):
                 stdout=output,
             )
             report = json.loads(output.getvalue())
-            self.assertEqual(report["lifecycle_transition_count"], 27)
+            expected_transition_count = sum(
+                len(new_statuses)
+                for previous_map in ALLOWED_STATUS_TRANSITIONS.values()
+                for new_statuses in previous_map.values()
+            )
+            self.assertEqual(report["lifecycle_transition_count"], expected_transition_count)
             self.assertEqual(report["published_case_count"], 0)
             self.assertFalse([case for case in report["cases"] if case["errors"]])
             self.assertTrue((Path(temp_dir) / "user-judgment-profile.md").exists())
@@ -347,8 +352,13 @@ class DailyWoWSimulationTests(TestCase):
                 write_journal=True,
             )
 
-        self.assertEqual(report["lifecycle_transition_count"], 27)
-        self.assertGreaterEqual(report["completed_case_count"], 32)
+        expected_transition_count = sum(
+            len(new_statuses)
+            for previous_map in ALLOWED_STATUS_TRANSITIONS.values()
+            for new_statuses in previous_map.values()
+        )
+        self.assertEqual(report["lifecycle_transition_count"], expected_transition_count)
+        self.assertGreaterEqual(report["completed_case_count"], expected_transition_count)
         self.assertFalse([case for case in report["cases"] if case["errors"]])
 
     def test_run_simulation_can_verify_published_public_pages(self):
@@ -373,9 +383,14 @@ class DailyWoWSimulationTests(TestCase):
                 )
 
         verification = report["public_verification"]
-        self.assertEqual(report["published_case_count"], 32)
-        self.assertEqual(verification["pages_checked"], 32)
-        self.assertEqual(verification["status_update_pages"], 27)
-        self.assertEqual(verification["status_update_events"], 27)
+        expected_transition_count = sum(
+            len(new_statuses)
+            for previous_map in ALLOWED_STATUS_TRANSITIONS.values()
+            for new_statuses in previous_map.values()
+        )
+        self.assertEqual(report["published_case_count"], report["case_count"] - 1)
+        self.assertEqual(verification["pages_checked"], report["published_case_count"])
+        self.assertEqual(verification["status_update_pages"], expected_transition_count)
+        self.assertEqual(verification["status_update_events"], expected_transition_count)
         self.assertGreaterEqual(verification["repeated_type_pages"], 1)
         self.assertEqual(verification["errors"], [])

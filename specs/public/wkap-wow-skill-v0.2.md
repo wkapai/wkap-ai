@@ -1,4 +1,4 @@
-﻿# WKAP WoW Skill v0.2
+# WKAP WoW Skill v0.2
 
 ## Metadata
 
@@ -25,6 +25,8 @@ agent_facts:
   current_daily_wow_state_schema: https://wkap.ai/specs/daily-wow-state-latest.schema.json
   default_spec_fetch: daily
   minimum_fallback_refresh_days: 30
+  submission_email: ledger@wkap.ai
+  submission_subject_template: "Daily WoW Packet - {market_date} - {investor_id_or_agent_label}"
   private_journal_required: true
   public_submission_requires_completed_daily_choice: true
   user_decision_completes_packet: true
@@ -32,6 +34,7 @@ agent_facts:
   ask_user_only_when_blocked: true
   durable_private_journal_required: true
   agent_memory_cache_only: true
+  record_requested_and_resolved_urls: true
 ```
 
 ## Purpose
@@ -58,10 +61,11 @@ setup_defaults:
   ask_user_only_when_blocked: true
   private_journal_location: durable user-owned Markdown storage; local Markdown folder if filesystem access exists
   investor_id: use known WKAP investor ID if available; otherwise use a stable local draft identity until public ledger identity is assigned or confirmed
-  daily_send_time: infer from the user's behavior pattern after daily investment research; ask only if it cannot be inferred
+  daily_send_time: infer from the user's behavior pattern after daily investment research when autonomous scheduling is available
+  schedule_fallback: if autonomous scheduling is unavailable, run when the user says "daily WoW" or at the start of the first agent session on a US market day when recent research context is available
   research_sources: agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and high-quality agent-found market items
   completion_flow: suggest 3 WoW signals, collect user selection or pass plus required reason, then submit; no reply means save privately and submit nothing publicly
-  default_packet_scope: one Daily WoW Packet for the current US market day
+  default_packet_scope: one Daily WoW Packet for the resolved US trading date
   weekly_review_requires_explicit_user_request: true
 ```
 
@@ -69,11 +73,17 @@ The agent may briefly confirm the setup after applying defaults, but it should n
 
 ## Default Run Scope
 
-The default WKAP WoW run is one Daily WoW Packet for the current US market day.
+The default WKAP WoW run is one Daily WoW Packet for the resolved US trading date.
 
 Do not summarize the user's past 7 days, create a weekly review, or produce a general private research memo unless the user explicitly asks for a weekly or multi-day review.
 
 The agent may use recent context as background, but the output must be framed as today's Daily WoW Packet with today's `market_date`.
+
+## Market Date Rule
+
+Resolve `market_date` in `America/New_York`.
+
+If the current date is a US trading day, use that trading date at packet preparation time. Before the next US trading session opens, use the most recent US trading date unless the user explicitly asks to prepare the next session's packet. Weekend or US market-holiday research rolls into the next US trading date unless the user explicitly asks for a catch-up packet for the most recent trading date.
 
 ## Source of Truth
 
@@ -122,7 +132,13 @@ Default behavior: fetch the latest WoW Packet Spec daily before preparing a Dail
 
 Minimum fallback for non-daily agents: refresh the spec at least every 30 days.
 
-The agent should record the spec version and spec URL used for each prepared packet.
+The agent should record the spec version, requested latest URL, resolved versioned URL, and, when available, the fetched content SHA256 for each prepared packet.
+
+## Scheduling Fallback
+
+If the agent environment supports autonomous scheduled tasks, schedule the daily workflow after the user's inferred investment research window.
+
+If autonomous scheduling is unavailable, do not promise a background cron. Run the daily workflow when the user says `daily WoW`, and at the start of the first agent session on a US market day when recent research context is available.
 
 ## Private WoW Journal
 
@@ -184,10 +200,24 @@ Private noticed is not public proof. Public submitted is not the same as receipt
 10. If the choice or reason is missing, ask only for the missing required field.
 11. Once choice plus reason exists, generate the final v0.2 Daily WoW Packet with reading_log, exactly 3 wow_items, selection, agent_facts, and validation_notes.
 12. Save the full structured packet to the Private WoW Journal.
-13. Submit the packet to WKAP Ledger.
+13. Submit the packet to WKAP Ledger by email using the Public Submission Rules.
 14. Reconcile receipt and public site status after attempted submission.
 15. Update private lifecycle state after submission.
 ```
+
+## Public Submission Rules
+
+Send completed packets to `ledger@wkap.ai`.
+
+Use this subject convention:
+
+```text
+Daily WoW Packet - {market_date} - {investor_id_or_agent_label}
+```
+
+The email body must be Markdown containing one fenced YAML block. The fenced YAML block is the canonical public packet artifact and must contain a top-level `packet:` object. Inline Markdown outside the YAML block may provide a short human note, but it is not canonical for parsing.
+
+Attachments are optional and non-canonical unless a later spec defines them. After sending, reconcile both the WKAP receipt email and the public WKAP URL.
 
 ## Agent CRM Operating Loop
 
@@ -220,7 +250,7 @@ The agent must suggest exactly 3 WoW signals. The user must choose one of:
 4. pass today
 ```
 
-Any of the 3 options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, a promotion, a resolution, or a maintenance event.
+Any of the 3 options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, an evidence-only update, a promotion, a resolution, or a maintenance event.
 
 The 3 options MUST NOT be forced into a fixed type mix. The agent must rank all candidate, trackable, scoreable, thesis, and status-update opportunities together and show the best three for today's evidence and CRM state. It is valid for multiple options to share the same `wow_type`; do not include one item from each type merely to make the slate look balanced.
 
@@ -233,7 +263,7 @@ selected:
     - reason_for_selection
   pass_only_fields:
     closest_rejected_wow: null
-    why_pass: null
+    reason_for_pass: null
     missing_evidence: null
 
 passed:
@@ -478,7 +508,7 @@ capabilities:
   - reconcile_receipts_with_public_site_status
 ```
 
-One of the 3 daily WoW suggestions may be a `status_update` when today's reading is primarily new evidence, a promotion, a resolution, or a maintenance event for an existing WoW.
+One of the 3 daily WoW suggestions may be a `status_update` when today's reading is primarily new evidence, an evidence-only update, a promotion, a resolution, or a maintenance event for an existing WoW.
 
 After public submission, update private lifecycle files to reflect the selected/public packet. Do not mutate old public artifacts.
 
@@ -554,6 +584,13 @@ scoreable_voided:
   previous_status: pending_scoreable | unresolved
   new_status: voided
   update_type: voided
+  required_fields: evidence_summary
+
+evidence_only_update:
+  target_wow_type: candidate_wow | trackable_wow | scoreable_signal | thesis_wow
+  previous_status: active_candidate | active_trackable | pending_scoreable | active_thesis | stale | supported | weakened | unresolved
+  new_status: same as previous_status
+  update_type: evidence
   required_fields: evidence_summary
 
 trackable_killed:
@@ -636,18 +673,18 @@ Allowed status transitions:
 ```yaml
 allowed_status_transitions:
   candidate_wow:
-    active_candidate: [promoted_trackable, promoted_scoreable, killed, stale]
-    stale: [active_candidate, killed]
+    active_candidate: [active_candidate, promoted_trackable, promoted_scoreable, killed, stale]
+    stale: [active_candidate, killed, stale]
   trackable_wow:
-    active_trackable: [promoted_scoreable, killed, stale]
-    stale: [active_trackable, killed]
+    active_trackable: [active_trackable, promoted_scoreable, killed, stale]
+    stale: [active_trackable, killed, stale]
   scoreable_signal:
-    pending_scoreable: [resolved_correct, resolved_incorrect, unresolved, invalid_test, voided]
-    unresolved: [resolved_correct, resolved_incorrect, invalid_test, voided]
+    pending_scoreable: [pending_scoreable, resolved_correct, resolved_incorrect, unresolved, invalid_test, voided]
+    unresolved: [resolved_correct, resolved_incorrect, invalid_test, unresolved, voided]
   thesis_wow:
-    active_thesis: [supported, weakened, retired]
-    supported: [weakened, retired]
-    weakened: [supported, retired]
+    active_thesis: [active_thesis, supported, weakened, retired]
+    supported: [supported, weakened, retired]
+    weakened: [supported, weakened, retired]
 ```
 
 Status update packet items must include:
@@ -664,7 +701,7 @@ status_update_required_fields:
   - evidence_summary
 ```
 
-The agent must not invent transitions outside the allowed table. If evidence suggests a different lifecycle move, choose the closest allowed transition or keep the idea in its current status.
+The agent must not invent transitions outside the allowed table. If evidence strengthens or weakens an item but does not change lifecycle state, use `update_type: evidence` and keep `new_status` equal to `previous_status`.
 
 The local CRM files must store enough information for the next run to reconstruct current state without reading every old packet from scratch:
 
@@ -716,8 +753,15 @@ daily_packet_record:
   local_journal_entry_id: string
   prepared_at: ISO timestamp
   packet_spec_version: string
+  packet_spec_url_requested: string
+  packet_spec_url_resolved: string
+  skill_url_requested: string
+  skill_url_resolved: string
+  packet_spec_content_sha256: string | null
+  skill_content_sha256: string | null
   skill_version: v0.2
-  private_status: prepared_private | user_no_reply | user_rejected | user_approved | no_pick | draft_saved
+  selection_status: selected | pass | user_no_reply | incomplete
+  private_status: prepared_private | user_no_reply | incomplete_private
   submission_status: not_submitted | submitted_to_wkap | submission_failed | unknown
   receipt_status: no_receipt | receipt_received | receipt_error | not_checked
   public_status: not_public | published_on_wkap | public_verified | public_not_found | unknown

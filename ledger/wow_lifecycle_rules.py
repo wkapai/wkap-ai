@@ -19,23 +19,26 @@ WOW_TYPE_DEFAULT_STATUS = {
 ALLOWED_STATUS_TRANSITIONS = {
     "candidate_wow": {
         "active_candidate": {
+            "active_candidate",
             "promoted_trackable",
             "promoted_scoreable",
             "killed",
             "stale",
         },
-        "stale": {"active_candidate", "killed"},
+        "stale": {"active_candidate", "killed", "stale"},
     },
     "trackable_wow": {
         "active_trackable": {
+            "active_trackable",
             "promoted_scoreable",
             "killed",
             "stale",
         },
-        "stale": {"active_trackable", "killed"},
+        "stale": {"active_trackable", "killed", "stale"},
     },
     "scoreable_signal": {
         "pending_scoreable": {
+            "pending_scoreable",
             "resolved_correct",
             "resolved_incorrect",
             "unresolved",
@@ -46,17 +49,19 @@ ALLOWED_STATUS_TRANSITIONS = {
             "resolved_correct",
             "resolved_incorrect",
             "invalid_test",
+            "unresolved",
             "voided",
         },
     },
     "thesis_wow": {
         "active_thesis": {
+            "active_thesis",
             "supported",
             "weakened",
             "retired",
         },
-        "supported": {"weakened", "retired"},
-        "weakened": {"supported", "retired"},
+        "supported": {"supported", "weakened", "retired"},
+        "weakened": {"supported", "weakened", "retired"},
     },
 }
 
@@ -79,6 +84,16 @@ UPDATE_TYPE_TO_NEW_STATUS = {
     "voided": {"voided"},
     "invalid_test": {"invalid_test"},
     "thesis_update": {"supported", "weakened", "retired"},
+    "evidence": {
+        "active_candidate",
+        "active_trackable",
+        "pending_scoreable",
+        "active_thesis",
+        "stale",
+        "supported",
+        "weakened",
+        "unresolved",
+    },
     "other": set(),
 }
 

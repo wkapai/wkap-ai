@@ -10,6 +10,9 @@
 <article class="setup-page" data-agent-readable="true" data-page-type="investor_log_setup">
   <section class="panel setup-intro">
     <p>WKAP turns daily investment research into a simple training loop for you and your agent. Your agent keeps the private notes, brings you three Worth Watching signals, records your select-or-pass decision, and publishes the complete Daily WoW Packet to your public ledger.</p>
+    {% if example_packet_url %}
+    <p><a href="{{ example_packet_url }}">View a live example Daily WoW Packet</a>.</p>
+    {% endif %}
     <p>There are two records:</p>
     <ul>
       <li>Private WoW Loop: drafts, no-reply days, skipped ideas, selected WoWs, revisits</li>
@@ -28,25 +31,19 @@
         <span>Copy</span>
       </button>
     </div>
-    <pre class="setup-prompt" data-agent-install-prompt="wkap-wow"><code>Set up WKAP WoW for me. Install WKAP WoW Skill as a durable skill.
+    <pre class="setup-prompt" data-agent-install-prompt="wkap-wow"><code>Set up WKAP WoW for me.
 
-Use this universal skill as the source of truth:
+Fetch and install this durable WKAP WoW Skill:
 https://wkap.ai/skills/wkap-wow-skill-latest.md
 
 If you are Codex, install this Codex-native skill:
 https://wkap.ai/skills/wkap-wow-codex/SKILL.md
 
-If you are Codex, verify the install by checking for a local wkap-wow/SKILL.md file in the Codex skills directory. Tell me whether the install is verified.
+If you are Codex, verify the install by checking for a local wkap-wow/SKILL.md file in the Codex skills directory.
 
 If you use another skill format, adapt the universal WKAP WoW Skill to your native format and install it.
 
-Follow the skill defaults for my Private WoW Journal and tell me where it is stored.
-
-When I do daily investor research in an agent-accessible browser, maintain my private WoW Journal.
-
-Based on my behavior pattern, infer when I usually finish most of my daily market investment research, then set the Daily WoW Packet send time after that. If you cannot infer it, ask me.
-
-Run the daily workflow exactly as the installed WKAP WoW Skill specifies.</code></pre>
+After installation, follow the installed skill and the latest JSON specs it references. Tell me whether the install is verified and where my Private WoW Journal is stored.</code></pre>
   </section>
 </article>
 <script>

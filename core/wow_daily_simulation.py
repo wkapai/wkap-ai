@@ -844,7 +844,7 @@ def lifecycle_transition_options(
     new_status: str,
     reading_log: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    update_type = update_type_for_status(new_status)
+    update_type = update_type_for_status(new_status, previous_status=previous_status)
     target_id = f"WOW-2026-06-01-{transition_number:03d}"
     update_id = wow_id(market_date, 1)
     readings = reading_log or reading_log_for_day(market_date, offset=transition_number)
@@ -939,7 +939,9 @@ def promotion_child_item(market_date: date, *, target_id: str, new_status: str) 
     return None
 
 
-def update_type_for_status(new_status: str) -> str:
+def update_type_for_status(new_status: str, *, previous_status: str = "") -> str:
+    if previous_status and new_status == previous_status:
+        return "evidence"
     if new_status in {"promoted_trackable", "promoted_scoreable"}:
         return "promotion"
     if new_status in {"resolved_correct", "resolved_incorrect", "unresolved"}:
