@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+import subprocess
 import uuid
 from datetime import date, datetime, time, timedelta
 from io import StringIO
@@ -11,9 +12,11 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from core.wow_chat_simulation import handle_chat_message, monthly_chat_case_index, start_chat_session
 from core.wow_daily_simulation import (
     SIM_EMAIL,
     SIM_INVESTOR_ID,
+    SUBMISSION_ACK_PROMPT,
     base_daily_options,
     initial_daily_state,
     lifecycle_transition_options,
@@ -81,7 +84,9 @@ class DailyWoWSimulationTests(TestCase):
             "The scoreable one, because I want calibration practice when the evidence is clean.",
         )
 
-        self.assertEqual(state["state"], "ready_to_submit")
+        self.assertEqual(state["state"], "submission_in_progress")
+        self.assertEqual(prompt, SUBMISSION_ACK_PROMPT)
+        self.assertEqual(normalized["submission"], "background")
         self.assertEqual(normalized["selected_wow_id"], state["wow_options"][1]["wow_id"])
         self.assertEqual(validate_daily_state(state), [])
         packet = packet_from_state(state)
@@ -100,7 +105,9 @@ class DailyWoWSimulationTests(TestCase):
 
         state, prompt, normalized = normalize_user_reply(state, "Because this is the recurring evidence stream I want trained.")
 
-        self.assertEqual(state["state"], "ready_to_submit")
+        self.assertEqual(state["state"], "submission_in_progress")
+        self.assertEqual(prompt, SUBMISSION_ACK_PROMPT)
+        self.assertEqual(normalized["submission"], "background")
         self.assertEqual(validate_daily_state(state), [])
         self.assertIn("recurring evidence stream", normalized["reason_for_selection"])
 
@@ -117,7 +124,9 @@ class DailyWoWSimulationTests(TestCase):
 
         state, prompt, normalized = normalize_user_reply(state, "closest: 3")
 
-        self.assertEqual(state["state"], "ready_to_submit")
+        self.assertEqual(state["state"], "submission_in_progress")
+        self.assertEqual(prompt, SUBMISSION_ACK_PROMPT)
+        self.assertEqual(normalized["submission"], "background")
         self.assertEqual(state["selection"]["selected_wow_id"], "none")
         self.assertEqual(state["selection"]["closest_rejected_wow"], state["wow_options"][2]["wow_id"])
         self.assertEqual(validate_daily_state(state), [])
@@ -135,11 +144,12 @@ class DailyWoWSimulationTests(TestCase):
             for previous_status, new_statuses in previous_map.items():
                 for new_status in sorted(new_statuses):
                     current_date = market_date + timedelta(days=transition_number - 1)
+                    reading_log = reading_log_for_day(current_date, count=1)
                     state = initial_daily_state(
                         investor_id=SIM_INVESTOR_ID,
                         market_date=current_date,
                         journal_path=Path("C:/tmp/wkap-wow-test-journal"),
-                        reading_log=reading_log_for_day(current_date, count=1),
+                        reading_log=reading_log,
                         wow_options=lifecycle_transition_options(
                             current_date,
                             investor_id=SIM_INVESTOR_ID,
@@ -147,8 +157,12 @@ class DailyWoWSimulationTests(TestCase):
                             target_wow_type=target_wow_type,
                             previous_status=previous_status,
                             new_status=new_status,
+                            reading_log=reading_log,
                         ),
                     )
+                    reading_refs = {f"Reading Item {item['item_number']}" for item in state["reading_log"]}
+                    for option in state["wow_options"]:
+                        self.assertFalse(set(option.get("source_refs", [])) - reading_refs)
                     state, _, _ = normalize_user_reply(state, "1 because this is the cleanest lifecycle update today.")
                     self.assertEqual(validate_daily_state(state), [])
                     packet = packet_from_state(state)
@@ -205,6 +219,64 @@ class DailyWoWSimulationTests(TestCase):
             self.assertIn("daily-wow-simulation:start", (Path(temp_dir) / "receipts.md").read_text(encoding="utf-8"))
             self.assertIn("Daily WoW Simulation Public Verification", (Path(temp_dir) / "public-verification.md").read_text(encoding="utf-8"))
             self.assertIn("Daily WoW Simulation Pending Scoreables", (Path(temp_dir) / "pending-scoreables.md").read_text(encoding="utf-8"))
+
+    def test_simulation_command_can_run_single_case(self):
+        with TemporaryDirectory() as temp_dir:
+            output = StringIO()
+            call_command(
+                "simulate_daily_wow_conversations",
+                "--journal-path",
+                temp_dir,
+                "--start-date",
+                "2026-07-06",
+                "--case",
+                "select_scoreable_with_reason",
+                "--no-journal",
+                "--json",
+                stdout=output,
+            )
+
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["case_name"], "select_scoreable_with_reason")
+        self.assertEqual(report["case_count"], 1)
+        self.assertEqual(report["completed_case_count"], 1)
+        self.assertEqual(report["published_case_count"], 0)
+        self.assertEqual(report["cases"][0]["name"], "select_scoreable_with_reason")
+        self.assertEqual(report["cases"][0]["state"], "submission_in_progress")
+
+    def test_chat_simulation_exercises_visible_intake_before_submit(self):
+        response = self.client.get("/daily-wow-chat-sim/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-testid="daily-wow-chat-input"')
+        self.assertContains(response, "monthly-chat-cases")
+
+        session = start_chat_session()
+        self.assertEqual(session["state"], "awaiting_user_choice")
+        self.assertEqual(session["submission_status"], "not_started")
+        slate = session["messages"][0]["message"]
+        self.assertIn("1. Trackable:", slate)
+        self.assertIn("2. Scoreable:", slate)
+        self.assertIn("3. Trackable:", slate)
+        self.assertIn("Pick one WoW: 1, 2, 3, or pass.", slate)
+        self.assertNotIn("WOW-2026", slate)
+
+        next_session = handle_chat_message(session_id=session["session_id"], message="3")
+        self.assertEqual(next_session["state"], "awaiting_selection_reason")
+        self.assertEqual(next_session["submission_status"], "not_started")
+        self.assertEqual(next_session["messages"][-1]["message"], "Why did you select this WoW?")
+
+    def test_monthly_chat_case_index_covers_30_days_and_status_transitions(self):
+        cases = monthly_chat_case_index(start_date=date(2026, 7, 6), investor_id=SIM_INVESTOR_ID)
+
+        self.assertEqual(len(cases), 30)
+        self.assertEqual(cases[0]["market_date"], "2026-07-06")
+        self.assertEqual(cases[-1]["market_date"], "2026-08-04")
+        self.assertGreaterEqual(
+            sum(1 for case in cases if len(set(case["option_types"])) < len(case["option_types"])),
+            1,
+        )
+        self.assertEqual(sum(1 for case in cases if case["option_types"][0] == "status_update"), 27)
+        self.assertTrue(all(case["replies"] for case in cases))
 
     def test_reset_daily_wow_simulation_deletes_only_simulation_footprint(self):
         with TemporaryDirectory() as temp_dir:
@@ -278,3 +350,32 @@ class DailyWoWSimulationTests(TestCase):
         self.assertEqual(report["lifecycle_transition_count"], 27)
         self.assertGreaterEqual(report["completed_case_count"], 32)
         self.assertFalse([case for case in report["cases"] if case["errors"]])
+
+    def test_run_simulation_can_verify_published_public_pages(self):
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            ledger = root / "ledger"
+            ledger.mkdir()
+            subprocess.run(["git", "init"], cwd=ledger, check=True, capture_output=True, text=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=ledger, check=True, capture_output=True, text=True)
+            subprocess.run(["git", "config", "user.name", "WKAP Test"], cwd=ledger, check=True, capture_output=True, text=True)
+            with override_settings(
+                WKAP_PUBLIC_SITE_ROOT=root / "public",
+                WKAP_LEDGER_REPO_PATH=str(ledger),
+                WKAP_LEDGER_GITHUB_BASE_URL="https://github.com/example/wkap-ledger/blob/main",
+            ):
+                report = run_daily_wow_simulation(
+                    journal_path=root / "journal",
+                    start_date=date(2026, 7, 6),
+                    publish=True,
+                    verify_public=True,
+                    write_journal=True,
+                )
+
+        verification = report["public_verification"]
+        self.assertEqual(report["published_case_count"], 32)
+        self.assertEqual(verification["pages_checked"], 32)
+        self.assertEqual(verification["status_update_pages"], 27)
+        self.assertEqual(verification["status_update_events"], 27)
+        self.assertGreaterEqual(verification["repeated_type_pages"], 1)
+        self.assertEqual(verification["errors"], [])

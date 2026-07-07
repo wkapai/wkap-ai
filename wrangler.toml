@@ -7,3 +7,7 @@ workers_dev = false
 [vars]
 WKAP_RENDER_INGEST_URL = "https://wkap.ai/internal/cloudflare-email-ingest/"
 WKAP_FORWARD_TO = "playinc@gmail.com"
+WKAP_KEEPWARM_URL = "https://wkap.ai/"
+
+[triggers]
+crons = ["*/10 * * * *"]

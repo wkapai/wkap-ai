@@ -12,13 +12,16 @@ This pressure test simulates the daily user conversation after Daily WoW setup:
 6. Generate a structured v0.2 packet.
 7. Save private journal records.
 8. Optionally publish completed packets to the local WKAP ledger.
-9. Update local CRM/training files from the result.
+9. Optionally verify generated public pages, machine-readable lifecycle fields, source refs, and status-transition coverage.
+10. Update local CRM/training files from the result.
 
 The implementation lives in:
 
 - `core/wow_daily_simulation.py`
 - `core/management/commands/simulate_daily_wow_conversations.py`
 - `tests/test_wow_daily_simulation.py`
+
+The hardening roadmap for making lifecycle/status-update QA fully automated, including oracle-based public-page reconstruction and fix-rerun loops, lives in `docs/WOW_SIMULATION_HARDENING_PLAN.md`.
 
 ## Local Command
 
@@ -38,6 +41,12 @@ Delete old simulator data, then publish completed simulated packets to the local
 
 ```powershell
 .\.venv\Scripts\python.exe manage.py simulate_daily_wow_conversations --reset --start-date 2026-07-06 --publish --json
+```
+
+Delete old simulator data, publish completed packets, then verify public pages and lifecycle reconstruction:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py simulate_daily_wow_conversations --reset --start-date 2026-07-06 --publish --verify-public --json
 ```
 
 The reset is scoped to simulator-owned data: investor `w0998`, sender `wkap-daily-wow-sim@example.com`, generated `daily-wow-simulation` journal blocks, generated daily case files, local public investor pages, WoW manifests, timestamps, and raw email artifacts for the matching packet ids.
@@ -112,6 +121,18 @@ Fix: Type-label matching now runs before ordinal fallback, and generic "one/two/
 Problem: A structured `status_update` with an explicit `investor_id` different from the packet `investor_id` was not rejected before publish.
 
 Fix: `ledger.parsers._validate_structured_wow_items()` now rejects explicit status update author mismatches.
+
+### P1: Completed Choice Still Modeled A Blocking Submit
+
+Problem: After a valid user selection/pass plus required reason, the simulator returned a `ready_to_submit` state and "complete and ready to submit" prompt. That did not reflect the user requirement that the agent immediately acknowledge the completed judgment and finish packet generation, ledger send, receipt reconciliation, and public URL verification in the background.
+
+Fix: `normalize_user_reply()` now moves completed responses into `submission_in_progress`, returns the explicit background acknowledgement, and marks normalized replies with `submission: background`. Tests assert the state and acknowledgement prompt.
+
+### P1: Lifecycle Filler Options Had Unresolved Source Refs
+
+Problem: Lifecycle status-update cases published a one-item reading log, but the non-selected filler options were generated from a separate default reading log and could reference `Reading Item 3` or `Reading Item 4`. The packet parsed and rendered, but an outside-agent verification pass found unresolved `source_refs`.
+
+Fix: `lifecycle_transition_options()` now receives the case's actual reading log and builds all filler options against that same source set. The lifecycle simulation test now asserts that every option's `source_refs` resolve against the packet reading log before parsing.
 
 ### P2: Installed User-Level Template Drift
 

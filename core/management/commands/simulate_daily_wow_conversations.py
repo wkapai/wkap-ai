@@ -4,7 +4,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from core.wow_daily_simulation import (
     SIM_INVESTOR_ID,
@@ -21,7 +21,9 @@ class Command(BaseCommand):
         parser.add_argument("--journal-path", default=str(default_journal_path()))
         parser.add_argument("--start-date", default="2026-07-06")
         parser.add_argument("--investor-id", default=SIM_INVESTOR_ID)
+        parser.add_argument("--case", dest="case_name", default="", help="Run a single named simulation case.")
         parser.add_argument("--publish", action="store_true", help="Publish completed simulated packets to the local WKAP ledger.")
+        parser.add_argument("--verify-public", action="store_true", help="Verify generated public pages and lifecycle reconstruction after publish.")
         parser.add_argument("--no-journal", action="store_true", help="Run without writing local journal artifacts.")
         parser.add_argument("--reset", action="store_true", help="Delete prior local simulation data before running.")
         parser.add_argument("--reset-only", action="store_true", help="Delete prior local simulation data and exit.")
@@ -45,13 +47,18 @@ class Command(BaseCommand):
             self.stdout.write(f"Removed paths: {reset_report['deleted']['paths']}")
             return
 
-        report = run_daily_wow_simulation(
-            journal_path=Path(options["journal_path"]),
-            start_date=date.fromisoformat(options["start_date"]),
-            investor_id=options["investor_id"],
-            publish=options["publish"],
-            write_journal=not options["no_journal"],
-        )
+        try:
+            report = run_daily_wow_simulation(
+                journal_path=Path(options["journal_path"]),
+                start_date=date.fromisoformat(options["start_date"]),
+                investor_id=options["investor_id"],
+                publish=options["publish"],
+                verify_public=options["verify_public"],
+                write_journal=not options["no_journal"],
+                case_name=options["case_name"] or None,
+            )
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
         if reset_report:
             report["reset"] = reset_report
         if options["json"]:
@@ -64,6 +71,8 @@ class Command(BaseCommand):
         self.stdout.write(f"Completed packets: {report['completed_case_count']}")
         self.stdout.write(f"Published packets: {report['published_case_count']}")
         self.stdout.write(f"Lifecycle transitions covered: {report['lifecycle_transition_count']}")
+        if report.get("public_verification"):
+            self.stdout.write(f"Public verification errors: {len(report['public_verification']['errors'])}")
         self.stdout.write("Findings:")
         for finding in report["findings"]:
             self.stdout.write(f"  {finding['severity']} {finding['title']} - {finding['status']}")

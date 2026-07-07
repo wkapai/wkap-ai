@@ -2031,6 +2031,16 @@ packet:
         self.assertFalse(type_mix_rule["force_one_from_each_wow_type"])
         self.assertTrue(type_mix_rule["repeated_wow_types_allowed"])
         self.assertEqual(type_mix_rule["selection_basis"], "highest_value_for_today_evidence_and_crm_state")
+        latency_slo = intake["states"]["draft_options"]["latency_slo"]
+        self.assertEqual(latency_slo["target_seconds_when_recent_context_available"], 10)
+        self.assertEqual(latency_slo["hard_limit_seconds"], 30)
+        self.assertIn("first_choice_slate_takes_more_than_30_seconds", latency_slo["invalid_if"])
+        self.assertIn("full_packet_generation_blocks_initial_choice_slate", latency_slo["invalid_if"])
+        user_wait_policy = intake["states"]["ready_to_submit"]["user_wait_policy"]
+        self.assertTrue(user_wait_policy["immediate_acknowledgement_required"])
+        self.assertTrue(user_wait_policy["user_must_not_wait_for_packet_generation_or_send"])
+        self.assertIn("submit_to_wkap_ledger", user_wait_policy["background_steps"])
+        self.assertIn("submission_in_progress", daily_state["properties"]["state"]["enum"])
 
         required = daily_state["properties"]["wow_options"]["items"]["required"]
         for field in ["wow_id", "wow_type", "visible_type_label", "plain_english_title", "why_worth_watching"]:
@@ -2146,6 +2156,9 @@ packet:
         self.assertIn("DailyWoWChoiceSlate", body)
         self.assertIn("Do not build, print, or validate the full packet YAML before the user has made a selection/pass", body)
         self.assertIn("target under 10 seconds", body)
+        self.assertIn("hard limit is 30 seconds", body)
+        self.assertIn("user should not need to wait for packet generation", body)
+        self.assertIn("reconcile asynchronously without making the user wait", body)
         self.assertIn("MUST NOT be forced into a fixed type mix", body)
         self.assertIn("multiple options to share the same `wow_type`", body)
         self.assertIn("Daily Suggestion Display Contract", body)

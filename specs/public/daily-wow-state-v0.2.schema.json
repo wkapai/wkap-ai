@@ -38,6 +38,7 @@
         "awaiting_selection_reason",
         "awaiting_pass_fields",
         "ready_to_submit",
+        "submission_in_progress",
         "submitted",
         "verified",
         "user_no_reply",

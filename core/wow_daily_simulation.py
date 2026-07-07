@@ -4,11 +4,13 @@ import json
 import re
 import shutil
 import uuid
+from html import unescape
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 from django.conf import settings
@@ -24,6 +26,7 @@ from publishing.services import publish_artifact, rebuild_indexes, validate_ledg
 
 
 DAILY_PROMPT = "Pick one WoW: 1, 2, 3, or pass."
+SUBMISSION_ACK_PROMPT = "Choice accepted. I will save, submit, and reconcile this in the background."
 SIM_INVESTOR_ID = "w0998"
 SIM_EMAIL = "wkap-daily-wow-sim@example.com"
 SIM_DISPLAY_NAME = "WKAP Daily WoW Simulation Agent"
@@ -153,11 +156,12 @@ class SimulationCase:
     packet_markdown: str = ""
     parse_error: str = ""
     published_url: str = ""
+    published_packet_id: int | None = None
     ledger_errors: list[str] = field(default_factory=list)
 
     @property
     def completed(self) -> bool:
-        return self.state.get("state") in {"ready_to_submit", "submitted", "verified"}
+        return self.state.get("state") in {"ready_to_submit", "submission_in_progress", "submitted", "verified"}
 
 
 def default_journal_path() -> Path:
@@ -255,6 +259,279 @@ def reset_daily_wow_simulation(
         "removed_paths": removed_paths,
         "public_indexes_rebuilt": rebuild_public,
     }
+
+
+def reset_all_local_wow_data(*, journal_path: Path | None = None, rebuild_public: bool = True) -> dict[str, Any]:
+    journal = journal_path or default_journal_path()
+    packet_ids = list(DailyWoWPacket.objects.values_list("id", flat=True))
+    raw_email_ids = list(DailyWoWPacket.objects.values_list("source_email_id", flat=True))
+    investor_ids = list(DailyWoWPacket.objects.order_by().values_list("investor__investor_id", flat=True).distinct())
+
+    raw_email_filter = (
+        Q(id__in=raw_email_ids)
+        | Q(classification=RawEmail.Classification.WOW)
+        | Q(subject__icontains="Daily WoW Packet")
+        | Q(sender_email=SIM_EMAIL)
+    )
+    raw_email_count = RawEmail.objects.filter(raw_email_filter, radar_issues__isnull=True).distinct().count()
+
+    event_filter = Q(entity_type="wow") | Q(event_name__startswith="wow_")
+    if investor_ids:
+        event_filter |= Q(investor_id__in=investor_ids) | Q(entity_type="investor", investor_id__in=investor_ids)
+    event_filter |= Q(sender_email=SIM_EMAIL)
+    ledger_event_count = LedgerEvent.objects.filter(event_filter).count()
+    investor_count = Investor.objects.filter(investor_id__in=investor_ids).count()
+
+    LedgerEvent.objects.filter(event_filter).delete()
+    DailyWoWPacket.objects.all().delete()
+    RawEmail.objects.filter(raw_email_filter, radar_issues__isnull=True).distinct().delete()
+    if investor_ids:
+        Investor.objects.filter(investor_id__in=investor_ids).delete()
+
+    ledger_root = _ledger_artifact_root()
+    allowed_roots = [settings.BASE_DIR, settings.WKAP_PUBLIC_SITE_ROOT, ledger_root, journal]
+    removed_paths: list[str] = []
+
+    def remove(path: Path) -> None:
+        removed = _safe_remove_path(path, allowed_roots=allowed_roots)
+        if removed:
+            removed_paths.append(str(removed))
+
+    remove(settings.WKAP_PUBLIC_SITE_ROOT / "investors")
+    for packet_id in packet_ids:
+        remove(ledger_root / "manifests" / f"wow-{packet_id}.json")
+        remove(ledger_root / "timestamps" / f"wow-{packet_id}.json")
+        remove(ledger_root / "timestamps" / f"wow-{packet_id}.json.ots")
+    raw_email_dir = ledger_root / "raw-emails" / "wow-packets"
+    if raw_email_dir.exists():
+        for path in raw_email_dir.glob("wow-packet-*.txt"):
+            remove(path)
+    remove(journal)
+
+    if rebuild_public:
+        rebuild_indexes(run_id=uuid.uuid4())
+
+    return {
+        "investor_ids": investor_ids,
+        "deleted": {
+            "daily_wow_packets": len(packet_ids),
+            "raw_emails": raw_email_count,
+            "ledger_events": ledger_event_count,
+            "investors": investor_count,
+            "paths": len(removed_paths),
+        },
+        "removed_paths": removed_paths,
+        "public_indexes_rebuilt": rebuild_public,
+    }
+
+
+def verify_published_simulation(
+    *,
+    investor_id: str = SIM_INVESTOR_ID,
+    packet_ids: set[int] | None = None,
+    expected_packet_count: int | None = 32,
+    require_full_transition_coverage: bool = True,
+) -> dict[str, Any]:
+    packet_qs = DailyWoWPacket.objects.filter(investor__investor_id=investor_id)
+    if packet_ids is not None:
+        packet_qs = packet_qs.filter(id__in=packet_ids)
+    packets = list(packet_qs.order_by("market_date"))
+    errors: list[str] = []
+    warnings: list[str] = []
+    page_count = 0
+    status_update_pages = 0
+    repeated_type_pages = 0
+    pass_pages = 0
+    selected_pages = 0
+    expected_transition_set = {
+        (target_wow_type, previous_status, new_status)
+        for target_wow_type, previous_map in ALLOWED_STATUS_TRANSITIONS.items()
+        for previous_status, new_statuses in previous_map.items()
+        for new_status in new_statuses
+    }
+
+    if expected_packet_count is not None and len(packets) != expected_packet_count:
+        errors.append(f"expected {expected_packet_count} published simulator packets for {investor_id}, found {len(packets)}")
+
+    for packet in packets:
+        ledger_errors = validate_ledger("wow", packet.id)
+        if ledger_errors:
+            errors.append(f"{packet.packet_id}: validate_ledger errors: {ledger_errors}")
+        page_path = Path(settings.WKAP_PUBLIC_SITE_ROOT) / urlparse(packet.canonical_url).path.lstrip("/")
+        if not page_path.exists():
+            errors.append(f"{packet.packet_id}: missing public page {page_path}")
+            continue
+        page_count += 1
+        text = page_path.read_text(encoding="utf-8")
+        if text.count("data-packet-wow-id=") < 3:
+            errors.append(f"{packet.packet_id}: page exposes fewer than 3 packet wow ids")
+        if packet.packet_id not in text:
+            errors.append(f"{packet.packet_id}: page missing canonical packet id")
+
+        raw_packet = _page_json_field(text, "raw_packet_json", page_path, errors)
+        wow_items = _page_json_field(text, "wow_items_json", page_path, errors)
+        lifecycle_events = _page_json_field(text, "lifecycle_events_json", page_path, errors)
+        current_wow_state = _page_json_field(text, "current_wow_state_json", page_path, errors)
+        status_updates = _page_json_field(text, "status_updates_json", page_path, errors)
+        if raw_packet is None or wow_items is None:
+            continue
+
+        types = [item.get("wow_type") for item in wow_items]
+        if len(set(types)) < len(types):
+            repeated_type_pages += 1
+        status_update_pages += types.count("status_update")
+        if packet.selected_wow_id == "none":
+            pass_pages += 1
+        else:
+            selected_pages += 1
+        _verify_page_packet_fields(
+            packet=packet,
+            investor_id=investor_id,
+            raw_packet=raw_packet,
+            wow_items=wow_items,
+            lifecycle_events=lifecycle_events,
+            current_wow_state=current_wow_state,
+            status_updates=status_updates,
+            text=text,
+            errors=errors,
+        )
+
+    status_event_qs = LedgerEvent.objects.filter(
+        investor_id=investor_id,
+        event_name="wow_lifecycle_status_update_logged",
+        entity_type="wow",
+    )
+    if packet_ids is not None:
+        status_event_qs = status_event_qs.filter(entity_id__in={str(packet_id) for packet_id in packet_ids})
+    status_events = list(status_event_qs)
+    actual_transition_set = {
+        (event.details.get("target_wow_type"), event.details.get("previous_status"), event.details.get("new_status"))
+        for event in status_events
+    }
+    if require_full_transition_coverage and len(status_events) != len(expected_transition_set):
+        errors.append(f"expected {len(expected_transition_set)} status update events, found {len(status_events)}")
+    missing_transitions = sorted(expected_transition_set - actual_transition_set) if require_full_transition_coverage else []
+    extra_transitions = sorted(actual_transition_set - expected_transition_set)
+    if missing_transitions:
+        errors.append(f"missing lifecycle transitions: {missing_transitions}")
+    if extra_transitions:
+        errors.append(f"unexpected lifecycle transitions: {extra_transitions}")
+    if require_full_transition_coverage and repeated_type_pages == 0:
+        errors.append("all published pages use one of each wow_type; expected at least one repeated-type page to prove the slate is not fixed-format")
+
+    return {
+        "investor_id": investor_id,
+        "packets": len(packets),
+        "packet_ids": sorted(packet_ids) if packet_ids is not None else [packet.id for packet in packets],
+        "pages_checked": page_count,
+        "status_update_pages": status_update_pages,
+        "status_update_events": len(status_events),
+        "expected_transition_count": len(expected_transition_set),
+        "full_transition_coverage_required": require_full_transition_coverage,
+        "repeated_type_pages": repeated_type_pages,
+        "selected_pages": selected_pages,
+        "pass_pages": pass_pages,
+        "errors": errors,
+        "warnings": warnings,
+    }
+
+
+def _page_field(text: str, field_name: str) -> str | None:
+    match = re.search(rf'<dd data-field="{re.escape(field_name)}">(.*?)</dd>', text, flags=re.DOTALL)
+    return unescape(match.group(1)).strip() if match else None
+
+
+def _page_json_field(text: str, field_name: str, page_path: Path, errors: list[str]) -> Any:
+    value = _page_field(text, field_name)
+    if value is None:
+        errors.append(f"{page_path.name}: missing data-field={field_name}")
+        return None
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError as exc:
+        errors.append(f"{page_path.name}: data-field={field_name} is not parseable JSON: {exc}")
+        return None
+
+
+def _local_public_wow_id(value: str, investor_id: str) -> str:
+    value = str(value or "")
+    prefix = f"WOW-{investor_id}-"
+    return "WOW-" + value[len(prefix) :] if value.startswith(prefix) else value
+
+
+def _verify_page_packet_fields(
+    *,
+    packet: DailyWoWPacket,
+    investor_id: str,
+    raw_packet: dict[str, Any],
+    wow_items: list[dict[str, Any]],
+    lifecycle_events: list[dict[str, Any]] | None,
+    current_wow_state: list[dict[str, Any]] | None,
+    status_updates: list[dict[str, Any]] | None,
+    text: str,
+    errors: list[str],
+) -> None:
+    if len(wow_items) != 3:
+        errors.append(f"{packet.packet_id}: expected 3 wow_items, found {len(wow_items)}")
+    types = [item.get("wow_type") for item in wow_items]
+    counts = {
+        "wow_count": len(types),
+        "scoreable_count": types.count("scoreable_signal"),
+        "trackable_count": types.count("trackable_wow"),
+        "thesis_count": types.count("thesis_wow"),
+        "candidate_count": types.count("candidate_wow"),
+        "status_update_count": types.count("status_update"),
+    }
+    stored_counts = {
+        "wow_count": packet.wow_count,
+        "scoreable_count": packet.scoreable_count,
+        "trackable_count": packet.trackable_count,
+        "thesis_count": packet.thesis_count,
+        "candidate_count": packet.candidate_count,
+        "status_update_count": packet.status_update_count,
+    }
+    if counts != stored_counts:
+        errors.append(f"{packet.packet_id}: page counts {counts} do not match DB counts {stored_counts}")
+    if raw_packet.get("agent_facts", {}).get("status_update_count") != packet.status_update_count:
+        errors.append(f"{packet.packet_id}: raw_packet agent status_update_count mismatch")
+
+    reading_refs = {f"Reading Item {item.get('item_number')}" for item in raw_packet.get("reading_log", [])}
+    for item in wow_items:
+        missing_refs = [ref for ref in item.get("source_refs", []) if ref not in reading_refs]
+        if missing_refs:
+            errors.append(f"{packet.packet_id}: {item.get('wow_id')} has unresolved source_refs {missing_refs}")
+        if item.get("wow_type") == "status_update":
+            if 'data-agent-lifecycle="status_updates"' not in text:
+                errors.append(f"{packet.packet_id}: status_update page missing data-agent-lifecycle=status_updates")
+            for field_name in ("target_wow_type", "target_wow_id", "target_root_wow_id", "previous_status", "new_status", "update_type", "evidence_summary"):
+                if not item.get(field_name):
+                    errors.append(f"{packet.packet_id}: status_update {item.get('wow_id')} missing {field_name}")
+            explicit_investor = item.get("investor_id")
+            if explicit_investor and explicit_investor != investor_id:
+                errors.append(f"{packet.packet_id}: status_update investor_id mismatch {explicit_investor}")
+
+    if packet.status_update_count and not status_updates:
+        errors.append(f"{packet.packet_id}: status_update_count={packet.status_update_count} but status_updates_json empty")
+    if lifecycle_events is not None and len(lifecycle_events) != 3:
+        errors.append(f"{packet.packet_id}: lifecycle_events_json expected 3 records, found {len(lifecycle_events)}")
+    if current_wow_state is not None and len(current_wow_state) != 3:
+        errors.append(f"{packet.packet_id}: current_wow_state_json expected 3 records, found {len(current_wow_state)}")
+
+    selection = raw_packet.get("selection", {})
+    option_ids = {_local_public_wow_id(item.get("wow_id"), investor_id) for item in wow_items}
+    if packet.selected_wow_id == "none":
+        for field_name in ("reason_for_pass", "closest_rejected_wow", "missing_evidence"):
+            if not selection.get(field_name):
+                errors.append(f"{packet.packet_id}: pass missing {field_name}")
+        if _local_public_wow_id(selection.get("closest_rejected_wow"), investor_id) not in option_ids:
+            errors.append(f"{packet.packet_id}: closest_rejected_wow is not one of the 3 options")
+    else:
+        if _local_public_wow_id(packet.selected_wow_id, investor_id) not in option_ids:
+            errors.append(f"{packet.packet_id}: selected_wow_id not in 3 options")
+        if _local_public_wow_id(selection.get("selected_wow_id"), investor_id) not in option_ids:
+            errors.append(f"{packet.packet_id}: raw_packet selected_wow_id not in 3 options")
+        if not packet.reason_for_selection:
+            errors.append(f"{packet.packet_id}: selected page missing reason_for_selection")
 
 
 def reading_log_for_day(market_date: date, *, offset: int = 0, count: int = 7) -> list[dict[str, Any]]:
@@ -452,8 +729,8 @@ def normalize_user_reply(state: dict[str, Any], user_reply: str) -> tuple[dict[s
             if missing:
                 next_state["state"] = "awaiting_pass_fields"
                 return next_state, _pass_prompt(missing), {"choice": "pass", "missing": ", ".join(missing)}
-            next_state["state"] = "ready_to_submit"
-            return next_state, "Daily WoW Packet is complete and ready to submit.", {"choice": "pass"}
+            next_state["state"] = "submission_in_progress"
+            return next_state, SUBMISSION_ACK_PROMPT, {"choice": "pass", "submission": "background"}
         if isinstance(choice, int):
             selected = next_state["wow_options"][choice - 1]["wow_id"]
             reason = _reason_from_reply(user_reply)
@@ -461,9 +738,10 @@ def normalize_user_reply(state: dict[str, Any], user_reply: str) -> tuple[dict[s
             normalized["selected_wow_id"] = selected
             if reason:
                 next_state["selection"]["reason_for_selection"] = reason
-                next_state["state"] = "ready_to_submit"
+                next_state["state"] = "submission_in_progress"
                 normalized["reason_for_selection"] = reason
-                return next_state, "Daily WoW Packet is complete and ready to submit.", normalized
+                normalized["submission"] = "background"
+                return next_state, SUBMISSION_ACK_PROMPT, normalized
             next_state["state"] = "awaiting_selection_reason"
             return next_state, "Why did you select this WoW?", normalized
         return next_state, DAILY_PROMPT, {"unrecognized_reply": user_reply}
@@ -471,16 +749,16 @@ def normalize_user_reply(state: dict[str, Any], user_reply: str) -> tuple[dict[s
     if current == "awaiting_selection_reason":
         reason = _reason_from_reply(user_reply) or user_reply.strip()
         next_state["selection"]["reason_for_selection"] = reason
-        next_state["state"] = "ready_to_submit"
-        return next_state, "Daily WoW Packet is complete and ready to submit.", {"reason_for_selection": reason}
+        next_state["state"] = "submission_in_progress"
+        return next_state, SUBMISSION_ACK_PROMPT, {"reason_for_selection": reason, "submission": "background"}
 
     if current == "awaiting_pass_fields":
         _merge_pass_fields(next_state, user_reply)
         missing = _missing_pass_fields(next_state)
         if missing:
             return next_state, _pass_prompt(missing), {"missing": ", ".join(missing)}
-        next_state["state"] = "ready_to_submit"
-        return next_state, "Daily WoW Packet is complete and ready to submit.", {"choice": "pass"}
+        next_state["state"] = "submission_in_progress"
+        return next_state, SUBMISSION_ACK_PROMPT, {"choice": "pass", "submission": "background"}
 
     return next_state, "", {}
 
@@ -511,7 +789,7 @@ def validate_daily_state(state: dict[str, Any]) -> list[str]:
     selected = state["selection"].get("selected_wow_id", "")
     if selected and selected != "none" and selected not in option_ids:
         errors.append("selected_wow_id must be one of today's 3 wow_options")
-    if state["state"] in {"ready_to_submit", "submitted", "verified"}:
+    if state["state"] in {"ready_to_submit", "submission_in_progress", "submitted", "verified"}:
         errors.extend(_validate_completed_selection(state, option_ids))
     return errors
 
@@ -564,11 +842,13 @@ def lifecycle_transition_options(
     target_wow_type: str,
     previous_status: str,
     new_status: str,
+    reading_log: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     update_type = update_type_for_status(new_status)
     target_id = f"WOW-2026-06-01-{transition_number:03d}"
     update_id = wow_id(market_date, 1)
-    sample = READING_SAMPLES[transition_number % len(READING_SAMPLES)]
+    readings = reading_log or reading_log_for_day(market_date, offset=transition_number)
+    sample = readings[0]
     update = with_visible_fields(
         {
             "wow_id": update_id,
@@ -605,9 +885,9 @@ def lifecycle_transition_options(
     if update_type == "resolution" and new_status in {"resolved_correct", "resolved_incorrect"}:
         update["resolution_source_used"] = sample["source_url"]
 
-    second = promotion_child_item(market_date, target_id=target_id, new_status=new_status) or base_daily_options(market_date, investor_id=investor_id)[1]
+    second = promotion_child_item(market_date, target_id=target_id, new_status=new_status) or base_daily_options(market_date, investor_id=investor_id, reading_log=readings)[1]
     second["option_number"] = 2
-    third = base_daily_options(market_date, investor_id=investor_id)[2]
+    third = base_daily_options(market_date, investor_id=investor_id, reading_log=readings)[2]
     third["option_number"] = 3
     return [update, second, third]
 
@@ -683,11 +963,19 @@ def run_daily_wow_simulation(
     start_date: date = date(2026, 7, 6),
     investor_id: str = SIM_INVESTOR_ID,
     publish: bool = False,
+    verify_public: bool = False,
     write_journal: bool = True,
+    case_name: str | None = None,
 ) -> dict[str, Any]:
     journal = journal_path or default_journal_path()
     created_paths = ensure_private_journal(journal) if write_journal else []
     cases = build_simulation_cases(journal_path=journal, start_date=start_date, investor_id=investor_id)
+    if case_name:
+        filtered_cases = [case for case in cases if case.name == case_name]
+        if not filtered_cases:
+            available = ", ".join(case.name for case in cases)
+            raise ValueError(f"unknown simulation case {case_name!r}; available cases: {available}")
+        cases = filtered_cases
     run_id = uuid.uuid4()
     if publish:
         Investor.objects.update_or_create(
@@ -712,8 +1000,34 @@ def run_daily_wow_simulation(
 
     profile = judgment_profile(cases)
     findings = simulation_findings(cases)
+    public_verification: dict[str, Any] = {}
+    if verify_public:
+        if publish:
+            published_packet_ids = {case.published_packet_id for case in cases if case.published_packet_id is not None}
+            public_verification = verify_published_simulation(
+                investor_id=investor_id,
+                packet_ids=published_packet_ids,
+                expected_packet_count=len(published_packet_ids),
+                require_full_transition_coverage=case_name is None,
+            )
+            if public_verification["errors"]:
+                findings.append(
+                    {
+                        "severity": "P0",
+                        "title": "Published public-page verification failed",
+                        "status": "needs_fix",
+                        "fix_plan": f"Fix {len(public_verification['errors'])} public verification error(s) before treating the WoW flow as production-ready.",
+                    }
+                )
+        else:
+            public_verification = {
+                "investor_id": investor_id,
+                "errors": ["--verify-public requires --publish"],
+                "warnings": [],
+            }
     report = {
         "run_id": str(run_id),
+        "case_name": case_name or "",
         "journal_path": str(journal),
         "created_paths": [str(path) for path in created_paths],
         "case_count": len(cases),
@@ -721,6 +1035,7 @@ def run_daily_wow_simulation(
         "published_case_count": sum(1 for case in cases if case.published_url),
         "lifecycle_transition_count": sum(1 for case in cases if case.name.startswith("lifecycle_")),
         "findings": findings,
+        "public_verification": public_verification,
         "judgment_profile": profile,
         "cases": [case_summary(case) for case in cases],
     }
@@ -773,6 +1088,7 @@ def build_simulation_cases(*, journal_path: Path, start_date: date, investor_id:
         for previous_status, new_statuses in previous_map.items():
             for new_status in sorted(new_statuses):
                 market_date = lifecycle_start + timedelta(days=transition_index - 1)
+                reading_log = reading_log_for_day(market_date, offset=transition_index, count=1)
                 options = lifecycle_transition_options(
                     market_date,
                     investor_id=investor_id,
@@ -780,8 +1096,8 @@ def build_simulation_cases(*, journal_path: Path, start_date: date, investor_id:
                     target_wow_type=target_wow_type,
                     previous_status=previous_status,
                     new_status=new_status,
+                    reading_log=reading_log,
                 )
-                reading_log = reading_log_for_day(market_date, offset=transition_index, count=1)
                 state = initial_daily_state(
                     investor_id=investor_id,
                     market_date=market_date,
@@ -1021,6 +1337,21 @@ def write_simulation_report(report: dict[str, Any], journal_path: Path) -> Path:
     ]
     for finding in report["findings"]:
         lines.append(f"- {finding['severity']} {finding['title']}: {finding['status']}. {finding['fix_plan']}")
+    public_verification = report.get("public_verification") or {}
+    if public_verification:
+        lines.extend(
+            [
+                "",
+                "## Public Verification",
+                "",
+                f"- Pages checked: {public_verification.get('pages_checked', 0)}",
+                f"- Status update pages: {public_verification.get('status_update_pages', 0)}",
+                f"- Status update events: {public_verification.get('status_update_events', 0)}",
+                f"- Errors: {len(public_verification.get('errors', []))}",
+            ]
+        )
+        for error in public_verification.get("errors", []):
+            lines.append(f"  - {error}")
     lines.extend(["", "## Cases", ""])
     for case in report["cases"]:
         status = "ok" if not case["errors"] else "needs_fix"
@@ -1182,7 +1513,7 @@ def _validate_completed_selection(state: dict[str, Any], option_ids: set[str]) -
             if selection.get(field_name):
                 errors.append(f"{field_name} must be blank when a WoW is selected")
     else:
-        errors.append("ready_to_submit requires selected_wow_id or none")
+        errors.append("completed daily state requires selected_wow_id or none")
     return errors
 
 
@@ -1344,6 +1675,7 @@ def _publish_case(case: SimulationCase, *, run_id: uuid.UUID) -> None:
     publish_artifact("wow", packet.id, run_id=run_id)
     packet.refresh_from_db()
     case.published_url = packet.canonical_url
+    case.published_packet_id = packet.id
     case.ledger_errors = validate_ledger("wow", packet.id)
     case.state["public_url"] = packet.canonical_url
     case.state["receipt_status"] = "skipped_local" if not packet.receipt_email_message_id else "sent"

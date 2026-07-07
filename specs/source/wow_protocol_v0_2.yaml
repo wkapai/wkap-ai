@@ -99,6 +99,13 @@ intake_flow:
     draft_options:
       required_action: generate exactly 3 WoW choices from today's readings and existing CRM state
       allowed_option_kinds: [new_wow_signal, existing_wow_status_update]
+      latency_slo:
+        target_seconds_when_recent_context_available: 10
+        hard_limit_seconds: 30
+        timeout_behavior: show_best_available_3_option_slate_and_mark_deeper_research_pending
+        invalid_if:
+          - first_choice_slate_takes_more_than_30_seconds
+          - full_packet_generation_blocks_initial_choice_slate
       type_mix_rule:
         force_one_from_each_wow_type: false
         repeated_wow_types_allowed: true
@@ -135,8 +142,16 @@ intake_flow:
       closest_rejected_wow_rule: "must be one of today's 3 wow_id values"
       next: [ready_to_submit]
     ready_to_submit:
-      required_action: generate structured Daily WoW Packet, validate it against CRM and intake specs, save privately, submit publicly
+      required_action: immediately acknowledge completed user choice, then generate structured Daily WoW Packet, validate it against CRM and intake specs, save privately, submit publicly
       completion_rule: "the user's selection/pass plus required reason completes the Daily WoW Packet"
+      user_wait_policy:
+        immediate_acknowledgement_required: true
+        user_must_not_wait_for_packet_generation_or_send: true
+        foreground_response: "Choice accepted. I will save, submit, and reconcile this in the background."
+        background_steps: [generate_packet, validate_packet, save_private_journal, submit_to_wkap_ledger, reconcile_receipt_and_public_url]
+      next: [submission_in_progress, submitted, not_submitted_format_error]
+    submission_in_progress:
+      required_action: continue packet generation, private save, public submission, and reconciliation without blocking the user
       next: [submitted, not_submitted_format_error]
     submitted:
       required_action: reconcile receipt, public WKAP URL, raw email artifact, proof state, and local private CRM files
@@ -158,7 +173,7 @@ intake_flow:
     valid_completed_daily_choice_should_be_submitted: true
     agent_does_not_decide_valid_packet_is_too_weak_to_publish: true
 daily_state:
-  states: [setup, collecting_reading_log, draft_options, awaiting_user_choice, awaiting_selection_reason, awaiting_pass_fields, ready_to_submit, submitted, verified, user_no_reply, not_submitted_format_error]
+  states: [setup, collecting_reading_log, draft_options, awaiting_user_choice, awaiting_selection_reason, awaiting_pass_fields, ready_to_submit, submission_in_progress, submitted, verified, user_no_reply, not_submitted_format_error]
   max_reading_items: 10
   wow_option_required_fields: [wow_id, wow_type, visible_type_label, plain_english_title, why_worth_watching]
   source_type_values: [article, filing, transcript, X thread, podcast, chart, internal note, email, website, social post]

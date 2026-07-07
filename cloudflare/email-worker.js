@@ -1,4 +1,9 @@
 export default {
+  async scheduled(event, env, ctx) {
+    const keepwarmUrl = env.WKAP_KEEPWARM_URL || "https://wkap.ai/";
+    ctx.waitUntil(pingKeepwarm(keepwarmUrl));
+  },
+
   async email(message, env, ctx) {
     const forwardTo = env.WKAP_FORWARD_TO || env.WKAP_CLOUDFLARE_FORWARD_TO || "playinc@gmail.com";
     const ingestUrl = env.WKAP_RENDER_INGEST_URL;
@@ -32,6 +37,35 @@ export default {
     await message.forward(forwardTo);
   },
 };
+
+async function pingKeepwarm(keepwarmUrl) {
+  try {
+    const response = await fetch(keepwarmUrl, {
+      method: "HEAD",
+      headers: {
+        "user-agent": "wkap-keepwarm/1.0",
+      },
+    });
+    if (!response.ok) {
+      console.error(
+        JSON.stringify({
+          event: "wkap_keepwarm_failed",
+          status: response.status,
+          status_text: response.statusText,
+          keepwarm_url: keepwarmUrl,
+        })
+      );
+    }
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "wkap_keepwarm_failed",
+        error: error && error.message ? error.message : String(error),
+        keepwarm_url: keepwarmUrl,
+      })
+    );
+  }
+}
 
 async function postToIngest(ingestUrl, ingestSecret, payload) {
   try {

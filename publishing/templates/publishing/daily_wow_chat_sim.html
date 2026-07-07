@@ -1,0 +1,226 @@
+{% extends "publishing/base.html" %}
+{% block title %}{{ meta_title|default:"Daily WoW Chat Simulation" }}{% endblock %}
+{% block content %}
+<section class="page-heading setup-heading">
+  <p class="eyebrow">Local Daily WoW Harness</p>
+  <h1>Daily WoW Agent Chat</h1>
+  <p>Browser-driven simulation of the Daily WoW intake flow.</p>
+</section>
+
+<article class="chat-sim-shell" data-agent-readable="true" data-page-type="daily_wow_chat_sim">
+  <input type="hidden" data-testid="csrf-token" value="{{ csrf_token }}">
+  <section class="chat-sim-status" aria-label="Simulation status">
+    <span data-testid="chat-state">Starting</span>
+    <span data-testid="chat-submission-status">not_started</span>
+    <a data-testid="chat-public-url" href="" hidden>Open public packet</a>
+  </section>
+  <section class="chat-sim-thread" data-testid="daily-wow-chat-thread" aria-live="polite"></section>
+  <form class="chat-sim-form" data-testid="daily-wow-chat-form">
+    <label class="sr-only" for="daily-wow-chat-input">Message</label>
+    <textarea id="daily-wow-chat-input" data-testid="daily-wow-chat-input" rows="3" placeholder="Type a user reply, for example: 3"></textarea>
+    <button class="button-link primary" type="submit" data-testid="daily-wow-chat-send">Send</button>
+  </form>
+</article>
+{{ monthly_cases|json_script:"monthly-chat-cases" }}
+
+<style>
+  .chat-sim-shell {
+    max-width: 960px;
+    margin: 0 auto 64px;
+    padding: 0 24px;
+  }
+
+  .chat-sim-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+    color: var(--muted-text);
+    font-size: 0.9rem;
+  }
+
+  .chat-sim-status span,
+  .chat-sim-status a {
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 6px 10px;
+    background: var(--surface-color);
+  }
+
+  .chat-sim-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 360px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    background: var(--surface-color);
+  }
+
+  .chat-message {
+    max-width: 82%;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    white-space: pre-wrap;
+    line-height: 1.45;
+  }
+
+  .chat-message[data-actor="agent"] {
+    align-self: flex-start;
+    background: var(--page-color);
+  }
+
+  .chat-message[data-actor="user"] {
+    align-self: flex-end;
+    background: #eef6ff;
+  }
+
+  .chat-message strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    color: var(--muted-text);
+  }
+
+  .chat-sim-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+    margin-top: 14px;
+  }
+
+  .chat-sim-form textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 72px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    font: inherit;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 700px) {
+    .chat-message {
+      max-width: 100%;
+    }
+
+    .chat-sim-form {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  (function () {
+    var sessionId = "";
+    var thread = document.querySelector("[data-testid='daily-wow-chat-thread']");
+    var form = document.querySelector("[data-testid='daily-wow-chat-form']");
+    var input = document.querySelector("[data-testid='daily-wow-chat-input']");
+    var stateNode = document.querySelector("[data-testid='chat-state']");
+    var statusNode = document.querySelector("[data-testid='chat-submission-status']");
+    var publicLink = document.querySelector("[data-testid='chat-public-url']");
+    var csrfToken = document.querySelector("[data-testid='csrf-token']").value;
+    var query = new URLSearchParams(window.location.search);
+    var startDate = query.get("start_date") || "2026-07-06";
+    var caseName = query.get("case_name") || "";
+    var investorId = query.get("investor_id") || "w0998";
+
+    function api(payload) {
+      return fetch("/internal/daily-wow-chat-sim/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken
+        },
+        body: JSON.stringify(payload)
+      }).then(function (response) {
+        return response.json().then(function (json) {
+          if (!response.ok) {
+            throw new Error((json.errors || ["Request failed"]).join("; "));
+          }
+          return json;
+        });
+      });
+    }
+
+    function render(data) {
+      sessionId = data.session_id || sessionId;
+      stateNode.textContent = data.state || "";
+      statusNode.textContent = data.submission_status || "";
+      if (data.public_url) {
+        publicLink.href = data.public_url;
+        publicLink.textContent = "Open public packet";
+        publicLink.hidden = false;
+      }
+      thread.innerHTML = "";
+      (data.messages || []).forEach(function (item) {
+        var bubble = document.createElement("div");
+        bubble.className = "chat-message";
+        bubble.dataset.actor = item.actor;
+        bubble.dataset.state = item.state || "";
+        var label = document.createElement("strong");
+        label.textContent = item.actor === "user" ? "User" : "Agent";
+        var body = document.createElement("div");
+        body.textContent = item.message || "";
+        bubble.appendChild(label);
+        bubble.appendChild(body);
+        thread.appendChild(bubble);
+      });
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    function pollUntilDone() {
+      if (!sessionId) {
+        return;
+      }
+      api({ action: "status", session_id: sessionId }).then(function (data) {
+        render(data);
+        if (["queued", "running"].indexOf(data.submission_status) !== -1) {
+          window.setTimeout(pollUntilDone, 700);
+        }
+      }).catch(function (error) {
+        statusNode.textContent = error.message;
+      });
+    }
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var message = input.value.trim();
+      if (!message) {
+        return;
+      }
+      input.value = "";
+      api({ action: "message", session_id: sessionId, message: message }).then(function (data) {
+        render(data);
+        if (["queued", "running"].indexOf(data.submission_status) !== -1) {
+          pollUntilDone();
+        }
+      }).catch(function (error) {
+        statusNode.textContent = error.message;
+      });
+    });
+
+    api({ action: "start", start_date: startDate, case_name: caseName, investor_id: investorId }).then(render).catch(function (error) {
+      statusNode.textContent = error.message;
+    });
+  })();
+</script>
+{% endblock %}

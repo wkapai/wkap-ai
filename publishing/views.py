@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db.models import Max
-from django.http import Http404, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.html import escape
 from django.views.decorators.cache import cache_control
+from django.views.decorators.http import require_POST
 
+from core.wow_chat_simulation import chat_session_snapshot, handle_chat_message, monthly_chat_case_index, start_chat_session
 from ledger.models import Investor, RadarIssue, DailyWoWPacket
 from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, local_wow_id, market_terms
 from ledger.wow_lifecycle import lifecycle_records, lifecycle_records_json, status_update_records
@@ -275,6 +278,57 @@ def submit_to_ledger(request):
             },
         ),
     )
+
+
+def daily_wow_chat_sim(request):
+    start_date = date.fromisoformat(str(request.GET.get("start_date") or "2026-07-06"))
+    investor_id = str(request.GET.get("investor_id") or "w0998")
+    return render(
+        request,
+        "publishing/daily_wow_chat_sim.html",
+        _page_context(
+            title="Daily WoW Chat Simulation - WKAP.ai",
+            description="Local browser-driven Daily WoW chat simulation for WKAP agent workflow testing.",
+            canonical_url=f"{settings.WKAP_BASE_URL}/daily-wow-chat-sim/",
+            page_type="daily_wow_chat_sim",
+            agent_facts=[
+                {"name": "page_purpose", "value": "Local Daily WoW chat harness for browser-driven simulation."},
+                {"name": "publishes_to_local_ledger", "value": "true"},
+                {"name": "user_decision_completes_packet", "value": "true"},
+            ],
+            monthly_cases=monthly_chat_case_index(start_date=start_date, investor_id=investor_id),
+        ),
+    )
+
+
+@require_POST
+def daily_wow_chat_sim_api(request):
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+        action = payload.get("action")
+        start_date = date.fromisoformat(str(payload.get("start_date") or "2026-07-06"))
+        investor_id = str(payload.get("investor_id") or "w0998")
+        if action == "monthly_cases":
+            return JsonResponse({"cases": monthly_chat_case_index(start_date=start_date, investor_id=investor_id)})
+        if action == "start":
+            market_date = date.fromisoformat(str(payload.get("market_date") or start_date.isoformat()))
+            return JsonResponse(
+                start_chat_session(
+                    investor_id=investor_id,
+                    market_date=market_date,
+                    case_name=str(payload.get("case_name") or "") or None,
+                    start_date=start_date,
+                )
+            )
+        if action == "message":
+            return JsonResponse(handle_chat_message(session_id=str(payload.get("session_id") or ""), message=str(payload.get("message") or "")))
+        if action == "status":
+            return JsonResponse(chat_session_snapshot(str(payload.get("session_id") or "")))
+    except ValueError as exc:
+        return JsonResponse({"errors": [str(exc)]}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({"errors": ["invalid JSON request body"]}, status=400)
+    return JsonResponse({"errors": ["unknown action"]}, status=400)
 
 
 def markdown_resource(request, resource_key: str):

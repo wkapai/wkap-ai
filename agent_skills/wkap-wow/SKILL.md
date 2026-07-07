@@ -72,13 +72,14 @@ Ask the user only for information that is required and cannot be inferred or saf
 - Show exactly 3 WoW signal options, numbered 1-3.
 - Show a fast lightweight choice slate first. Do not generate the full structured Daily WoW Packet before the user has selected 1, 2, 3, or pass.
 - The first user-facing slate should be concise and should target under 10 seconds whenever recent reading context is already available.
+- Hard latency limit: if the agent cannot serve the first 3-option slate within 30 seconds, it must show the best available slate from current evidence and mark deeper research as pending; do not block the user's daily choice on full packet generation or extra research.
 - Do not force a fixed type mix. The 3 options must be the highest-value choices for today's evidence and CRM state, not one item from each `wow_type`; repeated types are valid when they are the best choices.
 - Any of the 3 options may be a new WoW signal or an append-only `status_update` for an existing WoW signal when today's reading provides new evidence, a promotion, a resolution, or a maintenance event.
 - Require `selected_wow_id` and `reason_for_selection` when the user selects an option.
 - Require `selected_wow_id: none`, `reason_for_pass`, `closest_rejected_wow`, and `missing_evidence` when the user passes.
 - For a pass, `closest_rejected_wow` must be the `wow_id` of one of today's 3 suggested WoW signals, not a free-text rejected idea.
 - Do not run a default edit/research/confirmation loop. If the user asks for edits or more research, complete that request, then return to selection/pass plus reason.
-- Selection/pass plus reason completes the Daily WoW Packet and triggers submission to WKAP Ledger.
+- Selection/pass plus reason completes the Daily WoW Packet and triggers submission to WKAP Ledger. After the user gives the completed choice/pass response, immediately acknowledge that the choice is accepted, then save, submit, and reconcile asynchronously; the user should not need to wait for packet generation, ledger send, receipt reconciliation, or public URL verification.
 
 ## Fast Choice Slate Rule
 
@@ -100,7 +101,7 @@ choice_slate:
   prompt: "Pick one WoW: 1, 2, 3, or pass."
 ```
 
-Do not build, print, or validate the full packet YAML before the user has made a selection/pass and provided the required reason. Keep reading-log selection, source refs, `wow_id`, lineage, and CRM state internally while showing only the slate. After choice plus reason exists, generate the final v0.2 Daily WoW Packet, save it privately, submit it publicly, and reconcile asynchronously.
+Do not build, print, or validate the full packet YAML before the user has made a selection/pass and provided the required reason. Keep reading-log selection, source refs, `wow_id`, lineage, and CRM state internally while showing only the slate. The slate must be served within 30 seconds; if deeper research is still running, show the best current slate and continue enrichment only after the user choice is collected. After choice plus reason exists, generate the final v0.2 Daily WoW Packet, save it privately, submit it publicly, and reconcile asynchronously without making the user wait.
 
 The slate is not a template slot exercise. Do not choose one Trackable, one Scoreable, and one Thesis just to make the surface look balanced. Rank all candidate, trackable, scoreable, thesis, and status-update opportunities together, then show the best three.
 

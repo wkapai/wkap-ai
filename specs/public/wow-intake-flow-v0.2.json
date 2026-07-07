@@ -26,6 +26,15 @@
         "new_wow_signal",
         "existing_wow_status_update"
       ],
+      "latency_slo": {
+        "target_seconds_when_recent_context_available": 10,
+        "hard_limit_seconds": 30,
+        "timeout_behavior": "show_best_available_3_option_slate_and_mark_deeper_research_pending",
+        "invalid_if": [
+          "first_choice_slate_takes_more_than_30_seconds",
+          "full_packet_generation_blocks_initial_choice_slate"
+        ]
+      },
       "type_mix_rule": {
         "force_one_from_each_wow_type": false,
         "repeated_wow_types_allowed": true,
@@ -99,8 +108,28 @@
       ]
     },
     "ready_to_submit": {
-      "required_action": "generate structured Daily WoW Packet, validate it against CRM and intake specs, save privately, submit publicly",
+      "required_action": "immediately acknowledge completed user choice, then generate structured Daily WoW Packet, validate it against CRM and intake specs, save privately, submit publicly",
       "completion_rule": "the user's selection/pass plus required reason completes the Daily WoW Packet",
+      "user_wait_policy": {
+        "immediate_acknowledgement_required": true,
+        "user_must_not_wait_for_packet_generation_or_send": true,
+        "foreground_response": "Choice accepted. I will save, submit, and reconcile this in the background.",
+        "background_steps": [
+          "generate_packet",
+          "validate_packet",
+          "save_private_journal",
+          "submit_to_wkap_ledger",
+          "reconcile_receipt_and_public_url"
+        ]
+      },
+      "next": [
+        "submission_in_progress",
+        "submitted",
+        "not_submitted_format_error"
+      ]
+    },
+    "submission_in_progress": {
+      "required_action": "continue packet generation, private save, public submission, and reconciliation without blocking the user",
       "next": [
         "submitted",
         "not_submitted_format_error"

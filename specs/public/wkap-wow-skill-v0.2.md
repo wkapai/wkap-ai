@@ -246,7 +246,7 @@ passed:
 
 For a pass, `closest_rejected_wow` must be the `wow_id` of one of today's 3 suggested WoW signals. Do not invent a new prose rejected idea at selection time.
 
-The user selection/pass plus required reason completes the Daily WoW Packet and triggers submission. Do not ask for a second confirmation after the user completes the daily choice.
+The user selection/pass plus required reason completes the Daily WoW Packet and triggers submission. Do not ask for a second confirmation after the user completes the daily choice. After the user gives the completed choice/pass response, immediately acknowledge that the choice is accepted, then save, submit, and reconcile asynchronously; the user should not need to wait for packet generation, ledger send, receipt reconciliation, or public URL verification.
 
 Do not ask the user to edit the packet, approve the packet text, or request more research as part of the default routine. If the user explicitly asks to edit or research more, follow that instruction, then return to the same selection/pass plus reason flow.
 
@@ -270,11 +270,11 @@ choice_slate:
   prompt: "Pick one WoW: 1, 2, 3, or pass."
 ```
 
-Do not build, print, or validate the full packet YAML before the user has made a selection/pass and provided the required reason. Keep reading-log selection, source refs, `wow_id`, lineage, and CRM state internally while showing only the slate. The first user-facing slate should be concise and should target under 10 seconds whenever recent reading context is already available.
+Do not build, print, or validate the full packet YAML before the user has made a selection/pass and provided the required reason. Keep reading-log selection, source refs, `wow_id`, lineage, and CRM state internally while showing only the slate. The first user-facing slate should be concise and should target under 10 seconds whenever recent reading context is already available. The hard limit is 30 seconds: if the agent cannot serve the first 3-option slate within 30 seconds, it must show the best available slate from current evidence and mark deeper research as pending; do not block the user's daily choice on full packet generation or extra research.
 
 The slate is not a template slot exercise. Do not choose one Trackable, one Scoreable, and one Thesis just to make the surface look balanced.
 
-After choice plus reason exists, generate the final v0.2 Daily WoW Packet, save it privately, submit it publicly, and reconcile asynchronously.
+After choice plus reason exists, generate the final v0.2 Daily WoW Packet, save it privately, submit it publicly, and reconcile asynchronously without making the user wait.
 
 ## Daily Suggestion Display Contract
 
