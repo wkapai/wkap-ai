@@ -42,6 +42,7 @@ from publishing.services import (
     purge_radar_cache,
     publish_artifact,
     rebuild_indexes,
+    timestamp_pending_artifacts,
     timestamp_artifact,
     upgrade_opentimestamps,
     validate_ledger,
@@ -1450,6 +1451,116 @@ packet:
                 self.assertNotIn("ots_status", target_payload)
                 self.assertTrue(LedgerEvent.objects.filter(event_name="opentimestamp_succeeded", entity_type="wow").exists())
 
+    def test_opentimestamp_disabled_writes_target_and_syncs_queued_metadata(self):
+        run_id = "00000000-0000-0000-0000-000000000033"
+        raw = self.raw_email(sender="playinc@gmail.com", body="Market_date: 2026-07-04\nTitle: Queued Radar\nBody: Context")
+        issue = create_radar_issue(raw, run_id=run_id)
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ledger_root = root / "ledger"
+            with override_settings(
+                WKAP_PUBLIC_SITE_ROOT=root / "public",
+                WKAP_LEDGER_REPO_PATH=ledger_root,
+                WKAP_LEDGER_GITHUB_BASE_URL="https://github.com/wkapai/wkap-ledger/blob/main",
+                WKAP_OPENTIMESTAMP_ENABLED=False,
+            ):
+                generate_radar_html(issue, run_id=run_id)
+                generate_manifest("radar", issue.id, run_id=run_id)
+                issue.github_file_url = "https://github.com/wkapai/wkap-ledger/blob/main/radar/wkap-radar-feed-2026-07-04.html"
+                issue.github_commit_sha = "c" * 40
+                issue.save(update_fields=["github_file_url", "github_commit_sha", "updated_at"])
+
+                with patch("publishing.services._commit_ledger_changes", return_value="commit-sha") as commit:
+                    stamped = timestamp_artifact("radar", issue.id, run_id=run_id)
+
+                target = ledger_root / "timestamps" / f"radar-{issue.id}.json"
+                manifest = ledger_root / "manifests" / f"radar-{issue.id}.json"
+                ledger_html = ledger_root / "radar" / "wkap-radar-feed-2026-07-04.html"
+                public_html = root / "public" / "radar" / "wkap-radar-feed-2026-07-04.html"
+
+                self.assertEqual(stamped.ots_status, "queued")
+                self.assertEqual(stamped.ots_proof_url, "")
+                self.assertTrue(target.exists())
+                self.assertFalse(Path(f"{target}.ots").exists())
+                self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["content_sha256"], stamped.content_sha256)
+                self.assertEqual(json.loads(manifest.read_text(encoding="utf-8"))["ots_status"], "queued")
+                self.assertIn('data-opentimestamp-status="queued"', public_html.read_text(encoding="utf-8"))
+                self.assertIn('data-opentimestamp-status="queued"', ledger_html.read_text(encoding="utf-8"))
+                commit.assert_called_once()
+
+    def test_opentimestamp_enabled_syncs_stamped_html_to_ledger_repo(self):
+        run_id = "00000000-0000-0000-0000-000000000034"
+        raw = self.raw_email(sender="playinc@gmail.com", body="Market_date: 2026-07-05\nTitle: Stamped Radar\nBody: Context")
+        issue = create_radar_issue(raw, run_id=run_id)
+
+        def fake_ots(*args):
+            target = Path(args[1])
+            Path(f"{target}.ots").write_text("fake ots proof", encoding="utf-8")
+            return "submitted"
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ledger_root = root / "ledger"
+            with override_settings(
+                WKAP_PUBLIC_SITE_ROOT=root / "public",
+                WKAP_LEDGER_REPO_PATH=ledger_root,
+                WKAP_LEDGER_GITHUB_BASE_URL="https://github.com/wkapai/wkap-ledger/blob/main",
+                WKAP_OPENTIMESTAMP_ENABLED=True,
+            ):
+                generate_radar_html(issue, run_id=run_id)
+                generate_manifest("radar", issue.id, run_id=run_id)
+                issue.github_file_url = "https://github.com/wkapai/wkap-ledger/blob/main/radar/wkap-radar-feed-2026-07-05.html"
+                issue.github_commit_sha = "d" * 40
+                issue.save(update_fields=["github_file_url", "github_commit_sha", "updated_at"])
+
+                with patch("publishing.services._run_ots", side_effect=fake_ots), patch(
+                    "publishing.services._commit_ledger_changes", return_value="commit-sha"
+                ) as commit:
+                    stamped = timestamp_artifact("radar", issue.id, run_id=run_id)
+
+                target = ledger_root / "timestamps" / f"radar-{issue.id}.json"
+                manifest = ledger_root / "manifests" / f"radar-{issue.id}.json"
+                ledger_html = ledger_root / "radar" / "wkap-radar-feed-2026-07-05.html"
+
+                self.assertEqual(stamped.ots_status, "stamped")
+                self.assertTrue(Path(f"{target}.ots").exists())
+                self.assertTrue(stamped.ots_proof_url.endswith(f"timestamps/radar-{issue.id}.json.ots"))
+                self.assertEqual(json.loads(manifest.read_text(encoding="utf-8"))["ots_status"], "stamped")
+                self.assertIn('data-opentimestamp-status="stamped"', ledger_html.read_text(encoding="utf-8"))
+                self.assertIn("Proof file", ledger_html.read_text(encoding="utf-8"))
+                commit.assert_called_once()
+
+    def test_timestamp_pending_artifacts_repairs_not_started_radar(self):
+        run_id = "00000000-0000-0000-0000-000000000035"
+        raw = self.raw_email(sender="playinc@gmail.com", body="Market_date: 2026-07-06\nTitle: Pending Radar\nBody: Context")
+        issue = create_radar_issue(raw, run_id=run_id)
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ledger_root = root / "ledger"
+            with override_settings(
+                WKAP_PUBLIC_SITE_ROOT=root / "public",
+                WKAP_LEDGER_REPO_PATH=ledger_root,
+                WKAP_LEDGER_GITHUB_BASE_URL="https://github.com/wkapai/wkap-ledger/blob/main",
+                WKAP_OPENTIMESTAMP_ENABLED=False,
+            ):
+                generate_radar_html(issue, run_id=run_id)
+                generate_manifest("radar", issue.id, run_id=run_id)
+                with patch("publishing.services._commit_ledger_changes", return_value="commit-sha"):
+                    self.assertEqual(timestamp_pending_artifacts(run_id=run_id, entity_type="radar"), [])
+
+                issue.github_file_url = "https://github.com/wkapai/wkap-ledger/blob/main/radar/wkap-radar-feed-2026-07-06.html"
+                issue.github_commit_sha = "e" * 40
+                issue.save(update_fields=["github_file_url", "github_commit_sha", "updated_at"])
+                with patch("publishing.services._commit_ledger_changes", return_value="commit-sha"):
+                    repaired = timestamp_pending_artifacts(run_id=run_id, entity_type="radar")
+
+                issue.refresh_from_db()
+                self.assertEqual([artifact.id for artifact in repaired], [issue.id])
+                self.assertEqual(issue.ots_status, "queued")
+                self.assertTrue((ledger_root / "timestamps" / f"radar-{issue.id}.json").exists())
+
     def test_upgrade_opentimestamps_updates_status_without_mutating_target(self):
         run_id = "00000000-0000-0000-0000-000000000032"
         raw = self.raw_email(sender="ots-upgrade@example.com", subject="Daily WoW Packet - 2026-06-29 - OTS Agent", body=self.wow_packet_body())
@@ -1586,7 +1697,14 @@ packet:
         issue.receipt_email_sent_at = timezone.now()
         issue.receipt_email_message_id = "old-message-id"
         issue.receipt_email_error = "old error"
-        issue.save(update_fields=["receipt_email_sent_at", "receipt_email_message_id", "receipt_email_error"])
+        issue.canonical_url = "https://wkap.ai/radar/wkap-radar-feed-2026-07-02.html"
+        issue.content_sha256 = "a" * 64
+        issue.github_file_url = "https://github.com/wkap/ledger/radar/wkap-radar-feed-2026-07-02.html"
+        issue.github_commit_sha = "b" * 40
+        issue.manifest_url = "https://github.com/wkap/ledger/manifests/radar-1.json"
+        issue.ots_status = "stamped"
+        issue.ots_proof_url = "https://github.com/wkap/ledger/timestamps/radar-1.json.ots"
+        issue.save()
         second_raw = self.raw_email(
             sender="playinc@gmail.com",
             subject="WKAP Radar Feed - 2026 - 07 - 02",
@@ -1600,6 +1718,13 @@ packet:
         self.assertIsNone(updated_issue.receipt_email_sent_at)
         self.assertEqual(updated_issue.receipt_email_message_id, "")
         self.assertEqual(updated_issue.receipt_email_error, "")
+        self.assertEqual(updated_issue.canonical_url, "")
+        self.assertEqual(updated_issue.content_sha256, "")
+        self.assertEqual(updated_issue.github_file_url, "")
+        self.assertEqual(updated_issue.github_commit_sha, "")
+        self.assertEqual(updated_issue.manifest_url, "")
+        self.assertEqual(updated_issue.ots_status, "not_started")
+        self.assertEqual(updated_issue.ots_proof_url, "")
 
     def test_publish_radar_attempts_receipt_after_proof_fields(self):
         run_id = "00000000-0000-0000-0000-000000000024"

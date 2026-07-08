@@ -57,4 +57,4 @@ services:
       - key: WKAP_CLOUDFLARE_CACHE_PURGE_ENABLED
         value: "true"
       - key: WKAP_OPENTIMESTAMP_ENABLED
-        value: "false"
+        value: "true"

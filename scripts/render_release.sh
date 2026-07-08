@@ -26,5 +26,6 @@ fi
 python manage.py migrate --noinput
 python manage.py check --deploy
 python manage.py wkap --json environment-check
+python manage.py wkap --json timestamp-pending-artifacts
 python manage.py wkap --json rebuild-indexes
 python manage.py wkap --json validate-all

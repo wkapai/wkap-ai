@@ -21,6 +21,7 @@ from publishing.services import (
     generate_wow_html,
     publish_artifact,
     rebuild_indexes,
+    timestamp_pending_artifacts,
     timestamp_artifact,
     upgrade_opentimestamps,
     validate_all,
@@ -91,6 +92,11 @@ class Command(BaseCommand):
 
         timestamp = subparsers.add_parser("timestamp-artifact")
         self._add_entity_args(timestamp)
+
+        timestamp_pending = subparsers.add_parser("timestamp-pending-artifacts")
+        timestamp_pending.add_argument("--entity-type", choices=["radar", "wow"])
+        timestamp_pending.add_argument("--entity-id", type=int)
+        timestamp_pending.add_argument("--limit", type=int)
 
         upgrade_ots = subparsers.add_parser("upgrade-opentimestamps")
         upgrade_ots.add_argument("--entity-type", choices=["radar", "wow"])
@@ -330,6 +336,29 @@ class Command(BaseCommand):
                 entity=artifact,
                 next_action=f"wkap validate-ledger --entity-type {options['entity_type']} --entity-id {artifact.id}",
             )
+
+        if command == "timestamp-pending-artifacts":
+            if options.get("entity_id") and not options.get("entity_type"):
+                raise CommandError("--entity-id requires --entity-type")
+            stamped = timestamp_pending_artifacts(
+                run_id=run_id,
+                entity_type=options.get("entity_type"),
+                entity_id=options.get("entity_id"),
+                limit=options.get("limit"),
+            )
+            result = CommandResult(
+                command=command,
+                run_id=str(run_id),
+                status="succeeded",
+                entity_type=options.get("entity_type") or "opentimestamp",
+                entity_id=str(options.get("entity_id") or ""),
+                next_action="done",
+            )
+            result.details = {
+                "processed_count": len(stamped),
+                "artifacts": [f"{'radar' if artifact.__class__.__name__ == 'RadarIssue' else 'wow'}:{artifact.id}" for artifact in stamped],
+            }
+            return result
 
         if command == "upgrade-opentimestamps":
             if options.get("entity_id") and not options.get("entity_type"):

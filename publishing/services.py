@@ -193,6 +193,7 @@ def commit_ledger(entity_type: str, entity_id: int, *, run_id: uuid.UUID) -> Any
 
 def timestamp_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
     artifact = _artifact(entity_type, entity_id)
+    target_path = _write_timestamp_target(entity_type, artifact)
     log_event(
         "opentimestamp_started",
         run_id=run_id,
@@ -203,20 +204,21 @@ def timestamp_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
     )
     if not settings.WKAP_OPENTIMESTAMP_ENABLED:
         artifact.ots_status = "queued"
-        artifact.save(update_fields=["ots_status", "updated_at"])
+        artifact.ots_proof_url = ""
+        artifact.save(update_fields=["ots_status", "ots_proof_url", "updated_at"])
         _refresh_artifact_files(entity_type, artifact)
+        commit_sha = _sync_and_commit_ledger_metadata(entity_type, artifact, f"Queue OpenTimestamp {entity_type} {entity_id}")
         log_event(
             "opentimestamp_succeeded",
             run_id=run_id,
             entity_type=entity_type,
             entity_id=artifact.id,
             artifact=artifact,
-            details={"mode": "queued_without_runtime"},
+            details={"mode": "queued_without_runtime", "target_path": str(target_path), "commit_sha": commit_sha},
         )
         return artifact
 
     try:
-        target_path = _write_timestamp_target(entity_type, artifact)
         proof_path = _ots_proof_storage_path(entity_type, artifact.id)
         if not proof_path.exists():
             _run_ots("stamp", str(target_path))
@@ -224,10 +226,7 @@ def timestamp_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
         artifact.ots_proof_url = _github_url(proof_path) or str(proof_path)
         artifact.save(update_fields=["ots_status", "ots_proof_url", "updated_at"])
         _refresh_artifact_files(entity_type, artifact)
-        if settings.WKAP_LEDGER_REPO_PATH:
-            commit_sha = _commit_ledger_changes(settings.WKAP_LEDGER_REPO_PATH, f"OpenTimestamp {entity_type} {entity_id}")
-        else:
-            commit_sha = ""
+        commit_sha = _sync_and_commit_ledger_metadata(entity_type, artifact, f"OpenTimestamp {entity_type} {entity_id}")
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
         artifact.ots_status = "failed"
         artifact.save(update_fields=["ots_status", "updated_at"])
@@ -253,6 +252,22 @@ def timestamp_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
         details={"target_path": str(target_path), "proof_path": str(proof_path), "commit_sha": commit_sha},
     )
     return artifact
+
+
+def timestamp_pending_artifacts(
+    *,
+    run_id: uuid.UUID,
+    entity_type: str | None = None,
+    entity_id: int | None = None,
+    limit: int | None = None,
+) -> list[Any]:
+    candidates = _timestamp_pending_candidates(entity_type, entity_id)
+    if limit is not None:
+        candidates = candidates[:limit]
+    stamped = []
+    for current_entity_type, artifact in candidates:
+        stamped.append(timestamp_artifact(current_entity_type, artifact.id, run_id=run_id))
+    return stamped
 
 
 def upgrade_opentimestamps(*, run_id: uuid.UUID, entity_type: str | None = None, entity_id: int | None = None) -> list[Any]:
@@ -595,6 +610,13 @@ def _sync_artifact_to_ledger_repo(entity_type: str, artifact) -> None:
         raw_destination.parent.mkdir(parents=True, exist_ok=True)
         if raw_source.resolve() != raw_destination.resolve():
             shutil.copyfile(raw_source, raw_destination)
+
+
+def _sync_and_commit_ledger_metadata(entity_type: str, artifact, message: str) -> str:
+    if not settings.WKAP_LEDGER_REPO_PATH:
+        return ""
+    _sync_artifact_to_ledger_repo(entity_type, artifact)
+    return _commit_ledger_changes(settings.WKAP_LEDGER_REPO_PATH, message)
 
 
 def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
@@ -991,6 +1013,44 @@ def _timestamp_upgrade_candidates(entity_type: str | None, entity_id: int | None
         *[("radar", issue) for issue in RadarIssue.objects.exclude(ots_proof_url="").order_by("id")],
         *[("wow", packet) for packet in DailyWoWPacket.objects.select_related("investor").exclude(ots_proof_url="").order_by("id")],
     ]
+
+
+def _timestamp_pending_candidates(entity_type: str | None, entity_id: int | None) -> list[tuple[str, Any]]:
+    statuses = ["", "not_started"]
+    if settings.WKAP_OPENTIMESTAMP_ENABLED:
+        statuses.append("queued")
+
+    if entity_type and entity_id:
+        artifact = _artifact(entity_type, entity_id)
+        return [(entity_type, artifact)] if artifact.ots_status in statuses and _artifact_ready_for_timestamp(artifact) else []
+    if entity_type == "radar":
+        return [("radar", issue) for issue in _timestamp_ready(RadarIssue.objects.filter(ots_status__in=statuses)).order_by("market_date", "id")]
+    if entity_type == "wow":
+        return [
+            ("wow", packet)
+            for packet in _timestamp_ready(DailyWoWPacket.objects.select_related("investor").filter(ots_status__in=statuses)).order_by(
+                "market_date", "id"
+            )
+        ]
+    return [
+        *[("radar", issue) for issue in _timestamp_ready(RadarIssue.objects.filter(ots_status__in=statuses)).order_by("market_date", "id")],
+        *[
+            ("wow", packet)
+            for packet in _timestamp_ready(DailyWoWPacket.objects.select_related("investor").filter(ots_status__in=statuses)).order_by(
+                "market_date", "id"
+            )
+        ],
+    ]
+
+
+def _timestamp_ready(queryset):
+    for field in ("canonical_url", "content_sha256", "github_file_url", "github_commit_sha", "manifest_url"):
+        queryset = queryset.exclude(**{field: ""})
+    return queryset
+
+
+def _artifact_ready_for_timestamp(artifact) -> bool:
+    return all(getattr(artifact, field, "") for field in ("canonical_url", "content_sha256", "github_file_url", "github_commit_sha", "manifest_url"))
 
 
 def _wow_agent_facts(submission: DailyWoWPacket, selected_wow, selection_status: str) -> list[dict[str, str]]:
