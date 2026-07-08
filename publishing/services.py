@@ -1017,8 +1017,6 @@ def _timestamp_upgrade_candidates(entity_type: str | None, entity_id: int | None
 
 def _timestamp_pending_candidates(entity_type: str | None, entity_id: int | None) -> list[tuple[str, Any]]:
     statuses = ["", "not_started"]
-    if settings.WKAP_OPENTIMESTAMP_ENABLED:
-        statuses.append("queued")
 
     if entity_type and entity_id:
         artifact = _artifact(entity_type, entity_id)
