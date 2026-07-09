@@ -62,7 +62,9 @@ setup_defaults:
   private_journal_location: durable user-owned Markdown storage; local Markdown folder if filesystem access exists
   investor_id: use known WKAP investor ID if available; otherwise use a stable local draft identity until public ledger identity is assigned or confirmed
   daily_send_time: infer from the user's behavior pattern after daily investment research when autonomous scheduling is available
+  setup_scheduling: create or update an active recurring automation named "WKAP Daily WoW" when Codex scheduled automations or an equivalent autonomous scheduler is available
   schedule_fallback: if autonomous scheduling is unavailable, run when the user says "daily WoW" or at the start of the first agent session on a US market day when recent research context is available
+  setup_report: include install verification, journal path, automation status, schedule summary, and fallback trigger
   research_sources: agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and high-quality agent-found market items
   completion_flow: suggest 3 WoW signals, collect user selection or pass plus required reason, then submit; no reply means save privately and submit nothing publicly
   default_packet_scope: one Daily WoW Packet for the resolved US trading date
@@ -136,7 +138,11 @@ The agent should record the spec version, requested latest URL, resolved version
 
 ## Scheduling Fallback
 
-If the agent environment supports autonomous scheduled tasks, schedule the daily workflow after the user's inferred investment research window.
+During setup, if Codex scheduled automations or an equivalent autonomous scheduler are available, create or update an active recurring automation named `WKAP Daily WoW` for the active workspace.
+
+Each scheduled run must invoke the installed WKAP WoW Skill and the latest specs it references. The daily workout behavior remains governed by this skill and the JSON execution contracts, not by duplicated setup-prompt instructions.
+
+After setup, report whether scheduling was created, updated, unavailable, or skipped. Include the journal path, schedule summary, and fallback trigger.
 
 If autonomous scheduling is unavailable, do not promise a background cron. Run the daily workflow when the user says `daily WoW`, and at the start of the first agent session on a US market day when recent research context is available.
 

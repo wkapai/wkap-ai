@@ -55,6 +55,8 @@ When installing this skill or setting up a recurring WKAP task, use defaults and
 - Agent memory: may be used as a cache, but must not be the only durable journal when local files are available.
 - `investor_id`: use the known WKAP investor ID if available. If unknown, use a stable local draft identity and do not block setup. Update the mapping after WKAP assigns or confirms a public investor ID.
 - Send time: if autonomous scheduling is available, infer the daily send time from the user's behavior pattern after their usual investment research window. If autonomous scheduling is not available, run when the user says `daily WoW` or at the start of the first agent session on a US market day when recent research context is available.
+- Scheduling setup: during setup, if Codex scheduled automations or an equivalent autonomous scheduler are available, create or update an active recurring automation named `WKAP Daily WoW` for the active workspace. Each scheduled run must invoke this installed skill and the latest specs it references.
+- Setup report: after setup, tell the user whether scheduling was created, updated, unavailable, or skipped. Include install verification, journal path, schedule summary, and fallback trigger.
 - Research sources: default to agent-accessible browser activity, pasted/saved/reviewed items, explicit user requests, and useful agent-found market items.
 - Completion: default to collecting the user's selection/pass plus required reason. That daily choice completes the Daily WoW Packet. If the user does not reply, save privately as no-reply and submit nothing publicly.
 

@@ -97,9 +97,11 @@ market_date_rule:
   off_hours: "Before the next US trading session opens, use the most recent US trading date unless the user explicitly asks to prepare the next session's packet."
   weekend_or_holiday: "Roll research into the next US trading date unless the user explicitly asks for a catch-up packet for the most recent trading date."
 scheduling:
-  autonomous_supported: "Schedule the daily workflow after the user's inferred investment research window."
+  autonomous_supported: "During setup, if Codex scheduled automations or an equivalent autonomous scheduler are available, create or update an active recurring automation named WKAP Daily WoW for the active workspace. Each scheduled run must invoke the installed WKAP WoW skill and the latest specs it references."
   autonomous_not_supported: "Run the workflow when the user says daily WoW, and at the start of the first agent session on a US market day when recent research context is available."
+  default_codex_automation_name: WKAP Daily WoW
   no_silent_cron_promise: true
+  setup_status_report_required_fields: [install_verified, journal_path, automation_status, schedule_summary, fallback_trigger]
 submission:
   channel: email
   to: ledger@wkap.ai
@@ -115,7 +117,8 @@ intake_flow:
   goal: "Make every agent behave like the same intake program during Daily WoW data collection while still accepting natural conversation as input."
   states:
     setup:
-      required_action: install_skill_and_prepare_private_journal
+      required_action: install_skill_prepare_private_journal_and_configure_supported_scheduling
+      required_outputs: [install_verified, journal_path, automation_status, schedule_summary, fallback_trigger]
       next: [collecting_reading_log]
     collecting_reading_log:
       required_action: collect top daily investment readings from user activity and agent-found sources
