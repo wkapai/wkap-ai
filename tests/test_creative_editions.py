@@ -47,7 +47,7 @@ creative_edition:
       interaction_or_action: "He braces the building while mechanical tools align the wafer line."
       show_seed: "Follow the factory floor into the next earnings call."
   credits:
-    human_contribution: "Alex: editorial judgment and final approval"
+    human_contribution: "Alex: product direction and optional taste feedback; no routine daily touch"
     ai_contribution: "AI: research synthesis, iteration, and rendering assistance"
     publisher: "WKAP.ai"
   rejected_choices:
