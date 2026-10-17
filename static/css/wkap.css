@@ -1288,6 +1288,68 @@ body:not([data-page-type="home"]) .setup-page h2 {
   color: var(--muted);
 }
 
+.creative-premise {
+  color: var(--soft);
+  font-size: 17px;
+  margin: 6px 0 14px;
+}
+
+.creative-cover-frame {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  overflow: hidden;
+}
+
+.creative-cover {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.creative-cover-frame figcaption {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+}
+
+.creative-card-grid,
+.creative-scenes {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.creative-card,
+.creative-scene {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(20, 35, 66, 0.11);
+  border-radius: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.creative-details {
+  display: grid;
+  grid-template-columns: minmax(98px, 0.28fr) minmax(0, 1fr);
+  margin: 8px 0;
+}
+
+.creative-details dt,
+.creative-details dd {
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+.source-links {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
 body:not([data-page-type="home"]) main {
   max-width: 1320px;
   padding-top: clamp(10px, 1.7vw, 22px);
@@ -1634,6 +1696,19 @@ body:not([data-page-type="home"]) .agent-facts {
 
   .metadata {
     grid-template-columns: 1fr;
+  }
+
+  .creative-card-grid,
+  .creative-scenes,
+  .creative-details {
+    grid-template-columns: 1fr;
+  }
+
+  .creative-cover-frame,
+  .creative-card,
+  .creative-scene {
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
 
   h1 {

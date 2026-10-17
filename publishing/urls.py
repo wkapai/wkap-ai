@@ -15,6 +15,27 @@ def radar_issue_url(market_date) -> str:
     return f"{settings.WKAP_BASE_URL}/{radar_issue_path(market_date)}"
 
 
+def creative_archive_url() -> str:
+    return f"{settings.WKAP_BASE_URL}/creative/"
+
+
+def creative_issue_path(market_date, edition_version: int) -> str:
+    return f"creative/wkap-creative-edition-{market_date}-v{edition_version}.html"
+
+
+def creative_issue_url(market_date, edition_version: int) -> str:
+    return f"{settings.WKAP_BASE_URL}/{creative_issue_path(market_date, edition_version)}"
+
+
+def creative_image_path(market_date, edition_version: int, extension: str) -> str:
+    safe_extension = extension.lower().lstrip(".")
+    return f"creative/assets/wkap-cover-{market_date}-v{edition_version}.{safe_extension}"
+
+
+def creative_image_url(market_date, edition_version: int, extension: str) -> str:
+    return f"{settings.WKAP_BASE_URL}/{creative_image_path(market_date, edition_version, extension)}"
+
+
 def investor_home_path(investor_id: str) -> str:
     return f"investors/{investor_id}/index.html"
 

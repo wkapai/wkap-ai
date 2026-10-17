@@ -14,7 +14,11 @@
       </div>
     </div>
     <p class="ots-proof-copy">
-      {% if artifact.ots_proof_url %}
+      {% if artifact.ots_status == "verified_bitcoin" %}
+        This proof has been independently verified against Bitcoin.
+      {% elif artifact.format_version == "creative_edition_v1" and artifact.ots_proof_url %}
+        A proof file exists, but Bitcoin confirmation remains pending or unverified.
+      {% elif artifact.ots_proof_url %}
         This artifact has an OpenTimestamp proof file.
       {% else %}
         Timestamp proof is pending.

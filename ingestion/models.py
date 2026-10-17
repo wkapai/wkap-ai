@@ -6,6 +6,7 @@ class RawEmail(models.Model):
         UNCLASSIFIED = "unclassified", "Unclassified"
         RADAR = "radar", "Radar Feed"
         WOW = "wow", "WoW"
+        CREATIVE = "creative", "Creative Edition"
         UNKNOWN = "unknown", "Unknown"
         SPAM = "spam", "Spam"
         ERROR = "error", "Error"

@@ -22,6 +22,7 @@ from ledger.models import LedgerEvent
 
 
 RADAR_TERMS = ("wkap radar", "radar feed", "market context")
+CREATIVE_TERMS = ("wkap creative edition", "creative_edition_v1")
 WOW_TERMS = (
     "daily wow packet",
     "agent suggested 3 wows",
@@ -121,7 +122,7 @@ def parse_cloudflare_email_payload(payload: dict) -> CloudflareEmailPayload:
 
 
 def process_raw_email_for_publish(raw_email: RawEmail, *, run_id: uuid.UUID):
-    from ledger.services import create_radar_issue, create_wow_submission
+    from ledger.services import create_creative_edition, create_radar_issue, create_wow_submission
     from publishing.receipts import send_wow_format_fix_receipt
     from publishing.services import publish_artifact
 
@@ -136,6 +137,9 @@ def process_raw_email_for_publish(raw_email: RawEmail, *, run_id: uuid.UUID):
             send_wow_format_fix_receipt(raw_email, run_id=run_id)
             return raw_email
         return publish_artifact("wow", submission.id, run_id=run_id)
+    if classification == RawEmail.Classification.CREATIVE:
+        edition = create_creative_edition(raw_email, run_id=run_id)
+        return publish_artifact("creative", edition.id, run_id=run_id)
 
     log_event(
         "cloudflare_email_not_published",
@@ -151,7 +155,9 @@ def process_raw_email_for_publish(raw_email: RawEmail, *, run_id: uuid.UUID):
 
 def classify_email(raw_email: RawEmail, *, run_id: uuid.UUID) -> str:
     text = f"{raw_email.subject}\n{raw_email.raw_body}".lower()
-    if any(term in text for term in RADAR_TERMS):
+    if any(term in text for term in CREATIVE_TERMS):
+        classification = RawEmail.Classification.CREATIVE
+    elif any(term in text for term in RADAR_TERMS):
         classification = RawEmail.Classification.RADAR
     elif any(term in text for term in WOW_TERMS):
         classification = RawEmail.Classification.WOW
@@ -242,6 +248,28 @@ def ensure_radar_authorized(raw_email: RawEmail, *, run_id: uuid.UUID) -> bool:
         entity_id=raw_email.id,
         raw_email=raw_email,
         error_code="unauthorized_radar_sender",
+        error_message=raw_email.error_message,
+    )
+    return False
+
+
+def ensure_creative_authorized(raw_email: RawEmail, *, run_id: uuid.UUID) -> bool:
+    authorized = raw_email.sender_email.lower() in settings.WKAP_CREATIVE_AUTHORIZED_SENDERS
+    if authorized:
+        log_event("creative_authorized", run_id=run_id, entity_type="raw_email", entity_id=raw_email.id, raw_email=raw_email)
+        return True
+
+    raw_email.processing_status = RawEmail.ProcessingStatus.REJECTED
+    raw_email.error_message = "Sender is not authorized to publish WKAP Creative Edition."
+    raw_email.save(update_fields=["processing_status", "error_message", "updated_at"])
+    log_event(
+        "creative_rejected",
+        run_id=run_id,
+        status=LedgerEvent.Status.REJECTED,
+        entity_type="raw_email",
+        entity_id=raw_email.id,
+        raw_email=raw_email,
+        error_code="unauthorized_creative_sender",
         error_message=raw_email.error_message,
     )
     return False

@@ -13,12 +13,12 @@ from django.views.decorators.cache import cache_control
 from django.views.decorators.http import require_POST
 
 from core.wow_chat_simulation import chat_session_snapshot, handle_chat_message, monthly_chat_case_index, start_chat_session
-from ledger.models import Investor, RadarIssue, DailyWoWPacket
+from ledger.models import CreativeEdition, Investor, RadarIssue, DailyWoWPacket
 from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, local_wow_id, market_terms
 from ledger.wow_lifecycle import lifecycle_records, lifecycle_records_json, status_update_records
 from ledger.wow_packet_spec import current_spec
-from publishing.services import WOW_DISCLAIMER
-from publishing.urls import investor_home_url, investor_wows_url, radar_archive_url, radar_issue_url, wow_url
+from publishing.services import CREATIVE_CONTENT_SHA256_COVERS, CREATIVE_PROOF_DISCLAIMER, WOW_DISCLAIMER
+from publishing.urls import creative_archive_url, creative_image_url, creative_issue_url, investor_home_url, investor_wows_url, radar_archive_url, radar_issue_url, wow_url
 
 
 ET_ZONE = ZoneInfo("America/New_York")
@@ -36,6 +36,7 @@ JSON_RESOURCES = {
     "wow_crm_v0_2": "specs/public/wow-crm-v0.2.json",
     "wow_intake_flow_v0_2": "specs/public/wow-intake-flow-v0.2.json",
     "daily_wow_state_v0_2": "specs/public/daily-wow-state-v0.2.schema.json",
+    "creative_edition_v1": "specs/public/creative-edition-v1.schema.json",
 }
 
 
@@ -152,7 +153,11 @@ def _unique_values(values) -> list[str]:
 
 
 def _content_sha256_covers(artifact_type: str) -> str:
-    return RADAR_CONTENT_SHA256_COVERS if artifact_type == "radar" else WOW_CONTENT_SHA256_COVERS
+    if artifact_type == "radar":
+        return RADAR_CONTENT_SHA256_COVERS
+    if artifact_type == "creative":
+        return CREATIVE_CONTENT_SHA256_COVERS
+    return WOW_CONTENT_SHA256_COVERS
 
 
 def _wow_selection_status(submission: DailyWoWPacket) -> str:
@@ -407,6 +412,86 @@ def radar_issue(request, market_date):
             agent_facts=_artifact_facts(issue, "radar") + [{"name": "title", "value": issue.title}],
             json_ld=_artifact_json_ld(issue, "WKAP Radar Feed", issue.title, issue.body_text),
             issue=issue,
+        ),
+    )
+
+
+@cache_control(public=True, max_age=300)
+def creative_archive(request):
+    editions = CreativeEdition.objects.order_by("-market_date", "-edition_version", "-id")
+    return render(
+        request,
+        "publishing/creative/archive.html",
+        _page_context(
+            title="WKAP Creative Edition Archive",
+            description="The public creative journal behind WKAP's daily market-news covers, with exact-byte image and journal hashes.",
+            canonical_url=creative_archive_url(),
+            page_type="creative_archive",
+            agent_facts=[
+                {"name": "artifact_family", "value": "WKAP Creative Edition"},
+                {"name": "format_version", "value": "creative_edition_v1"},
+                {"name": "entry_count", "value": str(editions.count())},
+            ],
+            json_ld={
+                "@context": "https://schema.org",
+                "@type": "CollectionPage",
+                "name": "WKAP Creative Edition Archive",
+                "url": creative_archive_url(),
+                "hasPart": [
+                    {
+                        "@type": "CreativeWork",
+                        "name": edition.title,
+                        "url": creative_issue_url(edition.market_date, edition.edition_version),
+                    }
+                    for edition in editions
+                ],
+            },
+            editions=editions,
+        ),
+    )
+
+
+@cache_control(public=True, max_age=300)
+def creative_issue(request, market_date, edition_version):
+    edition = get_object_or_404(
+        CreativeEdition,
+        market_date=market_date,
+        edition_version=edition_version,
+    )
+    image_url = creative_image_url(edition.market_date, edition.edition_version, edition.image_extension)
+    return render(
+        request,
+        "publishing/creative/issue.html",
+        _page_context(
+            title=f"WKAP Creative Edition {edition.market_date} v{edition.edition_version} - {edition.title}",
+            description=edition.journal_json.get("episode_premise", "")[:240],
+            canonical_url=edition.canonical_url or creative_issue_url(edition.market_date, edition.edition_version),
+            page_type="creative_edition",
+            agent_spec_version=edition.format_version,
+            agent_facts=_artifact_facts(edition, "creative")
+            + [
+                {"name": "image_sha256", "value": edition.image_sha256},
+                {"name": "journal_sha256", "value": edition.journal_sha256},
+                {"name": "edition_version", "value": str(edition.edition_version)},
+            ],
+            json_ld=_artifact_json_ld(
+                edition,
+                "WKAP Creative Edition",
+                edition.title,
+                edition.journal_json.get("episode_premise", ""),
+                {
+                    "@type": "CreativeWork",
+                    "image": image_url,
+                    "creator": [
+                        {"@type": "Person", "name": edition.creator_human},
+                        {"@type": "SoftwareApplication", "name": edition.creator_ai},
+                    ],
+                },
+            ),
+            edition=edition,
+            journal=edition.journal_json,
+            image_url=image_url,
+            proof_disclaimer=CREATIVE_PROOF_DISCLAIMER,
         ),
     )
 
@@ -795,9 +880,14 @@ def sitemap_xml(request):
         (f"{settings.WKAP_BASE_URL}/", "daily"),
         (f"{settings.WKAP_BASE_URL}/submit-to-wkap-ledger.html", "weekly"),
         (radar_archive_url(), "daily"),
+        (creative_archive_url(), "daily"),
         (f"{settings.WKAP_BASE_URL}/investors/", "daily"),
     ]
     urls.extend((radar_issue_url(issue.market_date), "weekly") for issue in RadarIssue.objects.order_by("-market_date"))
+    urls.extend(
+        (creative_issue_url(edition.market_date, edition.edition_version), "weekly")
+        for edition in CreativeEdition.objects.order_by("-market_date", "-edition_version")
+    )
     investors = (
         Investor.objects.filter(wows__isnull=False)
         .annotate(latest_wow_created_at=Max("wows__created_at"))

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wkap.ai/specs/creative-edition-v1.schema.json",
+  "title": "WKAP Creative Edition v1",
+  "description": "Public journal for one final WKAP X cover. Exact cover bytes and canonical journal JSON are independently hashed; this does not assert authorship or creation time.",
+  "type": "object",
+  "required": ["creative_edition"],
+  "additionalProperties": false,
+  "properties": {
+    "creative_edition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format_version", "market_date", "edition_version", "title", "article_url", "image_source_url", "episode_premise", "market_hooks", "scenes", "credits", "rejected_choices", "corrections", "lesson_next_time"],
+      "properties": {
+        "format_version": {"const": "creative_edition_v1"},
+        "market_date": {"type": "string", "format": "date"},
+        "edition_version": {"type": "integer", "minimum": 1},
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "article_url": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "image_source_url": {"type": "string", "format": "uri", "pattern": "^https://pbs\\.twimg\\.com/"},
+        "episode_premise": {"type": "string", "minLength": 1, "maxLength": 1400},
+        "market_hooks": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"$ref": "#/$defs/market_hook"}},
+        "scenes": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/$defs/scene"}},
+        "credits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["human_contribution", "ai_contribution", "publisher"],
+          "properties": {
+            "human_contribution": {"type": "string", "minLength": 1, "maxLength": 300},
+            "ai_contribution": {"type": "string", "minLength": 1, "maxLength": 300},
+            "publisher": {"type": "string", "minLength": 1, "maxLength": 200}
+          }
+        },
+        "rejected_choices": {"$ref": "#/$defs/decision_list"},
+        "corrections": {"$ref": "#/$defs/decision_list"},
+        "lesson_next_time": {"type": "string", "minLength": 1, "maxLength": 1200}
+      }
+    }
+  },
+  "$defs": {
+    "source_urls": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "format": "uri", "pattern": "^https://"}},
+    "market_hook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["story", "why_it_matters", "source_urls"],
+      "properties": {
+        "story": {"type": "string", "minLength": 1, "maxLength": 700},
+        "why_it_matters": {"type": "string", "minLength": 1, "maxLength": 700},
+        "source_urls": {"$ref": "#/$defs/source_urls"}
+      }
+    },
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["story", "source_urls", "visual_joke", "character_choices", "character_rationale", "relationship_semantics", "interaction_or_action", "show_seed"],
+      "properties": {
+        "story": {"type": "string", "minLength": 1, "maxLength": 700},
+        "source_urls": {"$ref": "#/$defs/source_urls"},
+        "visual_joke": {"type": "string", "minLength": 1, "maxLength": 700},
+        "character_choices": {"type": "string", "minLength": 1, "maxLength": 700},
+        "character_rationale": {"type": "string", "minLength": 1, "maxLength": 900, "description": "A defensible link between the verified story, actual character traits or role, and the joke. Recognition alone is insufficient."},
+        "relationship_semantics": {"type": "string", "minLength": 1, "maxLength": 900, "description": "Whole-scene review of dominant audience associations, hero/villain implications, and relationships among the chosen characters. A mechanically apt prop is insufficient when the implied narrative is false."},
+        "interaction_or_action": {"type": "string", "minLength": 1, "maxLength": 700},
+        "show_seed": {"type": "string", "minLength": 1, "maxLength": 700, "description": "A concise creative-development seed for a possible future market-news show, not a video-production instruction."}
+      }
+    },
+    "decision_list": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"type": "string", "minLength": 1, "maxLength": 600}}
+  }
+}

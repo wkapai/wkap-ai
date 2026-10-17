@@ -85,5 +85,6 @@ def _entity_type(artifact) -> str:
     return {
         "radarissue": "radar",
         "dailywowpacket": "wow",
+        "creativeedition": "creative",
         "rawemail": "raw_email",
     }.get(model_name, model_name or "raw_email")

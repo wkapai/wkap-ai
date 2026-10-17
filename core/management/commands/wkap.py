@@ -13,10 +13,11 @@ from ingestion.services import classify_email, ingest_email
 from ledger.investor_id import find_or_create_investor
 from ledger.models import LedgerEvent
 from ledger.parsers import ParseError
-from ledger.services import create_radar_issue, create_wow_submission
+from ledger.services import create_creative_edition, create_radar_issue, create_wow_submission
 from publishing.services import (
     commit_ledger,
     generate_manifest,
+    generate_creative_html,
     generate_radar_html,
     generate_wow_html,
     publish_artifact,
@@ -65,6 +66,9 @@ class Command(BaseCommand):
         parse_wow = subparsers.add_parser("parse-wow")
         parse_wow.add_argument("--raw-email-id", required=True, type=int)
 
+        parse_creative = subparsers.add_parser("parse-creative")
+        parse_creative.add_argument("--raw-email-id", required=True, type=int)
+
         assign = subparsers.add_parser("assign-investor-id")
         assign.add_argument("--email", required=True)
 
@@ -73,6 +77,9 @@ class Command(BaseCommand):
 
         wow_html = subparsers.add_parser("generate-wow-html")
         wow_html.add_argument("--wow-id", required=True, type=int)
+
+        creative_html = subparsers.add_parser("generate-creative-html")
+        creative_html.add_argument("--creative-id", required=True, type=int)
 
         receipt = subparsers.add_parser("send-wow-receipt")
         receipt.add_argument("--wow-id", required=True, type=int)
@@ -94,12 +101,12 @@ class Command(BaseCommand):
         self._add_entity_args(timestamp)
 
         timestamp_pending = subparsers.add_parser("timestamp-pending-artifacts")
-        timestamp_pending.add_argument("--entity-type", choices=["radar", "wow"])
+        timestamp_pending.add_argument("--entity-type", choices=["radar", "wow", "creative"])
         timestamp_pending.add_argument("--entity-id", type=int)
         timestamp_pending.add_argument("--limit", type=int)
 
         upgrade_ots = subparsers.add_parser("upgrade-opentimestamps")
-        upgrade_ots.add_argument("--entity-type", choices=["radar", "wow"])
+        upgrade_ots.add_argument("--entity-type", choices=["radar", "wow", "creative"])
         upgrade_ots.add_argument("--entity-id", type=int)
 
         subparsers.add_parser("rebuild-indexes")
@@ -165,6 +172,7 @@ class Command(BaseCommand):
             next_action = {
                 RawEmail.Classification.RADAR: f"wkap parse-radar --raw-email-id {raw_email.id}",
                 RawEmail.Classification.WOW: f"wkap parse-wow --raw-email-id {raw_email.id}",
+                RawEmail.Classification.CREATIVE: f"wkap parse-creative --raw-email-id {raw_email.id}",
             }.get(classification, "saved_not_published")
             return CommandResult.from_entity(
                 command=command,
@@ -216,6 +224,17 @@ class Command(BaseCommand):
                 next_action=f"wkap generate-wow-html --wow-id {submission.id}",
             )
 
+        if command == "parse-creative":
+            edition = create_creative_edition(RawEmail.objects.get(id=options["raw_email_id"]), run_id=run_id)
+            return CommandResult.from_entity(
+                command=command,
+                run_id=str(run_id),
+                status="succeeded",
+                entity_type="creative",
+                entity=edition,
+                next_action=f"wkap generate-creative-html --creative-id {edition.id}",
+            )
+
         if command == "assign-investor-id":
             investor, created = find_or_create_investor(options["email"], run_id=run_id)
             return CommandResult.from_entity(
@@ -251,6 +270,19 @@ class Command(BaseCommand):
                 entity_type="wow",
                 entity=submission,
                 next_action=f"wkap generate-manifest --entity-type wow --entity-id {submission.id}",
+            )
+
+        if command == "generate-creative-html":
+            from ledger.models import CreativeEdition
+
+            edition = generate_creative_html(CreativeEdition.objects.get(id=options["creative_id"]), run_id=run_id)
+            return CommandResult.from_entity(
+                command=command,
+                run_id=str(run_id),
+                status="succeeded",
+                entity_type="creative",
+                entity=edition,
+                next_action=f"wkap generate-manifest --entity-type creative --entity-id {edition.id}",
             )
 
         if command == "send-wow-receipt":
@@ -356,7 +388,10 @@ class Command(BaseCommand):
             )
             result.details = {
                 "processed_count": len(stamped),
-                "artifacts": [f"{'radar' if artifact.__class__.__name__ == 'RadarIssue' else 'wow'}:{artifact.id}" for artifact in stamped],
+                "artifacts": [
+                    f"{ {'RadarIssue': 'radar', 'DailyWoWPacket': 'wow', 'CreativeEdition': 'creative'}.get(artifact.__class__.__name__, 'unknown') }:{artifact.id}"
+                    for artifact in stamped
+                ],
             }
             return result
 
@@ -564,6 +599,10 @@ class Command(BaseCommand):
                         continue
                     last_entity = publish_artifact("wow", submission.id, run_id=run_id)
                     published.append(f"wow:{submission.id}")
+                elif classification == RawEmail.Classification.CREATIVE:
+                    edition = create_creative_edition(raw_email, run_id=run_id)
+                    last_entity = publish_artifact("creative", edition.id, run_id=run_id)
+                    published.append(f"creative:{edition.id}")
                 else:
                     skipped.append(f"raw_email:{raw_email.id}:{classification}")
             except Exception as exc:
@@ -590,5 +629,5 @@ class Command(BaseCommand):
 
     @staticmethod
     def _add_entity_args(parser):
-        parser.add_argument("--entity-type", required=True, choices=["radar", "wow"])
+        parser.add_argument("--entity-type", required=True, choices=["radar", "wow", "creative"])
         parser.add_argument("--entity-id", required=True, type=int)

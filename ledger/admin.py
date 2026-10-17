@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AgentSuggestedWoW, DailyWoWPacket, Investor, LedgerEvent, RadarIssue, ReadingLogItem
+from .models import AgentSuggestedWoW, CreativeEdition, DailyWoWPacket, Investor, LedgerEvent, RadarIssue, ReadingLogItem
 
 
 @admin.register(Investor)
@@ -14,6 +14,14 @@ class InvestorAdmin(admin.ModelAdmin):
 class RadarIssueAdmin(admin.ModelAdmin):
     list_display = ("market_date", "title", "content_sha256", "ots_status", "updated_at")
     search_fields = ("title", "body_text", "content_sha256", "github_commit_sha")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(CreativeEdition)
+class CreativeEditionAdmin(admin.ModelAdmin):
+    list_display = ("market_date", "edition_version", "title", "image_sha256", "ots_status", "updated_at")
+    list_filter = ("market_date", "ots_status")
+    search_fields = ("title", "image_sha256", "journal_sha256", "content_sha256")
     readonly_fields = ("created_at", "updated_at")
 
 

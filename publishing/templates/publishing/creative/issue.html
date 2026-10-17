@@ -1,0 +1,62 @@
+{% extends "publishing/base.html" %}
+{% block title %}{{ meta_title|default:edition.title }}{% endblock %}
+{% block content %}
+<article class="artifact-layout creative-edition-layout" data-agent-readable="true" data-artifact-type="creative" data-market-date="{{ edition.market_date|date:"Y-m-d" }}" data-image-sha256="{{ edition.image_sha256 }}" data-journal-sha256="{{ edition.journal_sha256 }}">
+  <section class="artifact-main">
+    <p class="eyebrow">WKAP Creative Edition · v{{ edition.edition_version }}</p>
+    <h1>{{ edition.title }}</h1>
+    <p class="creative-premise">{{ journal.episode_premise }}</p>
+    <figure class="creative-cover-frame">
+      <img class="creative-cover" src="{{ image_url }}" alt="Final published WKAP cover for {{ edition.market_date|date:"Y-m-d" }}">
+      <figcaption>The actual final cover published on X. <a href="{{ edition.image_source_url }}">Original public image</a> · <a href="{{ edition.article_url }}">X article</a></figcaption>
+    </figure>
+
+    <section class="body-copy creative-journal" data-agent-body="creative-journal">
+      <h2>Market hooks</h2>
+      <div class="creative-card-grid">
+      {% for hook in journal.market_hooks %}
+        <article class="creative-card">
+          <h3>{{ hook.story }}</h3>
+          <p>{{ hook.why_it_matters }}</p>
+          <p class="source-links">{% for source in hook.source_urls %}<a href="{{ source }}">Source {{ forloop.counter }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+        </article>
+      {% endfor %}
+      </div>
+
+      <h2>Scene development</h2>
+      <div class="creative-scenes">
+      {% for scene in journal.scenes %}
+        <article class="creative-scene">
+          <h3>{{ scene.story }}</h3>
+          <dl class="creative-details">
+            <dt>Visual joke</dt><dd>{{ scene.visual_joke }}</dd>
+            <dt>Characters</dt><dd>{{ scene.character_choices }}</dd>
+            <dt>Why they belong</dt><dd>{{ scene.character_rationale }}</dd>
+            <dt>Relationship semantics</dt><dd>{{ scene.relationship_semantics }}</dd>
+            <dt>Action</dt><dd>{{ scene.interaction_or_action }}</dd>
+            <dt>Future show seed</dt><dd>{{ scene.show_seed }}</dd>
+          </dl>
+          <p class="source-links">{% for source in scene.source_urls %}<a href="{{ source }}">Source {{ forloop.counter }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+        </article>
+      {% endfor %}
+      </div>
+
+      <h2>Credits</h2>
+      <dl class="creative-details">
+        <dt>Human</dt><dd>{{ journal.credits.human_contribution }}</dd>
+        <dt>AI</dt><dd>{{ journal.credits.ai_contribution }}</dd>
+        <dt>Publisher</dt><dd>{{ journal.credits.publisher }}</dd>
+      </dl>
+
+      <h2>Rejected choices</h2>
+      <ul>{% for item in journal.rejected_choices %}<li>{{ item }}</li>{% endfor %}</ul>
+      <h2>Corrections</h2>
+      <ul>{% for item in journal.corrections %}<li>{{ item }}</li>{% endfor %}</ul>
+      <h2>Lesson for the next edition</h2>
+      <p>{{ journal.lesson_next_time }}</p>
+      <p class="disclaimer">{{ proof_disclaimer }}</p>
+    </section>
+  </section>
+  {% include "publishing/proof_panel.html" with artifact=edition %}
+</article>
+{% endblock %}

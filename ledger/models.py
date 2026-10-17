@@ -45,7 +45,12 @@ class ArtifactProofFields(models.Model):
         base = settings.WKAP_LEDGER_GITHUB_BASE_URL.rstrip("/")
         if not base or not self.id:
             return ""
-        entity_type = "radar" if isinstance(self, RadarIssue) else "wow"
+        if isinstance(self, RadarIssue):
+            entity_type = "radar"
+        elif isinstance(self, DailyWoWPacket):
+            entity_type = "wow"
+        else:
+            entity_type = "creative"
         return f"{base}/timestamps/{entity_type}-{self.id}.json"
 
 
@@ -121,6 +126,42 @@ class DailyWoWPacket(ArtifactProofFields):
     @property
     def public_selected_wow_id(self) -> str:
         return public_wow_id(self.investor.investor_id, self.selected_wow_id)
+
+
+class CreativeEdition(ArtifactProofFields):
+    market_date = models.DateField(db_index=True)
+    edition_version = models.PositiveIntegerField(default=1)
+    format_version = models.CharField(max_length=64, default="creative_edition_v1")
+    title = models.CharField(max_length=500)
+    article_url = models.URLField(max_length=1000)
+    image_source_url = models.URLField(max_length=1000)
+    image_extension = models.CharField(max_length=12)
+    image_media_type = models.CharField(max_length=80)
+    image_size_bytes = models.PositiveBigIntegerField(default=0)
+    image_sha256 = models.CharField(max_length=64, db_index=True)
+    image_github_url = models.URLField(max_length=1000, blank=True)
+    journal_json = models.JSONField(default=dict)
+    journal_sha256 = models.CharField(max_length=64, db_index=True)
+    creator_human = models.CharField(max_length=300)
+    creator_ai = models.CharField(max_length=300)
+    publisher = models.CharField(max_length=200, default="WKAP.ai")
+    ots_proof_version = models.PositiveIntegerField(default=0)
+    bitcoin_verified_at = models.DateTimeField(null=True, blank=True)
+    source_email = models.ForeignKey("ingestion.RawEmail", on_delete=models.PROTECT, related_name="creative_editions")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-market_date", "-edition_version", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["market_date", "edition_version"],
+                name="unique_creative_edition_date_version",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Creative {self.market_date} v{self.edition_version}: {self.title}"
 
 
 class ReadingLogItem(models.Model):

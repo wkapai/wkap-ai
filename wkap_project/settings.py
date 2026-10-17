@@ -139,6 +139,15 @@ WKAP_RADAR_AUTHORIZED_SENDERS = {
     ).split(",")
     if email.strip()
 }
+WKAP_CREATIVE_AUTHORIZED_SENDERS = {
+    email.strip().lower()
+    for email in os.getenv(
+        "WKAP_CREATIVE_AUTHORIZED_SENDERS",
+        os.getenv("WKAP_RADAR_AUTHORIZED_SENDERS", "playinc@gmail.com,minxixi0103@gmail.com"),
+    ).split(",")
+    if email.strip()
+}
+WKAP_CREATIVE_IMAGE_MAX_BYTES = int(os.getenv("WKAP_CREATIVE_IMAGE_MAX_BYTES", str(12 * 1024 * 1024)))
 WKAP_INBOUND_EMAIL = os.getenv("WKAP_INBOUND_EMAIL", "ledger@wkap.ai")
 WKAP_LOCAL_INBOUND_EMAIL = os.getenv("WKAP_LOCAL_INBOUND_EMAIL", "playinc@gmail.com")
 WKAP_GMAIL_ACCOUNT = os.getenv(

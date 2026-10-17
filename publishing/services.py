@@ -14,15 +14,20 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.db.models import Max
 from django.template.loader import render_to_string
+from django.utils import timezone
 
 from core.events import log_event
 from ingestion.models import RawEmail
 from ledger.lifecycle_events import ensure_wow_lifecycle_events
-from ledger.models import LedgerEvent, RadarIssue, DailyWoWPacket
+from ledger.models import CreativeEdition, LedgerEvent, RadarIssue, DailyWoWPacket
 from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_COVERS, clean_packet_text, json_array, local_wow_id, market_terms
 from ledger.wow_lifecycle import ITEM_EVENT, STATUS_UPDATE_EVENT, lifecycle_records, lifecycle_records_json, status_update_records
 from publishing.receipts import send_radar_receipt, send_wow_receipt
 from publishing.urls import (
+    creative_image_path,
+    creative_image_url,
+    creative_issue_path,
+    creative_issue_url,
     investor_home_path,
     investor_wows_path,
     manifest_path,
@@ -37,6 +42,13 @@ from publishing.urls import (
 WOW_DISCLAIMER = (
     "This is a ledgered Daily WoW Packet: reading log, agent-suggested WoWs, and investor selection/pass details. "
     "It is not WKAP editorial endorsement or investment advice."
+)
+CREATIVE_PROOF_DISCLAIMER = (
+    "These hashes and OpenTimestamps evidence bind the exact published journal and cover bytes. "
+    "They do not prove authorship, invention, or the exact time the creative work was made."
+)
+CREATIVE_CONTENT_SHA256_COVERS = (
+    "canonical JSON bytes of journal_json plus the exact published cover image SHA256, format version, market date, and edition version"
 )
 ET_ZONE = ZoneInfo("America/New_York")
 
@@ -74,6 +86,29 @@ def generate_wow_html(submission: DailyWoWPacket, *, run_id: uuid.UUID) -> Daily
     return submission
 
 
+def generate_creative_html(edition: CreativeEdition, *, run_id: uuid.UUID) -> CreativeEdition:
+    image_path = _public_file(creative_image_path(edition.market_date, edition.edition_version, edition.image_extension))
+    if not image_path.exists():
+        raise FileNotFoundError(f"Creative cover asset is missing: {image_path}")
+    image_bytes = image_path.read_bytes()
+    if hashlib.sha256(image_bytes).hexdigest() != edition.image_sha256:
+        raise ValueError("Creative cover bytes no longer match image_sha256.")
+    edition.canonical_url = creative_issue_url(edition.market_date, edition.edition_version)
+    edition.content_sha256 = _creative_content_hash(edition)
+    edition.save(update_fields=["canonical_url", "content_sha256", "updated_at"])
+    _write_public(creative_issue_path(edition.market_date, edition.edition_version), _render_creative(edition))
+    log_event(
+        "html_generated",
+        run_id=run_id,
+        entity_type="creative",
+        entity_id=edition.id,
+        raw_email=edition.source_email,
+        artifact=edition,
+    )
+    rebuild_indexes(run_id=run_id)
+    return edition
+
+
 def rebuild_indexes(*, run_id: uuid.UUID) -> None:
     radar_issues = RadarIssue.objects.order_by("-market_date")
     for issue in radar_issues:
@@ -83,7 +118,17 @@ def rebuild_indexes(*, run_id: uuid.UUID) -> None:
     for submission in wow_submissions:
         _refresh_artifact_files("wow", submission)
 
+    creative_editions = CreativeEdition.objects.select_related("source_email").order_by(
+        "-market_date", "-edition_version", "-id"
+    )
+    for edition in creative_editions:
+        _refresh_artifact_files("creative", edition)
+
     _write_public("radar/index.html", render_to_string("publishing/radar/archive.html", {"issues": radar_issues}))
+    _write_public(
+        "creative/index.html",
+        render_to_string("publishing/creative/archive.html", {"editions": creative_editions}),
+    )
     investors = _investors_with_wows()
     _write_public(
         "investors/index.html",
@@ -136,6 +181,10 @@ def commit_ledger(entity_type: str, entity_id: int, *, run_id: uuid.UUID) -> Any
             raw_path = _write_raw_email_artifact(artifact)
             artifact.raw_email_github_url = _github_url(raw_path) or str(raw_path)
             artifact.raw_email_commit_sha = "not_configured"
+        if entity_type == "creative":
+            artifact.image_github_url = _github_url(
+                creative_image_path(artifact.market_date, artifact.edition_version, artifact.image_extension)
+            ) or creative_image_url(artifact.market_date, artifact.edition_version, artifact.image_extension)
         artifact.github_commit_sha = "not_configured"
         artifact.save(update_fields=_commit_update_fields(entity_type))
         _refresh_artifact_files(entity_type, artifact)
@@ -185,6 +234,10 @@ def commit_ledger(entity_type: str, entity_id: int, *, run_id: uuid.UUID) -> Any
     if entity_type == "wow":
         artifact.raw_email_commit_sha = commit_sha
         artifact.raw_email_github_url = _github_url(_raw_email_public_path(artifact))
+    if entity_type == "creative":
+        artifact.image_github_url = _github_url(
+            creative_image_path(artifact.market_date, artifact.edition_version, artifact.image_extension)
+        )
     artifact.save(update_fields=_commit_update_fields(entity_type))
     _refresh_artifact_files(entity_type, artifact)
     log_event("github_commit_succeeded", run_id=run_id, entity_type=entity_type, entity_id=artifact.id, artifact=artifact)
@@ -222,9 +275,16 @@ def timestamp_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
         proof_path = _ots_proof_storage_path(entity_type, artifact.id)
         if not proof_path.exists():
             _run_ots("stamp", str(target_path))
-        artifact.ots_status = "stamped"
+        if entity_type == "creative":
+            artifact.ots_proof_version = max(artifact.ots_proof_version, 1)
+            artifact.ots_status, artifact.bitcoin_verified_at = _verify_creative_proof(proof_path)
+        else:
+            artifact.ots_status = "stamped"
         artifact.ots_proof_url = _github_url(proof_path) or str(proof_path)
-        artifact.save(update_fields=["ots_status", "ots_proof_url", "updated_at"])
+        update_fields = ["ots_status", "ots_proof_url", "updated_at"]
+        if entity_type == "creative":
+            update_fields.extend(["ots_proof_version", "bitcoin_verified_at"])
+        artifact.save(update_fields=update_fields)
         _refresh_artifact_files(entity_type, artifact)
         commit_sha = _sync_and_commit_ledger_metadata(entity_type, artifact, f"OpenTimestamp {entity_type} {entity_id}")
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
@@ -296,6 +356,11 @@ def upgrade_opentimestamps(*, run_id: uuid.UUID, entity_type: str | None = None,
             artifact=artifact,
         )
         try:
+            if current_entity_type == "creative":
+                history_path = _creative_proof_history_path(artifact, max(artifact.ots_proof_version, 1))
+                history_path.parent.mkdir(parents=True, exist_ok=True)
+                if not history_path.exists():
+                    shutil.copyfile(proof_path, history_path)
             _run_ots("upgrade", str(proof_path))
         except (FileNotFoundError, subprocess.CalledProcessError) as exc:
             log_event(
@@ -309,8 +374,13 @@ def upgrade_opentimestamps(*, run_id: uuid.UUID, entity_type: str | None = None,
                 error_message=_subprocess_error_message(exc),
             )
             continue
-        artifact.ots_status = "upgraded"
-        artifact.save(update_fields=["ots_status", "updated_at"])
+        if current_entity_type == "creative":
+            artifact.ots_proof_version = max(artifact.ots_proof_version, 1) + 1
+            artifact.ots_status, artifact.bitcoin_verified_at = _verify_creative_proof(proof_path)
+            artifact.save(update_fields=["ots_status", "ots_proof_version", "bitcoin_verified_at", "updated_at"])
+        else:
+            artifact.ots_status = "upgraded"
+            artifact.save(update_fields=["ots_status", "updated_at"])
         _refresh_artifact_files(current_entity_type, artifact)
         commit_sha = (
             _commit_ledger_changes(settings.WKAP_LEDGER_REPO_PATH, f"Upgrade OpenTimestamp {current_entity_type} {artifact.id}")
@@ -342,8 +412,10 @@ def publish_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
     )
     if entity_type == "radar":
         generate_radar_html(artifact, run_id=run_id)
-    else:
+    elif entity_type == "wow":
         generate_wow_html(artifact, run_id=run_id)
+    else:
+        generate_creative_html(artifact, run_id=run_id)
     generate_manifest(entity_type, entity_id, run_id=run_id)
     commit_ledger(entity_type, entity_id, run_id=run_id)
     timestamp_artifact(entity_type, entity_id, run_id=run_id)
@@ -536,6 +608,24 @@ def validate_ledger(entity_type: str, entity_id: int) -> list[str]:
             if not getattr(artifact, field):
                 errors.append(f"{field} is missing")
         errors.extend(_wow_lifecycle_validation_errors(artifact))
+    if entity_type == "creative":
+        image_path = _public_file(
+            creative_image_path(artifact.market_date, artifact.edition_version, artifact.image_extension)
+        )
+        if not image_path.exists():
+            errors.append("creative cover asset is missing")
+        elif hashlib.sha256(image_path.read_bytes()).hexdigest() != artifact.image_sha256:
+            errors.append("creative cover asset does not match image_sha256")
+        canonical_journal = json.dumps(
+            artifact.journal_json,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if hashlib.sha256(canonical_journal).hexdigest() != artifact.journal_sha256:
+            errors.append("creative journal does not match journal_sha256")
+        if not artifact.image_github_url:
+            errors.append("image_github_url is missing")
     if entity_type == "wow" and WOW_DISCLAIMER not in _public_file(wow_path(artifact.investor.investor_id, artifact.market_date)).read_text(
         encoding="utf-8"
     ):
@@ -579,6 +669,8 @@ def validate_all() -> list[str]:
         errors.extend([f"radar:{issue.id}: {error}" for error in validate_ledger("radar", issue.id)])
     for submission in DailyWoWPacket.objects.all():
         errors.extend([f"wow:{submission.id}: {error}" for error in validate_ledger("wow", submission.id)])
+    for edition in CreativeEdition.objects.all():
+        errors.extend([f"creative:{edition.id}: {error}" for error in validate_ledger("creative", edition.id)])
     return errors
 
 
@@ -587,13 +679,17 @@ def _artifact(entity_type: str, entity_id: int):
         return RadarIssue.objects.get(id=entity_id)
     if entity_type == "wow":
         return DailyWoWPacket.objects.select_related("investor").get(id=entity_id)
-    raise ValueError("entity_type must be radar or wow")
+    if entity_type == "creative":
+        return CreativeEdition.objects.get(id=entity_id)
+    raise ValueError("entity_type must be radar, wow, or creative")
 
 
 def _artifact_public_path(entity_type: str, artifact) -> str:
     if entity_type == "radar":
         return radar_issue_path(artifact.market_date)
-    return wow_path(artifact.investor.investor_id, artifact.market_date)
+    if entity_type == "wow":
+        return wow_path(artifact.investor.investor_id, artifact.market_date)
+    return creative_issue_path(artifact.market_date, artifact.edition_version)
 
 
 def _sync_artifact_to_ledger_repo(entity_type: str, artifact) -> None:
@@ -610,6 +706,18 @@ def _sync_artifact_to_ledger_repo(entity_type: str, artifact) -> None:
         raw_destination.parent.mkdir(parents=True, exist_ok=True)
         if raw_source.resolve() != raw_destination.resolve():
             shutil.copyfile(raw_source, raw_destination)
+    if entity_type == "creative":
+        image_relative_path = creative_image_path(
+            artifact.market_date,
+            artifact.edition_version,
+            artifact.image_extension,
+        )
+        image_source = _public_file(image_relative_path)
+        if hashlib.sha256(image_source.read_bytes()).hexdigest() != artifact.image_sha256:
+            raise ValueError("Creative cover asset changed before ledger sync.")
+        image_destination = repo / image_relative_path
+        image_destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(image_source, image_destination)
 
 
 def _sync_and_commit_ledger_metadata(entity_type: str, artifact, message: str) -> str:
@@ -682,6 +790,40 @@ def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
                 ],
             }
         )
+    if entity_type == "creative":
+        payload.update(
+            {
+                "format_version": artifact.format_version,
+                "edition_version": artifact.edition_version,
+                "title": artifact.title,
+                "article_url": artifact.article_url,
+                "image_source_url": artifact.image_source_url,
+                "image_url": creative_image_url(
+                    artifact.market_date,
+                    artifact.edition_version,
+                    artifact.image_extension,
+                ),
+                "image_github_url": artifact.image_github_url,
+                "image_media_type": artifact.image_media_type,
+                "image_size_bytes": artifact.image_size_bytes,
+                "image_sha256": artifact.image_sha256,
+                "journal_sha256": artifact.journal_sha256,
+                "journal_json": artifact.journal_json,
+                "creator_human": artifact.creator_human,
+                "creator_ai": artifact.creator_ai,
+                "publisher": artifact.publisher,
+                "ots_proof_version": artifact.ots_proof_version,
+                "bitcoin_verified_at": artifact.bitcoin_verified_at.isoformat()
+                if artifact.bitcoin_verified_at
+                else None,
+                "proof_history_url": _github_url(
+                    _creative_proof_history_path(artifact, max(artifact.ots_proof_version - 1, 1))
+                )
+                if artifact.ots_proof_version > 1
+                else "",
+                "proof_scope_notice": CREATIVE_PROOF_DISCLAIMER,
+            }
+        )
     return payload
 
 
@@ -747,6 +889,20 @@ def _timestamp_target_payload(entity_type: str, artifact) -> dict[str, Any]:
                 "raw_email_commit_sha": artifact.raw_email_commit_sha,
             }
         )
+    if entity_type == "creative":
+        payload.update(
+            {
+                "format_version": artifact.format_version,
+                "edition_version": artifact.edition_version,
+                "image_sha256": artifact.image_sha256,
+                "journal_sha256": artifact.journal_sha256,
+                "image_size_bytes": artifact.image_size_bytes,
+                "creator_human": artifact.creator_human,
+                "creator_ai": artifact.creator_ai,
+                "publisher": artifact.publisher,
+                "proof_scope_notice": CREATIVE_PROOF_DISCLAIMER,
+            }
+        )
     return payload
 
 
@@ -756,9 +912,14 @@ def _refresh_artifact_files(entity_type: str, artifact) -> None:
         _write_public(radar_issue_path(artifact.market_date), html)
         artifact.body_html = html
         artifact.save(update_fields=["body_html", "updated_at"])
-    else:
+    elif entity_type == "wow":
         _write_public(wow_path(artifact.investor.investor_id, artifact.market_date), _render_wow(artifact))
         _write_raw_email_artifact(artifact)
+    else:
+        _write_public(
+            creative_issue_path(artifact.market_date, artifact.edition_version),
+            _render_creative(artifact),
+        )
 
     if artifact.manifest_url:
         _write_manifest(entity_type, artifact.id, _manifest_payload(entity_type, artifact))
@@ -797,6 +958,24 @@ def _render_wow(submission: DailyWoWPacket) -> str:
                 {"rel": "archives", "href": "/investors/", "label": "wow-ledger"},
                 {"rel": "alternate", "href": "/sitemap.xml", "label": "sitemap"},
             ],
+        },
+    )
+
+
+def _render_creative(edition: CreativeEdition) -> str:
+    return render_to_string(
+        "publishing/creative/issue.html",
+        {
+            "edition": edition,
+            "journal": edition.journal_json,
+            "image_url": creative_image_url(
+                edition.market_date,
+                edition.edition_version,
+                edition.image_extension,
+            ),
+            "proof_disclaimer": CREATIVE_PROOF_DISCLAIMER,
+            "page_type": "creative_edition",
+            "agent_spec_version": edition.format_version,
         },
     )
 
@@ -931,6 +1110,11 @@ def _github_url(relative_or_absolute_path) -> str:
             path = path.relative_to(settings.WKAP_LEDGER_REPO_PATH)
         except ValueError:
             pass
+    elif path.is_absolute():
+        try:
+            path = path.relative_to(_ledger_artifact_root())
+        except ValueError:
+            pass
     return f"{base}/{str(path).replace(chr(92), '/')}"
 
 
@@ -953,6 +1137,8 @@ def _commit_update_fields(entity_type: str) -> list[str]:
     fields = ["github_file_url", "github_commit_sha", "updated_at"]
     if entity_type == "wow":
         fields.extend(["raw_email_github_url", "raw_email_commit_sha"])
+    if entity_type == "creative":
+        fields.append("image_github_url")
     return fields
 
 
@@ -989,7 +1175,11 @@ def _unique_values(values) -> list[str]:
 
 
 def _content_sha256_covers(entity_type: str) -> str:
-    return RADAR_CONTENT_SHA256_COVERS if entity_type == "radar" else WOW_CONTENT_SHA256_COVERS
+    if entity_type == "radar":
+        return RADAR_CONTENT_SHA256_COVERS
+    if entity_type == "creative":
+        return CREATIVE_CONTENT_SHA256_COVERS
+    return WOW_CONTENT_SHA256_COVERS
 
 
 def _wow_selection_status(submission: DailyWoWPacket) -> str:
@@ -1009,9 +1199,12 @@ def _timestamp_upgrade_candidates(entity_type: str | None, entity_id: int | None
         return [("radar", issue) for issue in RadarIssue.objects.exclude(ots_proof_url="").order_by("id")]
     if entity_type == "wow":
         return [("wow", packet) for packet in DailyWoWPacket.objects.select_related("investor").exclude(ots_proof_url="").order_by("id")]
+    if entity_type == "creative":
+        return [("creative", edition) for edition in CreativeEdition.objects.exclude(ots_proof_url="").order_by("id")]
     return [
         *[("radar", issue) for issue in RadarIssue.objects.exclude(ots_proof_url="").order_by("id")],
         *[("wow", packet) for packet in DailyWoWPacket.objects.select_related("investor").exclude(ots_proof_url="").order_by("id")],
+        *[("creative", edition) for edition in CreativeEdition.objects.exclude(ots_proof_url="").order_by("id")],
     ]
 
 
@@ -1030,12 +1223,25 @@ def _timestamp_pending_candidates(entity_type: str | None, entity_id: int | None
                 "market_date", "id"
             )
         ]
+    if entity_type == "creative":
+        return [
+            ("creative", edition)
+            for edition in _timestamp_ready(CreativeEdition.objects.filter(ots_status__in=statuses)).order_by(
+                "market_date", "edition_version", "id"
+            )
+        ]
     return [
         *[("radar", issue) for issue in _timestamp_ready(RadarIssue.objects.filter(ots_status__in=statuses)).order_by("market_date", "id")],
         *[
             ("wow", packet)
             for packet in _timestamp_ready(DailyWoWPacket.objects.select_related("investor").filter(ots_status__in=statuses)).order_by(
                 "market_date", "id"
+            )
+        ],
+        *[
+            ("creative", edition)
+            for edition in _timestamp_ready(CreativeEdition.objects.filter(ots_status__in=statuses)).order_by(
+                "market_date", "edition_version", "id"
             )
         ],
     ]
@@ -1171,6 +1377,36 @@ def _wow_content_hash(submission: DailyWoWPacket) -> str:
         f"{wow.wow_id}\n{wow.ticker_or_theme}\n{wow.whats_worth_watching}\n{wow.why_now}\n{wow.evidence_to_watch_for}"
         for wow in submission.suggested_wows.all()
     )
+
+
+def _creative_content_hash(edition: CreativeEdition) -> str:
+    return hashlib.sha256(
+        "\n".join(
+            [
+                edition.format_version,
+                str(edition.market_date),
+                str(edition.edition_version),
+                edition.journal_sha256,
+                edition.image_sha256,
+            ]
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _creative_proof_history_path(edition: CreativeEdition, version: int) -> Path:
+    return _ledger_artifact_root() / "timestamps" / "history" / f"creative-{edition.id}-proof-v{version}.ots"
+
+
+def _verify_creative_proof(proof_path: Path):
+    try:
+        _run_ots("verify", str(proof_path))
+    except subprocess.CalledProcessError as exc:
+        message = _subprocess_error_message(exc).lower()
+        pending_terms = ("pending", "not confirmed", "unconfirmed", "bitcoin attestation")
+        if any(term in message for term in pending_terms):
+            return "submitted_pending", None
+        return "verification_failed", None
+    return "verified_bitcoin", timezone.now()
     reading = "\n".join(
         f"{item.item_number}\n{item.source_title}\n{item.source_url}\n{item.reading_origin}\n{item.agent_summary}"
         for item in submission.reading_items.all()

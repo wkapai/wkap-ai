@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import yaml
 from django.utils import timezone
@@ -31,6 +33,20 @@ class ParsedRadar:
     market_date: date
     title: str
     body_text: str
+
+
+@dataclass(frozen=True)
+class ParsedCreativeEdition:
+    market_date: date
+    edition_version: int
+    format_version: str
+    title: str
+    article_url: str
+    image_source_url: str
+    creator_human: str
+    creator_ai: str
+    publisher: str
+    journal_json: dict
 
 
 @dataclass(frozen=True)
@@ -102,6 +118,123 @@ def parse_radar(raw_email: RawEmail) -> ParsedRadar:
     if not body.strip():
         raise ParseError("Radar body is required.")
     return ParsedRadar(market_date=market_date, title=title.strip(), body_text=body.strip())
+
+
+def parse_creative_edition(raw_email: RawEmail) -> ParsedCreativeEdition:
+    block = _creative_structured_block(raw_email.raw_body)
+    if not block:
+        raise ParseError("Creative Edition requires one fenced YAML or JSON creative_edition block.")
+    try:
+        payload = yaml.safe_load(block)
+    except yaml.YAMLError as exc:
+        raise ParseError(f"Creative Edition YAML is invalid: {exc}") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("creative_edition"), dict):
+        raise ParseError("Creative Edition must contain a top-level creative_edition object.")
+    edition = payload["creative_edition"]
+    allowed = {
+        "format_version",
+        "market_date",
+        "edition_version",
+        "title",
+        "article_url",
+        "image_source_url",
+        "episode_premise",
+        "market_hooks",
+        "scenes",
+        "credits",
+        "rejected_choices",
+        "corrections",
+        "lesson_next_time",
+    }
+    unexpected = sorted(set(edition) - allowed)
+    if unexpected:
+        raise ParseError(f"Creative Edition contains unsupported public fields: {', '.join(unexpected)}")
+
+    format_version = _required_text(edition, "format_version", max_length=64)
+    if format_version != "creative_edition_v1":
+        raise ParseError("Creative Edition format_version must be creative_edition_v1.")
+    market_date = _date(_required_text(edition, "market_date", max_length=10), default=raw_email.received_at.date())
+    subject_date = _date_from_subject(raw_email.subject)
+    if not subject_date or subject_date != str(market_date):
+        raise ParseError("Creative Edition subject date must exactly match creative_edition.market_date.")
+    received_ict_date = raw_email.received_at.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+    if market_date != received_ict_date:
+        raise ParseError("Creative Edition market_date must match the ICT receipt date; backdating is not allowed.")
+
+    subject_version_match = re.search(r"\bv\s*(\d+)\b", raw_email.subject or "", flags=re.IGNORECASE)
+    if not subject_version_match:
+        raise ParseError("Creative Edition subject must include an explicit version such as v1.")
+    try:
+        edition_version = int(edition.get("edition_version"))
+    except (TypeError, ValueError) as exc:
+        raise ParseError("Creative Edition edition_version must be a positive integer.") from exc
+    if edition_version < 1 or edition_version != int(subject_version_match.group(1)):
+        raise ParseError("Creative Edition body version must be positive and match the subject version.")
+
+    title = _required_text(edition, "title", max_length=500)
+    article_url = _required_https_url(edition, "article_url")
+    image_source_url = _required_https_url(edition, "image_source_url")
+    if urlparse(image_source_url).hostname not in {"pbs.twimg.com"}:
+        raise ParseError("Creative Edition image_source_url must be the actual public X cover on pbs.twimg.com.")
+
+    episode_premise = _required_text(edition, "episode_premise", max_length=1400)
+    market_hooks = _creative_market_hooks(edition.get("market_hooks"))
+    scenes = _creative_scenes(edition.get("scenes"))
+    credits = edition.get("credits")
+    if not isinstance(credits, dict):
+        raise ParseError("Creative Edition credits must be an object.")
+    _reject_creative_unknown_fields(
+        credits,
+        {"human_contribution", "ai_contribution", "publisher"},
+        label="credits",
+    )
+    creator_human = _required_text(credits, "human_contribution", max_length=300)
+    creator_ai = _required_text(credits, "ai_contribution", max_length=300)
+    publisher = _required_text(credits, "publisher", max_length=200)
+    rejected_choices = _required_text_list(edition, "rejected_choices", max_items=8, max_item_length=600)
+    corrections = _required_text_list(edition, "corrections", max_items=8, max_item_length=600)
+    lesson_next_time = _required_text(edition, "lesson_next_time", max_length=1200)
+
+    source_links = []
+    for item in [*market_hooks, *scenes]:
+        for source_url in item["source_urls"]:
+            if source_url not in source_links:
+                source_links.append(source_url)
+
+    journal_json = {
+        "format_version": format_version,
+        "market_date": str(market_date),
+        "edition_version": edition_version,
+        "title": title,
+        "article_url": article_url,
+        "image_source_url": image_source_url,
+        "episode_premise": episode_premise,
+        "market_hooks": market_hooks,
+        "scenes": scenes,
+        "credits": {
+            "human_contribution": creator_human,
+            "ai_contribution": creator_ai,
+            "publisher": publisher,
+        },
+        "rejected_choices": rejected_choices,
+        "corrections": corrections,
+        "lesson_next_time": lesson_next_time,
+        "source_links": source_links,
+    }
+    if len(json.dumps(journal_json, ensure_ascii=False)) > 24000:
+        raise ParseError("Creative Edition public journal is too long; keep it concise and curated.")
+    return ParsedCreativeEdition(
+        market_date=market_date,
+        edition_version=edition_version,
+        format_version=format_version,
+        title=title,
+        article_url=article_url,
+        image_source_url=image_source_url,
+        creator_human=creator_human,
+        creator_ai=creator_ai,
+        publisher=publisher,
+        journal_json=journal_json,
+    )
 
 
 def parse_wow(raw_email: RawEmail, *, assigned_investor_id: str = "") -> ParsedWoWPacket:
@@ -328,6 +461,130 @@ def _structured_block(text: str) -> str:
         if re.search(r"^\s*packet\s*:", block, flags=re.MULTILINE) or '"packet"' in block:
             return block
     return ""
+
+
+def _creative_structured_block(text: str) -> str:
+    blocks = []
+    for match in re.finditer(r"```(?:yaml|yml|json)\s*\n(.*?)\n```", text, flags=re.IGNORECASE | re.DOTALL):
+        block = match.group(1).strip()
+        if re.search(r"^\s*creative_edition\s*:", block, flags=re.MULTILINE) or '"creative_edition"' in block:
+            blocks.append(block)
+    if len(blocks) > 1:
+        raise ParseError("Creative Edition email must contain exactly one creative_edition block.")
+    return blocks[0] if blocks else ""
+
+
+def _reject_creative_unknown_fields(payload: dict, allowed: set[str], *, label: str) -> None:
+    unexpected = sorted(set(payload) - allowed)
+    if unexpected:
+        raise ParseError(f"Creative Edition {label} contains unsupported fields: {', '.join(unexpected)}")
+
+
+def _required_text(payload: dict, field_name: str, *, max_length: int) -> str:
+    value = str(payload.get(field_name) or "").strip()
+    if not value:
+        raise ParseError(f"Creative Edition missing required field: {field_name}")
+    if len(value) > max_length:
+        raise ParseError(f"Creative Edition {field_name} exceeds {max_length} characters.")
+    return value
+
+
+def _required_text_list(payload: dict, field_name: str, *, max_items: int, max_item_length: int) -> list[str]:
+    values = payload.get(field_name)
+    if not isinstance(values, list) or not values:
+        raise ParseError(f"Creative Edition {field_name} must be a non-empty list.")
+    if len(values) > max_items:
+        raise ParseError(f"Creative Edition {field_name} can contain at most {max_items} items.")
+    cleaned = []
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            raise ParseError(f"Creative Edition {field_name} cannot contain blank items.")
+        if len(text) > max_item_length:
+            raise ParseError(f"Creative Edition {field_name} item exceeds {max_item_length} characters.")
+        cleaned.append(text)
+    return cleaned
+
+
+def _required_https_url(payload: dict, field_name: str) -> str:
+    value = _required_text(payload, field_name, max_length=1000)
+    parsed = urlparse(value)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ParseError(f"Creative Edition {field_name} must be an HTTPS URL.")
+    return value
+
+
+def _creative_source_urls(value, *, label: str) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise ParseError(f"Creative Edition {label} requires at least one source URL.")
+    if len(value) > 8:
+        raise ParseError(f"Creative Edition {label} can reference at most 8 source URLs.")
+    result = []
+    for item in value:
+        url = str(item or "").strip()
+        if not _is_http_url(url):
+            raise ParseError(f"Creative Edition {label} contains an invalid source URL.")
+        if url not in result:
+            result.append(url)
+    return result
+
+
+def _creative_market_hooks(value) -> list[dict]:
+    if not isinstance(value, list) or not value:
+        raise ParseError("Creative Edition market_hooks must be a non-empty list.")
+    if len(value) > 6:
+        raise ParseError("Creative Edition market_hooks can contain at most 6 items.")
+    result = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            raise ParseError(f"Creative Edition market_hook {index} must be an object.")
+        _reject_creative_unknown_fields(item, {"story", "why_it_matters", "source_urls"}, label=f"market_hook {index}")
+        result.append(
+            {
+                "story": _required_text(item, "story", max_length=700),
+                "why_it_matters": _required_text(item, "why_it_matters", max_length=700),
+                "source_urls": _creative_source_urls(item.get("source_urls"), label=f"market_hook {index}"),
+            }
+        )
+    return result
+
+
+def _creative_scenes(value) -> list[dict]:
+    if not isinstance(value, list) or not value:
+        raise ParseError("Creative Edition scenes must be a non-empty list.")
+    if len(value) > 8:
+        raise ParseError("Creative Edition scenes can contain at most 8 items.")
+    result = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            raise ParseError(f"Creative Edition scene {index} must be an object.")
+        _reject_creative_unknown_fields(
+            item,
+            {
+                "story",
+                "source_urls",
+                "visual_joke",
+                "character_choices",
+                "character_rationale",
+                "relationship_semantics",
+                "interaction_or_action",
+                "show_seed",
+            },
+            label=f"scene {index}",
+        )
+        result.append(
+            {
+                "story": _required_text(item, "story", max_length=700),
+                "source_urls": _creative_source_urls(item.get("source_urls"), label=f"scene {index}"),
+                "visual_joke": _required_text(item, "visual_joke", max_length=700),
+                "character_choices": _required_text(item, "character_choices", max_length=700),
+                "character_rationale": _required_text(item, "character_rationale", max_length=900),
+                "relationship_semantics": _required_text(item, "relationship_semantics", max_length=900),
+                "interaction_or_action": _required_text(item, "interaction_or_action", max_length=700),
+                "show_seed": _required_text(item, "show_seed", max_length=700),
+            }
+        )
+    return result
 
 
 def _structured_reading_items(items) -> list[ParsedReadingLogItem]:
