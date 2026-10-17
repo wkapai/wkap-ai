@@ -11,11 +11,11 @@ from django.conf import settings
 from django.test import TestCase, override_settings
 
 from ingestion.models import RawEmail
-from ingestion.services import classify_email
+from ingestion.services import classify_email, process_raw_email_for_publish
 from ledger.models import CreativeEdition
 from ledger.parsers import ParseError, parse_creative_edition
 from ledger.services import create_creative_edition
-from publishing.services import publish_artifact, upgrade_opentimestamps, validate_ledger
+from publishing.services import publish_artifact, timestamp_pending_artifacts, upgrade_opentimestamps, validate_ledger
 
 
 RUN_ID = "00000000-0000-0000-0000-000000000101"
@@ -94,6 +94,28 @@ creative_edition:
             with self.assertRaisesRegex(ParseError, "publish the correction as v2"):
                 create_creative_edition(conflict_raw, run_id=RUN_ID)
 
+    def test_completed_identical_redelivery_does_not_republish(self):
+        with TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp, override_settings(
+            WKAP_PUBLIC_SITE_ROOT=Path(tmp) / "public",
+            WKAP_CREATIVE_AUTHORIZED_SENDERS={"playinc@gmail.com"},
+        ), patch("ledger.services._download_creative_image", return_value=(PNG_BYTES, "image/png", "png")):
+            edition = create_creative_edition(self.raw_email(), run_id=RUN_ID)
+            edition.canonical_url = "https://wkap.ai/creative/edition.html"
+            edition.content_sha256 = "a" * 64
+            edition.github_file_url = "https://github.com/wkapai/wkap-ledger/blob/main/creative/edition.html"
+            edition.github_commit_sha = "b" * 40
+            edition.manifest_url = "https://github.com/wkapai/wkap-ledger/blob/main/manifests/creative-1.json"
+            edition.save()
+            duplicate = self.raw_email(message_id="creative-redelivery")
+
+            with patch("publishing.services.publish_artifact") as republish:
+                returned = process_raw_email_for_publish(duplicate, run_id=RUN_ID)
+
+            duplicate.refresh_from_db()
+            self.assertEqual(returned.id, edition.id)
+            self.assertEqual(duplicate.processing_status, RawEmail.ProcessingStatus.PUBLISHED)
+            republish.assert_not_called()
+
     def test_publish_writes_actual_cover_page_manifest_and_queued_proof(self):
         with TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
             root = Path(tmp)
@@ -129,6 +151,30 @@ creative_edition:
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, edition.image_sha256)
                 self.assertContains(response, "Relationship semantics")
+                self.assertContains(response, f'<meta property="og:image" content="{payload["image_url"]}">')
+
+    def test_queued_creative_proof_is_eligible_for_existing_catchup(self):
+        with TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            root = Path(tmp)
+            with override_settings(
+                BASE_DIR=root,
+                WKAP_PUBLIC_SITE_ROOT=root / "public",
+                WKAP_LEDGER_REPO_PATH="",
+                WKAP_CREATIVE_AUTHORIZED_SENDERS={"playinc@gmail.com"},
+                WKAP_OPENTIMESTAMP_ENABLED=False,
+            ), patch("ledger.services._download_creative_image", return_value=(PNG_BYTES, "image/png", "png")):
+                edition = create_creative_edition(self.raw_email(), run_id=RUN_ID)
+                edition.canonical_url = "https://wkap.ai/creative/edition.html"
+                edition.content_sha256 = "a" * 64
+                edition.github_file_url = "https://github.com/wkapai/wkap-ledger/blob/main/creative/edition.html"
+                edition.github_commit_sha = "b" * 40
+                edition.manifest_url = "https://github.com/wkapai/wkap-ledger/blob/main/manifests/creative-1.json"
+                edition.ots_status = "queued"
+                edition.save()
+
+                processed = timestamp_pending_artifacts(run_id=RUN_ID, entity_type="creative")
+
+            self.assertEqual([item.id for item in processed], [edition.id])
 
     def test_timestamp_pending_then_verified_upgrade_preserves_original_proof(self):
         with TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:

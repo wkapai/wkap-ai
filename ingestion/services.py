@@ -139,6 +139,20 @@ def process_raw_email_for_publish(raw_email: RawEmail, *, run_id: uuid.UUID):
         return publish_artifact("wow", submission.id, run_id=run_id)
     if classification == RawEmail.Classification.CREATIVE:
         edition = create_creative_edition(raw_email, run_id=run_id)
+        if creative_publication_complete(edition):
+            raw_email.processing_status = RawEmail.ProcessingStatus.PUBLISHED
+            raw_email.error_message = ""
+            raw_email.save(update_fields=["processing_status", "error_message", "updated_at"])
+            log_event(
+                "creative_publish_duplicate_noop",
+                run_id=run_id,
+                status=LedgerEvent.Status.SKIPPED,
+                entity_type="creative",
+                entity_id=edition.id,
+                raw_email=raw_email,
+                artifact=edition,
+            )
+            return edition
         return publish_artifact("creative", edition.id, run_id=run_id)
 
     log_event(
@@ -273,3 +287,10 @@ def ensure_creative_authorized(raw_email: RawEmail, *, run_id: uuid.UUID) -> boo
         error_message=raw_email.error_message,
     )
     return False
+
+
+def creative_publication_complete(edition) -> bool:
+    return all(
+        str(getattr(edition, field, "") or "").strip()
+        for field in ("canonical_url", "content_sha256", "github_file_url", "github_commit_sha", "manifest_url")
+    )

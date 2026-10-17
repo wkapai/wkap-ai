@@ -491,6 +491,7 @@ def creative_issue(request, market_date, edition_version):
             edition=edition,
             journal=edition.journal_json,
             image_url=image_url,
+            og_image_url=image_url,
             proof_disclaimer=CREATIVE_PROOF_DISCLAIMER,
         ),
     )

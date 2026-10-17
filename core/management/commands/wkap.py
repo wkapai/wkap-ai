@@ -9,7 +9,7 @@ from core.events import log_event, new_run_id
 from core.regression import run_local_regression
 from ingestion.gmail import search_gmail_message_ids
 from ingestion.models import RawEmail
-from ingestion.services import classify_email, ingest_email
+from ingestion.services import classify_email, creative_publication_complete, ingest_email
 from ledger.investor_id import find_or_create_investor
 from ledger.models import LedgerEvent
 from ledger.parsers import ParseError
@@ -601,8 +601,14 @@ class Command(BaseCommand):
                     published.append(f"wow:{submission.id}")
                 elif classification == RawEmail.Classification.CREATIVE:
                     edition = create_creative_edition(raw_email, run_id=run_id)
-                    last_entity = publish_artifact("creative", edition.id, run_id=run_id)
-                    published.append(f"creative:{edition.id}")
+                    if creative_publication_complete(edition):
+                        raw_email.processing_status = RawEmail.ProcessingStatus.PUBLISHED
+                        raw_email.save(update_fields=["processing_status", "updated_at"])
+                        skipped.append(f"creative:{edition.id}:duplicate_noop")
+                        last_entity = edition
+                    else:
+                        last_entity = publish_artifact("creative", edition.id, run_id=run_id)
+                        published.append(f"creative:{edition.id}")
                 else:
                     skipped.append(f"raw_email:{raw_email.id}:{classification}")
             except Exception as exc:

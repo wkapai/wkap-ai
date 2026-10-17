@@ -288,7 +288,7 @@ def timestamp_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
         _refresh_artifact_files(entity_type, artifact)
         commit_sha = _sync_and_commit_ledger_metadata(entity_type, artifact, f"OpenTimestamp {entity_type} {entity_id}")
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
-        artifact.ots_status = "failed"
+        artifact.ots_status = "verification_failed" if entity_type == "creative" else "failed"
         artifact.save(update_fields=["ots_status", "updated_at"])
         _refresh_artifact_files(entity_type, artifact)
         log_event(
@@ -303,9 +303,11 @@ def timestamp_artifact(entity_type: str, entity_id: int, *, run_id: uuid.UUID):
         )
         raise
 
+    verification_failed = entity_type == "creative" and artifact.ots_status == "verification_failed"
     log_event(
-        "opentimestamp_succeeded",
+        "opentimestamp_verification_failed" if verification_failed else "opentimestamp_succeeded",
         run_id=run_id,
+        status=LedgerEvent.Status.FAILED if verification_failed else LedgerEvent.Status.SUCCEEDED,
         entity_type=entity_type,
         entity_id=artifact.id,
         artifact=artifact,
@@ -1209,7 +1211,7 @@ def _timestamp_upgrade_candidates(entity_type: str | None, entity_id: int | None
 
 
 def _timestamp_pending_candidates(entity_type: str | None, entity_id: int | None) -> list[tuple[str, Any]]:
-    statuses = ["", "not_started"]
+    statuses = ["", "not_started", "queued"]
 
     if entity_type and entity_id:
         artifact = _artifact(entity_type, entity_id)
