@@ -14,7 +14,7 @@ from django.test import TestCase, override_settings
 from ingestion.models import RawEmail
 from ingestion.services import classify_email, process_raw_email_for_publish
 from ledger.models import CreativeEdition
-from ledger.parsers import ParseError, parse_creative_edition
+from ledger.parsers import DAILY_MARKET_MEME_CHALLENGE, ParseError, parse_creative_edition
 from ledger.services import create_creative_edition, create_radar_issue
 from publishing.services import publish_artifact, timestamp_pending_artifacts, upgrade_opentimestamps, validate_ledger
 
@@ -137,6 +137,11 @@ wkap_edition:
             parse_creative_edition(raw)
 
     def test_unified_parser_is_alpha_first_and_requires_fixed_challenge(self):
+        schema_path = Path(settings.BASE_DIR) / "specs" / "public" / "wkap-edition-v1.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        schema_invitation = schema["$defs"]["challenge"]["properties"]["invitation"]["const"]
+        self.assertEqual(schema_invitation, DAILY_MARKET_MEME_CHALLENGE)
+
         parsed = parse_creative_edition(self.unified_raw_email())
         self.assertEqual(parsed.format_version, "wkap_edition_v1")
         self.assertTrue(parsed.cover_logo_verified)

@@ -94,7 +94,7 @@
       "additionalProperties": false,
       "required": ["invitation", "x_url"],
       "properties": {
-        "invitation": {"const": "Roast our take, spot an egg, or show us your market meme. Tell us what today’s market is missing."},
+        "invitation": {"const": "Roast our take, spot an egg, or show us your market meme. Tell us what today\u0027s market is missing."},
         "x_url": {"type": "string", "format": "uri", "pattern": "^https://(www\\.)?(x\\.com|twitter\\.com)/.+/status/[0-9]+"},
         "moltbook_url": {"type": "string", "format": "uri", "pattern": "^https://(www\\.)?moltbook\\.com/"},
         "featured_contribution": {
