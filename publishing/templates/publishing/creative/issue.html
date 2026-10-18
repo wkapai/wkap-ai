@@ -3,15 +3,36 @@
 {% block content %}
 <article class="artifact-layout creative-edition-layout" data-agent-readable="true" data-artifact-type="creative" data-market-date="{{ edition.market_date|date:"Y-m-d" }}" data-image-sha256="{{ edition.image_sha256 }}" data-journal-sha256="{{ edition.journal_sha256 }}">
   <section class="artifact-main">
-    <p class="eyebrow">WKAP Creative Edition · v{{ edition.edition_version }}</p>
+    <p class="eyebrow">{% if unified %}WKAP Edition{% else %}WKAP Creative Edition{% endif %} · v{{ edition.edition_version }}</p>
     <h1>{{ edition.title }}</h1>
-    <p class="creative-premise">{{ journal.episode_premise }}</p>
     <figure class="creative-cover-frame">
       <img class="creative-cover" src="{{ image_url }}" alt="Final published WKAP cover for {{ edition.market_date|date:"Y-m-d" }}">
-      <figcaption>The actual final cover published on X. <a href="{{ edition.image_source_url }}">Original public image</a> · <a href="{{ edition.article_url }}">X article</a></figcaption>
+      <figcaption>The exact final watermarked cover published on X. <a href="{{ edition.image_source_url }}">Original public image</a> · <a href="{{ edition.article_url }}">X Article</a>{% if edition_json_url %} · <a href="{{ edition_json_url }}">Canonical edition JSON</a>{% endif %}</figcaption>
     </figure>
 
     <section class="body-copy creative-journal" data-agent-body="creative-journal">
+      {% if unified %}
+      <h2>Market take</h2>
+      <p>{{ journal.analysis.market_take }}</p>
+      <h2>What the market is missing</h2>
+      <p>{{ journal.analysis.what_market_misses }}</p>
+      {% for section in journal.analysis.sections %}
+      <section class="article-section">
+        <h2>{{ section.heading }}</h2>
+        {% for paragraph in section.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}
+        <p class="source-links">{% for source in section.source_urls %}<a href="{{ source }}">Source {{ forloop.counter }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+      </section>
+      {% endfor %}
+      <h2>What to watch next</h2>
+      <ul>{% for item in journal.analysis.watch_next %}<li>{{ item }}</li>{% endfor %}</ul>
+      <h2>What would invalidate this take</h2>
+      <ul>{% for item in journal.analysis.invalidation %}<li>{{ item }}</li>{% endfor %}</ul>
+
+      <hr>
+      <p class="eyebrow">Creative brief</p>
+      <h2>Episode premise</h2>
+      {% endif %}
+      <p class="creative-premise">{{ journal.episode_premise }}</p>
       <h2>Market hooks</h2>
       <div class="creative-card-grid">
       {% for hook in journal.market_hooks %}
@@ -34,7 +55,7 @@
             <dt>Why they belong</dt><dd>{{ scene.character_rationale }}</dd>
             <dt>Relationship semantics</dt><dd>{{ scene.relationship_semantics }}</dd>
             <dt>Action</dt><dd>{{ scene.interaction_or_action }}</dd>
-            <dt>Future show seed</dt><dd>{{ scene.show_seed }}</dd>
+            {% if scene.show_seed %}<dt>Future show seed</dt><dd>{{ scene.show_seed }}</dd>{% endif %}
           </dl>
           <p class="source-links">{% for source in scene.source_urls %}<a href="{{ source }}">Source {{ forloop.counter }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
         </article>
@@ -47,13 +68,18 @@
         <dt>AI</dt><dd>{{ journal.credits.ai_contribution }}</dd>
         <dt>Publisher</dt><dd>{{ journal.credits.publisher }}</dd>
       </dl>
-
       <h2>Rejected choices</h2>
       <ul>{% for item in journal.rejected_choices %}<li>{{ item }}</li>{% endfor %}</ul>
       <h2>Corrections</h2>
       <ul>{% for item in journal.corrections %}<li>{{ item }}</li>{% endfor %}</ul>
       <h2>Lesson for the next edition</h2>
       <p>{{ journal.lesson_next_time }}</p>
+      {% if unified %}
+      <h2>Daily Market Meme Challenge</h2>
+      <p>{{ journal.challenge.invitation }}</p>
+      <p><a href="{{ journal.challenge.x_url }}">Join the challenge on X</a>{% if journal.challenge.moltbook_url %} · <a href="{{ journal.challenge.moltbook_url }}">Join on Moltbook</a>{% endif %}</p>
+      {% if journal.challenge.featured_contribution %}<p>Featured contribution: <a href="{{ journal.challenge.featured_contribution.source_url }}">{{ journal.challenge.featured_contribution.credit }}</a></p>{% endif %}
+      {% endif %}
       <p class="disclaimer">{{ proof_disclaimer }}</p>
     </section>
   </section>

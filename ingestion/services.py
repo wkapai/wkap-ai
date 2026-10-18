@@ -22,7 +22,7 @@ from ledger.models import LedgerEvent
 
 
 RADAR_TERMS = ("wkap radar", "radar feed", "market context")
-CREATIVE_TERMS = ("wkap creative edition", "creative_edition_v1")
+CREATIVE_TERMS = ("wkap creative edition", "creative_edition_v1", "wkap edition", "wkap_edition_v1")
 WOW_TERMS = (
     "daily wow packet",
     "agent suggested 3 wows",
@@ -129,6 +129,20 @@ def process_raw_email_for_publish(raw_email: RawEmail, *, run_id: uuid.UUID):
     classification = classify_email(raw_email, run_id=run_id)
     if classification == RawEmail.Classification.RADAR:
         issue = create_radar_issue(raw_email, run_id=run_id)
+        if artifact_publication_complete(issue):
+            raw_email.processing_status = RawEmail.ProcessingStatus.PUBLISHED
+            raw_email.error_message = ""
+            raw_email.save(update_fields=["processing_status", "error_message", "updated_at"])
+            log_event(
+                "radar_publish_duplicate_noop",
+                run_id=run_id,
+                status=LedgerEvent.Status.SKIPPED,
+                entity_type="radar",
+                entity_id=issue.id,
+                raw_email=raw_email,
+                artifact=issue,
+            )
+            return issue
         return publish_artifact("radar", issue.id, run_id=run_id)
     if classification == RawEmail.Classification.WOW:
         try:
@@ -292,5 +306,12 @@ def ensure_creative_authorized(raw_email: RawEmail, *, run_id: uuid.UUID) -> boo
 def creative_publication_complete(edition) -> bool:
     return all(
         str(getattr(edition, field, "") or "").strip()
+        for field in ("canonical_url", "content_sha256", "github_file_url", "github_commit_sha", "manifest_url")
+    )
+
+
+def artifact_publication_complete(artifact) -> bool:
+    return all(
+        str(getattr(artifact, field, "") or "").strip()
         for field in ("canonical_url", "content_sha256", "github_file_url", "github_commit_sha", "manifest_url")
     )

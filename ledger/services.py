@@ -19,7 +19,7 @@ from ledger.lifecycle_events import ensure_wow_lifecycle_events
 from ledger.models import AgentSuggestedWoW, CreativeEdition, DailyWoWPacket, LedgerEvent, RadarIssue, ReadingLogItem
 from ledger.parsers import ParseError, parse_creative_edition, parse_radar, parse_wow
 from ledger.wow_contract import local_wow_id, public_wow_id
-from publishing.urls import creative_image_path
+from publishing.urls import creative_image_path, radar_cover_image_path
 
 
 def create_creative_edition(raw_email: RawEmail, *, run_id: uuid.UUID) -> CreativeEdition:
@@ -40,6 +40,27 @@ def create_creative_edition(raw_email: RawEmail, *, run_id: uuid.UUID) -> Creati
     ).encode("utf-8")
     image_sha256 = hashlib.sha256(image_bytes).hexdigest()
     journal_sha256 = hashlib.sha256(journal_bytes).hexdigest()
+    article_bytes = json.dumps(
+        parsed.journal_json.get("analysis", {}),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    article_sha256 = hashlib.sha256(article_bytes).hexdigest() if parsed.article_word_count else ""
+
+    matching_radar = RadarIssue.objects.filter(market_date=parsed.market_date).first()
+    if parsed.format_version == "wkap_edition_v1" and matching_radar and matching_radar.edition_version:
+        if (
+            matching_radar.edition_version != parsed.edition_version
+            or matching_radar.cover_image_sha256 != image_sha256
+            or not matching_radar.cover_logo_verified
+        ):
+            message = (
+                "WKAP Edition does not match the same-date Radar edition version, exact cover SHA-256, "
+                "and verified watermark declaration."
+            )
+            _mark_parse_failed(raw_email, run_id=run_id, message=message, event_name="creative_radar_mismatch")
+            raise ParseError(message)
 
     existing = CreativeEdition.objects.filter(
         market_date=parsed.market_date,
@@ -82,6 +103,9 @@ def create_creative_edition(raw_email: RawEmail, *, run_id: uuid.UUID) -> Creati
             image_sha256=image_sha256,
             journal_json=parsed.journal_json,
             journal_sha256=journal_sha256,
+            article_sha256=article_sha256,
+            article_word_count=parsed.article_word_count,
+            cover_logo_verified=parsed.cover_logo_verified,
             creator_human=parsed.creator_human,
             creator_ai=parsed.creator_ai,
             publisher=parsed.publisher,
@@ -154,7 +178,7 @@ def _write_creative_image_asset(edition: CreativeEdition, content: bytes) -> Pat
         edition.image_extension,
     )
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(content)
+    _atomic_write_bytes(path, content)
     return path
 
 
@@ -167,31 +191,82 @@ def create_radar_issue(raw_email: RawEmail, *, run_id: uuid.UUID) -> RadarIssue:
         _mark_parse_failed(raw_email, run_id=run_id, message=str(exc), event_name="radar_parsed")
         raise
 
-    with transaction.atomic():
-        issue, _ = RadarIssue.objects.update_or_create(
-            market_date=parsed.market_date,
-            defaults={
-                "title": _radar_title_for_storage(parsed.title),
-                "body_text": parsed.body_text,
-                "body_html": "",
-                "canonical_url": "",
-                "content_sha256": "",
-                "github_file_url": "",
-                "github_commit_sha": "",
-                "manifest_url": "",
-                "ots_status": "not_started",
-                "ots_proof_url": "",
-                "source_email": raw_email,
-                "receipt_email_sent_at": None,
-                "receipt_email_message_id": "",
-                "receipt_email_error": "",
-            },
+    cover_bytes = b""
+    media_type = ""
+    extension = ""
+    if parsed.cover_image_source_url:
+        cover_bytes, media_type, extension = _download_creative_image(parsed.cover_image_source_url)
+        if hashlib.sha256(cover_bytes).hexdigest() != parsed.cover_image_sha256:
+            message = "Radar cover_image_sha256 does not match the exact downloaded cover bytes."
+            _mark_parse_failed(raw_email, run_id=run_id, message=message, event_name="radar_cover_hash_mismatch")
+            raise ParseError(message)
+
+    existing = RadarIssue.objects.filter(market_date=parsed.market_date).first()
+    if existing:
+        unchanged = (
+            existing.title == _radar_title_for_storage(parsed.title)
+            and existing.body_text == parsed.body_text
+            and existing.edition_version == parsed.edition_version
+            and existing.cover_image_source_url == parsed.cover_image_source_url
+            and existing.cover_image_sha256 == parsed.cover_image_sha256
+            and existing.cover_logo_verified == parsed.cover_logo_verified
+            and existing.challenge_invitation == parsed.challenge_invitation
         )
+        if not unchanged:
+            message = f"Radar {parsed.market_date} already exists with different content; same-day overwrite is not allowed."
+            _mark_parse_failed(raw_email, run_id=run_id, message=message, event_name="radar_date_conflict")
+            raise ParseError(message)
+        if cover_bytes:
+            _write_radar_cover_asset(existing, cover_bytes)
+        raw_email.processing_status = RawEmail.ProcessingStatus.PARSED
+        raw_email.error_message = ""
+        raw_email.save(update_fields=["processing_status", "error_message", "updated_at"])
+        log_event(
+            "radar_duplicate_noop",
+            run_id=run_id,
+            status=LedgerEvent.Status.SKIPPED,
+            entity_type="radar",
+            entity_id=existing.id,
+            raw_email=raw_email,
+            artifact=existing,
+        )
+        return existing
+
+    with transaction.atomic():
+        issue = RadarIssue.objects.create(
+            market_date=parsed.market_date,
+            title=_radar_title_for_storage(parsed.title),
+            body_text=parsed.body_text,
+            edition_version=parsed.edition_version,
+            cover_image_source_url=parsed.cover_image_source_url,
+            cover_image_extension=extension,
+            cover_image_media_type=media_type,
+            cover_image_size_bytes=len(cover_bytes),
+            cover_image_sha256=parsed.cover_image_sha256,
+            cover_logo_verified=parsed.cover_logo_verified,
+            challenge_invitation=parsed.challenge_invitation,
+            source_email=raw_email,
+        )
+        if cover_bytes:
+            _write_radar_cover_asset(issue, cover_bytes)
         raw_email.processing_status = RawEmail.ProcessingStatus.PARSED
         raw_email.save(update_fields=["processing_status", "updated_at"])
         log_event("radar_parsed", run_id=run_id, entity_type="radar", entity_id=issue.id, raw_email=raw_email, artifact=issue)
         log_event("db_record_created", run_id=run_id, entity_type="radar", entity_id=issue.id, raw_email=raw_email, artifact=issue)
     return issue
+
+
+def _write_radar_cover_asset(issue: RadarIssue, content: bytes) -> Path:
+    path = settings.WKAP_PUBLIC_SITE_ROOT / radar_cover_image_path(issue.market_date, issue.cover_image_extension)
+    _atomic_write_bytes(path, content)
+    return path
+
+
+def _atomic_write_bytes(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_bytes(content)
+    temporary.replace(path)
 
 
 def _radar_title_for_storage(title: str) -> str:

@@ -25,6 +25,7 @@
   {% endif %}
   <link rel="index" href="/radar/" data-agent-crawl="radar-index">
   <link rel="index" href="/creative/" data-agent-crawl="creative-index">
+  <link rel="index" href="/editions/" data-agent-crawl="editions-index">
   <link rel="index" href="/investors/" data-agent-crawl="wow-ledger-index">
   {% for link in crawl_links %}
   <link rel="{{ link.rel }}" href="{{ link.href }}" data-agent-crawl="{{ link.label }}">
@@ -44,7 +45,7 @@
     </a>
     <nav aria-label="Primary">
       <a href="/radar/">Radar</a>
-      <a href="/creative/">Creative</a>
+      <a href="/editions/">Editions</a>
       <a href="/investors/">WoW Ledger</a>
     </nav>
   </header>

@@ -2,7 +2,7 @@
 
 WKAP V0 is a Gmail-powered, GitHub-ledgered, agent-validatable publishing system for Radar Feeds and Daily WoW Packets.
 
-It also publishes versioned Creative Editions for final weekday X covers. See [`docs/CREATIVE_EDITION_OPERATIONS.md`](docs/CREATIVE_EDITION_OPERATIONS.md) and the public `creative_edition_v1` schema. Creative publication is additive and cannot block Article or Radar publication.
+It also publishes versioned, alpha-first WKAP Editions for weekday X Articles and final covers. See [`docs/CREATIVE_EDITION_OPERATIONS.md`](docs/CREATIVE_EDITION_OPERATIONS.md) and the public `wkap_edition_v1` schema. Legacy `creative_edition_v1` records remain readable. Edition publication is part of the sole weekday workflow and cannot block Radar publication.
 
 The same Django codebase runs locally on a PC and in production on Render. Environment-specific behavior is controlled by `.env` locally and Render/Cloudflare/GitHub secrets in production.
 

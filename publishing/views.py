@@ -18,7 +18,20 @@ from ledger.wow_contract import RADAR_CONTENT_SHA256_COVERS, WOW_CONTENT_SHA256_
 from ledger.wow_lifecycle import lifecycle_records, lifecycle_records_json, status_update_records
 from ledger.wow_packet_spec import current_spec
 from publishing.services import CREATIVE_CONTENT_SHA256_COVERS, CREATIVE_PROOF_DISCLAIMER, WOW_DISCLAIMER
-from publishing.urls import creative_archive_url, creative_image_url, creative_issue_url, investor_home_url, investor_wows_url, radar_archive_url, radar_issue_url, wow_url
+from publishing.urls import (
+    creative_archive_url,
+    creative_image_url,
+    creative_issue_url,
+    edition_archive_url,
+    edition_issue_url,
+    edition_json_path,
+    investor_home_url,
+    investor_wows_url,
+    radar_archive_url,
+    radar_cover_image_url,
+    radar_issue_url,
+    wow_url,
+)
 
 
 ET_ZONE = ZoneInfo("America/New_York")
@@ -37,6 +50,7 @@ JSON_RESOURCES = {
     "wow_intake_flow_v0_2": "specs/public/wow-intake-flow-v0.2.json",
     "daily_wow_state_v0_2": "specs/public/daily-wow-state-v0.2.schema.json",
     "creative_edition_v1": "specs/public/creative-edition-v1.schema.json",
+    "wkap_edition_v1": "specs/public/wkap-edition-v1.schema.json",
 }
 
 
@@ -401,6 +415,13 @@ def radar_archive(request):
 @cache_control(public=True, max_age=300)
 def radar_issue(request, market_date):
     issue = get_object_or_404(RadarIssue, market_date=market_date)
+    edition = None
+    if issue.edition_version:
+        edition = CreativeEdition.objects.filter(
+            market_date=issue.market_date,
+            edition_version=issue.edition_version,
+            format_version="wkap_edition_v1",
+        ).first()
     return render(
         request,
         "publishing/radar/issue.html",
@@ -412,13 +433,17 @@ def radar_issue(request, market_date):
             agent_facts=_artifact_facts(issue, "radar") + [{"name": "title", "value": issue.title}],
             json_ld=_artifact_json_ld(issue, "WKAP Radar Feed", issue.title, issue.body_text),
             issue=issue,
+            edition=edition,
+            cover_image_url=radar_cover_image_url(issue.market_date, issue.cover_image_extension)
+            if issue.cover_image_sha256
+            else "",
         ),
     )
 
 
 @cache_control(public=True, max_age=300)
 def creative_archive(request):
-    editions = CreativeEdition.objects.order_by("-market_date", "-edition_version", "-id")
+    editions = CreativeEdition.objects.filter(format_version="creative_edition_v1").order_by("-market_date", "-edition_version", "-id")
     return render(
         request,
         "publishing/creative/archive.html",
@@ -457,6 +482,7 @@ def creative_issue(request, market_date, edition_version):
         CreativeEdition,
         market_date=market_date,
         edition_version=edition_version,
+        format_version="creative_edition_v1",
     )
     image_url = creative_image_url(edition.market_date, edition.edition_version, edition.image_extension)
     return render(
@@ -495,6 +521,87 @@ def creative_issue(request, market_date, edition_version):
             proof_disclaimer=CREATIVE_PROOF_DISCLAIMER,
         ),
     )
+
+
+@cache_control(public=True, max_age=300)
+def edition_archive(request):
+    editions = CreativeEdition.objects.filter(format_version="wkap_edition_v1").order_by(
+        "-market_date", "-edition_version", "-id"
+    )
+    return render(
+        request,
+        "publishing/creative/archive.html",
+        _page_context(
+            title="WKAP Edition Archive",
+            description="Alpha-first WKAP market editions with exact published covers, sources, challenge links, and ledger proof.",
+            canonical_url=edition_archive_url(),
+            page_type="wkap_edition_archive",
+            agent_facts=[
+                {"name": "artifact_family", "value": "WKAP Edition"},
+                {"name": "format_version", "value": "wkap_edition_v1"},
+                {"name": "entry_count", "value": str(editions.count())},
+            ],
+            editions=editions,
+            unified=True,
+        ),
+    )
+
+
+@cache_control(public=True, max_age=300)
+def edition_issue(request, market_date, edition_version):
+    edition = get_object_or_404(
+        CreativeEdition,
+        market_date=market_date,
+        edition_version=edition_version,
+        format_version="wkap_edition_v1",
+    )
+    image_url = creative_image_url(edition.market_date, edition.edition_version, edition.image_extension)
+    return render(
+        request,
+        "publishing/creative/issue.html",
+        _page_context(
+            title=f"WKAP Edition {edition.market_date} v{edition.edition_version} - {edition.title}",
+            description=edition.journal_json.get("analysis", {}).get("market_take", "")[:240],
+            canonical_url=edition.canonical_url or edition_issue_url(edition.market_date, edition.edition_version),
+            page_type="wkap_edition",
+            agent_spec_version=edition.format_version,
+            agent_facts=_artifact_facts(edition, "creative")
+            + [
+                {"name": "image_sha256", "value": edition.image_sha256},
+                {"name": "journal_sha256", "value": edition.journal_sha256},
+                {"name": "article_sha256", "value": edition.article_sha256},
+                {"name": "article_word_count", "value": str(edition.article_word_count)},
+                {"name": "cover_logo_verified", "value": str(edition.cover_logo_verified).lower()},
+                {"name": "edition_version", "value": str(edition.edition_version)},
+            ],
+            edition=edition,
+            journal=edition.journal_json,
+            image_url=image_url,
+            og_image_url=image_url,
+            proof_disclaimer=CREATIVE_PROOF_DISCLAIMER,
+            unified=True,
+            edition_json_url=f"/{edition_json_path(edition.market_date, edition.edition_version)}",
+        ),
+    )
+
+
+@cache_control(public=True, max_age=300)
+def edition_json(request, market_date, edition_version):
+    edition = get_object_or_404(
+        CreativeEdition,
+        market_date=market_date,
+        edition_version=edition_version,
+        format_version="wkap_edition_v1",
+    )
+    content = json.dumps(
+        edition.journal_json,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    response = HttpResponse(content, content_type="application/json; charset=utf-8")
+    response["X-Content-SHA256"] = edition.journal_sha256
+    return response
 
 
 def investor_archive(request):
@@ -882,11 +989,17 @@ def sitemap_xml(request):
         (f"{settings.WKAP_BASE_URL}/submit-to-wkap-ledger.html", "weekly"),
         (radar_archive_url(), "daily"),
         (creative_archive_url(), "daily"),
+        (edition_archive_url(), "daily"),
         (f"{settings.WKAP_BASE_URL}/investors/", "daily"),
     ]
     urls.extend((radar_issue_url(issue.market_date), "weekly") for issue in RadarIssue.objects.order_by("-market_date"))
     urls.extend(
-        (creative_issue_url(edition.market_date, edition.edition_version), "weekly")
+        (
+            edition_issue_url(edition.market_date, edition.edition_version)
+            if edition.format_version == "wkap_edition_v1"
+            else creative_issue_url(edition.market_date, edition.edition_version),
+            "weekly",
+        )
         for edition in CreativeEdition.objects.order_by("-market_date", "-edition_version")
     )
     investors = (

@@ -1690,7 +1690,7 @@ packet:
             ).exists()
         )
 
-    def test_reledgered_radar_resets_receipt_state_for_fresh_receipt(self):
+    def test_changed_same_day_radar_is_rejected_instead_of_overwritten(self):
         run_id = "00000000-0000-0000-0000-000000000030"
         first_raw = self.raw_email(sender="playinc@gmail.com", body="Market_date: 2026-07-02\nTitle: First Radar\nBody: Context")
         issue = create_radar_issue(first_raw, run_id=run_id)
@@ -1711,20 +1711,15 @@ packet:
             body="Market_date: 2026-07-02\nTitle: Updated Radar\nBody: Fresh context",
         )
 
-        updated_issue = create_radar_issue(second_raw, run_id=run_id)
+        with self.assertRaisesRegex(ParseError, "same-day overwrite is not allowed"):
+            create_radar_issue(second_raw, run_id=run_id)
 
-        self.assertEqual(updated_issue.id, issue.id)
-        self.assertEqual(updated_issue.source_email, second_raw)
-        self.assertIsNone(updated_issue.receipt_email_sent_at)
-        self.assertEqual(updated_issue.receipt_email_message_id, "")
-        self.assertEqual(updated_issue.receipt_email_error, "")
-        self.assertEqual(updated_issue.canonical_url, "")
-        self.assertEqual(updated_issue.content_sha256, "")
-        self.assertEqual(updated_issue.github_file_url, "")
-        self.assertEqual(updated_issue.github_commit_sha, "")
-        self.assertEqual(updated_issue.manifest_url, "")
-        self.assertEqual(updated_issue.ots_status, "not_started")
-        self.assertEqual(updated_issue.ots_proof_url, "")
+        issue.refresh_from_db()
+        self.assertEqual(issue.source_email, first_raw)
+        self.assertEqual(issue.title, "First Radar")
+        self.assertEqual(issue.receipt_email_message_id, "old-message-id")
+        self.assertEqual(issue.canonical_url, "https://wkap.ai/radar/wkap-radar-feed-2026-07-02.html")
+        self.assertEqual(issue.ots_status, "stamped")
 
     def test_publish_radar_attempts_receipt_after_proof_fields(self):
         run_id = "00000000-0000-0000-0000-000000000024"

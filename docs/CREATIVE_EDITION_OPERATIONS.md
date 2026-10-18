@@ -1,22 +1,50 @@
-# WKAP Creative Edition operations
+# WKAP unified edition operations
+
+`wkap_edition_v1` is the approved alpha-first WKAP revamp. It extends the existing weekday producer and the existing Creative Edition storage/proof machinery; it does not create another producer, writing workflow, or schedule. `creative_edition_v1` remains readable for already-created records, but new editions use `wkap_edition_v1`.
+
+## One edition, one frozen version
+
+Each version freezes together:
+
+- the verified public X Article URL;
+- the complete alpha-first analysis (market take, differentiated implication, watch points, invalidation, sections, and their sources);
+- the exact final cover bytes and SHA-256, after internal logo/likeness/fit/mobile/source-connection QA;
+- the succinct creative brief appended after the analysis;
+- the fixed Daily Market Meme Challenge invitation and exact X companion URL;
+- the Moltbook URL only when an already-authorized WKAP session successfully publishes it.
+
+The public JSON and exact cover are recoverable ledger files. Any byte change requires a new edition version. An identical retry is a no-op. The public page renders analysis before the creative brief so the cover attracts attention without displacing the investment work.
 
 `creative_edition_v1` adds a public creative journal to the existing weekday producer. It is not a new workflow and it never blocks the X Article or Radar Feed.
 
 ## Producer order
 
-1. Research and publish the X Article and final cover through the existing producer.
+1. Research and publish the alpha-first X Article and final watermarked cover through the existing producer.
 2. Use the actual final `pbs.twimg.com` image URL, never a prompt, draft, local render, or yesterday's private study.
-3. Curate the public journal from the internal working record. Keep private chain-of-thought and unused exploration private.
-4. Email `ledger@wkap.ai` with subject `WKAP Creative Edition - YYYY-MM-DD - vN` and exactly one fenced YAML or JSON block matching [the public schema](https://wkap.ai/specs/creative-edition-latest.schema.json).
-5. Identical retries are no-ops. Any changed journal or image byte requires the next version; an existing version is never overwritten.
+3. Publish the X companion challenge with the same cover and exact Article URL. Use the fixed invitation from the schema. Post the same challenge to Moltbook only after WKAP account/session and any terms requirement are explicitly satisfied.
+4. Curate the public edition from the same Article plus the internal cover record. Keep private chain-of-thought and unused exploration private.
+5. Email `ledger@wkap.ai` with subject `WKAP Edition - YYYY-MM-DD - vN` and exactly one fenced YAML or JSON `wkap_edition` block matching [the public schema](https://wkap.ai/specs/wkap-edition-latest.schema.json).
+6. Identical retries are no-ops. Any changed journal or image byte requires the next version; an existing version is never overwritten.
 
-The email receipt date in Asia/Ho_Chi_Minh must equal `market_date`, preventing backdating. The image host is restricted to `pbs.twimg.com`; redirects away, unsupported image bytes, MIME mismatches, and oversize images are rejected.
+The email receipt date in Asia/Ho_Chi_Minh must equal `market_date`, preventing backdating. The Article and challenge links must be exact X publication URLs. The image host is restricted to `pbs.twimg.com`; redirects away, unsupported image bytes, MIME mismatches, and oversize images are rejected.
+
+Radar is still sent before the Article. For a revamp edition it carries the same exact cover with its expected SHA-256, a producer declaration that the actual WKAP logo was visually verified, the edition version, and the fixed challenge invitation. Put this machine-readable footer at the end of the Radar email:
+
+```text
+Edition_version: 1
+Cover_image_source_url: https://pbs.twimg.com/media/example.jpg
+Cover_image_sha256: <64 lowercase hexadecimal characters>
+Cover_logo_verified: true
+Challenge_invitation: Roast our take, spot an egg, or show us your market meme. Tell us what today's market is missing.
+```
+
+It omits a placeholder Article URL. When the matching edition later exists, the Radar page links to it automatically; Radar is never resent merely to add the link. An identical delivery is a no-op; changed same-day content is rejected rather than silently overwriting the ledger.
 
 The recurring path is zero-touch: the producer owns research, internal critique and revisions, publication, proof follow-up, and reusable QA improvement within its existing authority. Alex may offer taste feedback, but is not a routine gate. Pause only for a genuine new permission, high-risk exception, or an external security/approval boundary.
 
 ## Editorial quality gate
 
-Each meaningful scene needs a verified market story, source links, a visual joke, an interaction or action, and a concise future-show seed. A recognizable character is necessary in the current phase but not sufficient. `character_rationale` must explain why the character's real role or traits fit that specific story and joke. `relationship_semantics` must review the whole scene's dominant audience associations, hero/villain implications, and relationships among the characters. A mechanically apt prop cannot rescue a false narrative implication; decorative costumes and post-hoc rationalizations should be rejected before submission.
+Each meaningful scene needs a verified market story, source links, a visual joke, and an interaction or action. It must stand alone; do not rely on lore. A recognizable character is necessary in the current phase but not sufficient. `character_rationale` must explain why the character's real role or traits fit that specific story and joke. `relationship_semantics` must review the whole scene's dominant audience associations, hero/villain implications, and relationships among the characters. A mechanically apt prop cannot rescue a false narrative implication; decorative costumes and post-hoc rationalizations should be rejected before submission.
 
 Before publication, inspect rendered pixels at phone size and at face/reference detail. Record rejected choices and corrections. Convert each recurring failure into a reusable preflight check; use journal history to look for fewer repeated corrections and stronger first-review results. The public journal is curated; the producer's internal revision log stays private and separate.
 
@@ -36,13 +64,29 @@ Proof upgrades preserve prior `.ots` bytes under `timestamps/history/` and incre
 ## Example envelope
 
 ```yaml
-creative_edition:
-  format_version: creative_edition_v1
+wkap_edition:
+  format_version: wkap_edition_v1
   market_date: 2026-10-19
   edition_version: 1
   title: "One-frame market show title"
-  article_url: "https://x.com/example/status/1"
+  article_url: "https://x.com/example/article/1"
   image_source_url: "https://pbs.twimg.com/media/example.jpg"
+  cover_logo_verified: true
+  analysis:
+    market_take: "The concise alpha-first market take."
+    what_market_misses: "The differentiated implication."
+    watch_next: ["A measurable checkpoint"]
+    invalidation: ["Evidence that would falsify the take"]
+    sections:
+      - heading: "The setup"
+        paragraphs: ["A sourced paragraph from the full Article."]
+        source_urls: ["https://example.com/source"]
+      - heading: "The implication"
+        paragraphs: ["Why the facts change the investment view."]
+        source_urls: ["https://example.com/source"]
+      - heading: "The risk"
+        paragraphs: ["What could make the take wrong."]
+        source_urls: ["https://example.com/source"]
   episode_premise: "The day's market episode compressed into one frame."
   market_hooks:
     - story: "Verified market development"
@@ -56,7 +100,9 @@ creative_edition:
       character_rationale: "How their real traits or roles connect to the story and joke"
       relationship_semantics: "Why the combination does not imply a false rivalry, alliance, hero/villain role, or other unsupported relationship"
       interaction_or_action: "What the characters are doing together"
-      show_seed: "A concise continuation seed for a future market-news show"
+  challenge:
+    invitation: "Roast our take, spot an egg, or show us your market meme. Tell us what today's market is missing."
+    x_url: "https://x.com/example/status/2"
   credits:
     human_contribution: "Alex: product direction and optional taste feedback; no routine daily touch"
     ai_contribution: "AI: research synthesis, iteration, and rendering assistance"

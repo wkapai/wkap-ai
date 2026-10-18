@@ -16,6 +16,7 @@ urlpatterns = [
     path("specs/wow-intake-flow-v0.2.json", views.json_resource, {"resource_key": "wow_intake_flow_v0_2"}, name="wow_intake_flow_v0_2"),
     path("specs/daily-wow-state-v0.2.schema.json", views.json_resource, {"resource_key": "daily_wow_state_v0_2"}, name="daily_wow_state_schema_v0_2"),
     path("specs/creative-edition-v1.schema.json", views.json_resource, {"resource_key": "creative_edition_v1"}, name="creative_edition_schema_v1"),
+    path("specs/wkap-edition-v1.schema.json", views.json_resource, {"resource_key": "wkap_edition_v1"}, name="wkap_edition_schema_v1"),
     path("skills/wkap-wow-skill-v0.2.md", views.markdown_resource, {"resource_key": "wkap_wow_skill_v0_2"}, name="wkap_wow_skill_v0_2"),
     path("skills/wkap-wow-codex/SKILL.md", views.markdown_resource, {"resource_key": "wkap_wow_codex_skill"}, name="wkap_wow_codex_skill"),
     path("skills/wkap-wow-codex/references/daily-packet-template.md", views.markdown_resource, {"resource_key": "wkap_wow_codex_daily_packet_template"}, name="wkap_wow_codex_daily_packet_template"),
@@ -26,11 +27,13 @@ urlpatterns = [
     path("specs/wow-intake-flow-latest.json", views.markdown_latest_redirect, {"target_path": "/specs/wow-intake-flow-v0.2.json"}, name="wow_intake_flow_latest"),
     path("specs/daily-wow-state-latest.schema.json", views.markdown_latest_redirect, {"target_path": "/specs/daily-wow-state-v0.2.schema.json"}, name="daily_wow_state_schema_latest"),
     path("specs/creative-edition-latest.schema.json", views.markdown_latest_redirect, {"target_path": "/specs/creative-edition-v1.schema.json"}, name="creative_edition_schema_latest"),
+    path("specs/wkap-edition-latest.schema.json", views.markdown_latest_redirect, {"target_path": "/specs/wkap-edition-v1.schema.json"}, name="wkap_edition_schema_latest"),
     path("skills/wkap-wow-skill-latest.md", views.markdown_latest_redirect, {"target_path": "/skills/wkap-wow-skill-v0.2.md"}, name="wkap_wow_skill_latest"),
     path("robots.txt", views.robots_txt, name="robots_txt"),
     path("sitemap.xml", views.sitemap_xml, name="sitemap_xml"),
     path("radar/", views.radar_archive, name="radar_archive"),
     path("creative/", views.creative_archive, name="creative_archive"),
+    path("editions/", views.edition_archive, name="edition_archive"),
     path("investors/", views.investor_archive, name="investor_archive"),
     re_path(
         r"^radar/wkap-radar-feed-(?P<market_date>\d{4}-\d{2}-\d{2})\.html$",
@@ -41,6 +44,16 @@ urlpatterns = [
         r"^creative/wkap-creative-edition-(?P<market_date>\d{4}-\d{2}-\d{2})-v(?P<edition_version>\d+)\.html$",
         views.creative_issue,
         name="creative_issue",
+    ),
+    re_path(
+        r"^editions/wkap-edition-(?P<market_date>\d{4}-\d{2}-\d{2})-v(?P<edition_version>\d+)\.html$",
+        views.edition_issue,
+        name="edition_issue",
+    ),
+    re_path(
+        r"^editions/data/wkap-edition-(?P<market_date>\d{4}-\d{2}-\d{2})-v(?P<edition_version>\d+)\.json$",
+        views.edition_json,
+        name="edition_json",
     ),
     re_path(r"^investors/(?P<investor_id>w\d{4})/$", views.investor_home, name="investor_home"),
     re_path(

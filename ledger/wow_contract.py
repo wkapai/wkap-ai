@@ -6,7 +6,7 @@ from collections.abc import Iterable
 
 
 RADAR_CONTENT_SHA256_COVERS = (
-    "sha256 over UTF-8 text: radar\\n{market_date}\\n{title}\\n{body_text}. "
+    "sha256 over UTF-8 text: radar\\n{market_date}\\n{title}\\n{body_text}\\n{edition_version}\\n{cover_image_sha256}\\n{cover_logo_verified}\\n{challenge_invitation}. "
     "It does not cover rendered HTML, proof panels, manifests, or OpenTimestamp status."
 )
 WOW_CONTENT_SHA256_COVERS = (

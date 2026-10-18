@@ -20,6 +20,12 @@ class ParseError(ValueError):
     pass
 
 
+DAILY_MARKET_MEME_CHALLENGE = (
+    "Roast our take, spot an egg, or show us your market meme. "
+    "Tell us what today\u0027s market is missing."
+)
+
+
 WOW_TYPE_REQUIRED_FIELDS = {
     "candidate_wow": ("observation", "why_worth_watching", "candidate_status", "source_refs"),
     "trackable_wow": ("claim", "evidence_to_watch", "review_cadence", "next_review_at", "trackable_status", "source_refs"),
@@ -33,6 +39,11 @@ class ParsedRadar:
     market_date: date
     title: str
     body_text: str
+    edition_version: int | None = None
+    cover_image_source_url: str = ""
+    cover_image_sha256: str = ""
+    cover_logo_verified: bool = False
+    challenge_invitation: str = ""
 
 
 @dataclass(frozen=True)
@@ -47,6 +58,8 @@ class ParsedCreativeEdition:
     creator_ai: str
     publisher: str
     journal_json: dict
+    article_word_count: int = 0
+    cover_logo_verified: bool = False
 
 
 @dataclass(frozen=True)
@@ -117,7 +130,19 @@ def parse_radar(raw_email: RawEmail) -> ParsedRadar:
     body = raw_email.raw_body
     if not body.strip():
         raise ParseError("Radar body is required.")
-    return ParsedRadar(market_date=market_date, title=title.strip(), body_text=body.strip())
+    edition_version, cover_url, cover_sha256, logo_verified, challenge = _radar_edition_metadata(fields)
+    if edition_version and str(fields.get("article_url") or "").strip():
+        raise ParseError("Revamp Radar must omit article_url; the exact Article link is added only after publication.")
+    return ParsedRadar(
+        market_date=market_date,
+        title=title.strip(),
+        body_text=body.strip(),
+        edition_version=edition_version,
+        cover_image_source_url=cover_url,
+        cover_image_sha256=cover_sha256,
+        cover_logo_verified=logo_verified,
+        challenge_invitation=challenge,
+    )
 
 
 def parse_creative_edition(raw_email: RawEmail) -> ParsedCreativeEdition:
@@ -128,8 +153,10 @@ def parse_creative_edition(raw_email: RawEmail) -> ParsedCreativeEdition:
         payload = yaml.safe_load(block)
     except yaml.YAMLError as exc:
         raise ParseError(f"Creative Edition YAML is invalid: {exc}") from exc
+    if isinstance(payload, dict) and isinstance(payload.get("wkap_edition"), dict):
+        return _parse_wkap_edition(raw_email, payload["wkap_edition"])
     if not isinstance(payload, dict) or not isinstance(payload.get("creative_edition"), dict):
-        raise ParseError("Creative Edition must contain a top-level creative_edition object.")
+        raise ParseError("Edition must contain one top-level wkap_edition or legacy creative_edition object.")
     edition = payload["creative_edition"]
     allowed = {
         "format_version",
@@ -234,6 +261,124 @@ def parse_creative_edition(raw_email: RawEmail) -> ParsedCreativeEdition:
         creator_ai=creator_ai,
         publisher=publisher,
         journal_json=journal_json,
+    )
+
+
+def _parse_wkap_edition(raw_email: RawEmail, edition: dict) -> ParsedCreativeEdition:
+    allowed = {
+        "format_version",
+        "market_date",
+        "edition_version",
+        "title",
+        "article_url",
+        "image_source_url",
+        "cover_logo_verified",
+        "analysis",
+        "episode_premise",
+        "market_hooks",
+        "scenes",
+        "challenge",
+        "credits",
+        "rejected_choices",
+        "corrections",
+        "lesson_next_time",
+    }
+    _reject_creative_unknown_fields(edition, allowed, label="wkap_edition")
+    format_version = _required_text(edition, "format_version", max_length=64)
+    if format_version != "wkap_edition_v1":
+        raise ParseError("WKAP Edition format_version must be wkap_edition_v1.")
+
+    market_date = _date(_required_text(edition, "market_date", max_length=10), default=raw_email.received_at.date())
+    subject_date = _date_from_subject(raw_email.subject)
+    if not subject_date or subject_date != str(market_date):
+        raise ParseError("WKAP Edition subject date must exactly match wkap_edition.market_date.")
+    received_ict_date = raw_email.received_at.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+    if market_date != received_ict_date:
+        raise ParseError("WKAP Edition market_date must match the ICT receipt date; backdating is not allowed.")
+
+    subject_version_match = re.search(r"\bv\s*(\d+)\b", raw_email.subject or "", flags=re.IGNORECASE)
+    if not subject_version_match:
+        raise ParseError("WKAP Edition subject must include an explicit version such as v1.")
+    try:
+        edition_version = int(edition.get("edition_version"))
+    except (TypeError, ValueError) as exc:
+        raise ParseError("WKAP Edition edition_version must be a positive integer.") from exc
+    if edition_version < 1 or edition_version != int(subject_version_match.group(1)):
+        raise ParseError("WKAP Edition body version must be positive and match the subject version.")
+
+    title = _required_text(edition, "title", max_length=500)
+    article_url = _required_https_url(edition, "article_url")
+    _require_x_publication_url(article_url, label="article_url", allow_article=True)
+    image_source_url = _required_https_url(edition, "image_source_url")
+    if (urlparse(image_source_url).hostname or "").lower() != "pbs.twimg.com":
+        raise ParseError("WKAP Edition image_source_url must be the actual public X cover on pbs.twimg.com.")
+    if edition.get("cover_logo_verified") is not True:
+        raise ParseError("WKAP Edition cover_logo_verified must be true after actual-pixel watermark QA.")
+
+    analysis, article_word_count = _wkap_analysis(edition.get("analysis"))
+    episode_premise = _required_text(edition, "episode_premise", max_length=900)
+    market_hooks = _creative_market_hooks(edition.get("market_hooks"))
+    scenes = _creative_scenes(edition.get("scenes"), require_show_seed=False)
+    challenge = _wkap_challenge(edition.get("challenge"))
+    credits = edition.get("credits")
+    if not isinstance(credits, dict):
+        raise ParseError("WKAP Edition credits must be an object.")
+    _reject_creative_unknown_fields(credits, {"human_contribution", "ai_contribution", "publisher"}, label="credits")
+    creator_human = _required_text(credits, "human_contribution", max_length=300)
+    creator_ai = _required_text(credits, "ai_contribution", max_length=300)
+    publisher = _required_text(credits, "publisher", max_length=200)
+    rejected_choices = _required_text_list(edition, "rejected_choices", max_items=8, max_item_length=600)
+    corrections = _required_text_list(edition, "corrections", max_items=8, max_item_length=600)
+    lesson_next_time = _required_text(edition, "lesson_next_time", max_length=1200)
+
+    source_links: list[str] = []
+    for section in analysis["sections"]:
+        for source_url in section["source_urls"]:
+            if source_url not in source_links:
+                source_links.append(source_url)
+    for item in [*market_hooks, *scenes]:
+        for source_url in item["source_urls"]:
+            if source_url not in source_links:
+                source_links.append(source_url)
+
+    journal_json = {
+        "format_version": format_version,
+        "market_date": str(market_date),
+        "edition_version": edition_version,
+        "title": title,
+        "article_url": article_url,
+        "image_source_url": image_source_url,
+        "cover_logo_verified": True,
+        "analysis": analysis,
+        "episode_premise": episode_premise,
+        "market_hooks": market_hooks,
+        "scenes": scenes,
+        "challenge": challenge,
+        "credits": {
+            "human_contribution": creator_human,
+            "ai_contribution": creator_ai,
+            "publisher": publisher,
+        },
+        "rejected_choices": rejected_choices,
+        "corrections": corrections,
+        "lesson_next_time": lesson_next_time,
+        "source_links": source_links,
+    }
+    if len(json.dumps(journal_json, ensure_ascii=False)) > 120000:
+        raise ParseError("WKAP Edition is too long for the public edition envelope.")
+    return ParsedCreativeEdition(
+        market_date=market_date,
+        edition_version=edition_version,
+        format_version=format_version,
+        title=title,
+        article_url=article_url,
+        image_source_url=image_source_url,
+        creator_human=creator_human,
+        creator_ai=creator_ai,
+        publisher=publisher,
+        journal_json=journal_json,
+        article_word_count=article_word_count,
+        cover_logo_verified=True,
     )
 
 
@@ -467,10 +612,14 @@ def _creative_structured_block(text: str) -> str:
     blocks = []
     for match in re.finditer(r"```(?:yaml|yml|json)\s*\n(.*?)\n```", text, flags=re.IGNORECASE | re.DOTALL):
         block = match.group(1).strip()
-        if re.search(r"^\s*creative_edition\s*:", block, flags=re.MULTILINE) or '"creative_edition"' in block:
+        if (
+            re.search(r"^\s*(?:wkap_edition|creative_edition)\s*:", block, flags=re.MULTILINE)
+            or '"wkap_edition"' in block
+            or '"creative_edition"' in block
+        ):
             blocks.append(block)
     if len(blocks) > 1:
-        raise ParseError("Creative Edition email must contain exactly one creative_edition block.")
+        raise ParseError("Edition email must contain exactly one wkap_edition or legacy creative_edition block.")
     return blocks[0] if blocks else ""
 
 
@@ -549,7 +698,7 @@ def _creative_market_hooks(value) -> list[dict]:
     return result
 
 
-def _creative_scenes(value) -> list[dict]:
+def _creative_scenes(value, *, require_show_seed: bool = True) -> list[dict]:
     if not isinstance(value, list) or not value:
         raise ParseError("Creative Edition scenes must be a non-empty list.")
     if len(value) > 8:
@@ -558,9 +707,7 @@ def _creative_scenes(value) -> list[dict]:
     for index, item in enumerate(value, start=1):
         if not isinstance(item, dict):
             raise ParseError(f"Creative Edition scene {index} must be an object.")
-        _reject_creative_unknown_fields(
-            item,
-            {
+        allowed_fields = {
                 "story",
                 "source_urls",
                 "visual_joke",
@@ -568,12 +715,15 @@ def _creative_scenes(value) -> list[dict]:
                 "character_rationale",
                 "relationship_semantics",
                 "interaction_or_action",
-                "show_seed",
-            },
+            }
+        if require_show_seed:
+            allowed_fields.add("show_seed")
+        _reject_creative_unknown_fields(
+            item,
+            allowed_fields,
             label=f"scene {index}",
         )
-        result.append(
-            {
+        scene = {
                 "story": _required_text(item, "story", max_length=700),
                 "source_urls": _creative_source_urls(item.get("source_urls"), label=f"scene {index}"),
                 "visual_joke": _required_text(item, "visual_joke", max_length=700),
@@ -581,9 +731,131 @@ def _creative_scenes(value) -> list[dict]:
                 "character_rationale": _required_text(item, "character_rationale", max_length=900),
                 "relationship_semantics": _required_text(item, "relationship_semantics", max_length=900),
                 "interaction_or_action": _required_text(item, "interaction_or_action", max_length=700),
-                "show_seed": _required_text(item, "show_seed", max_length=700),
+            }
+        show_seed = str(item.get("show_seed") or "").strip()
+        if require_show_seed:
+            show_seed = _required_text(item, "show_seed", max_length=700)
+        if show_seed:
+            scene["show_seed"] = show_seed
+        result.append(scene)
+    return result
+
+
+def _radar_edition_metadata(fields: dict) -> tuple[int | None, str, str, bool, str]:
+    raw_version = str(fields.get("edition_version") or "").strip()
+    cover_url = str(fields.get("cover_image_source_url") or fields.get("image_source_url") or "").strip()
+    cover_sha256 = str(fields.get("cover_image_sha256") or fields.get("image_sha256") or "").strip().lower()
+    challenge = str(fields.get("challenge_invitation") or fields.get("daily_market_meme_challenge") or "").strip()
+    logo_raw = str(fields.get("cover_logo_verified") or "").strip().lower()
+    present = any((raw_version, cover_url, cover_sha256, challenge, logo_raw))
+    if not present:
+        return None, "", "", False, ""
+    try:
+        version = int(raw_version)
+    except (TypeError, ValueError) as exc:
+        raise ParseError("Radar edition_version must be a positive integer when cover metadata is supplied.") from exc
+    if version < 1:
+        raise ParseError("Radar edition_version must be a positive integer.")
+    if not _is_http_url(cover_url) or (urlparse(cover_url).hostname or "").lower() != "pbs.twimg.com":
+        raise ParseError("Radar cover_image_source_url must be the actual public X cover on pbs.twimg.com.")
+    if not re.fullmatch(r"[0-9a-f]{64}", cover_sha256):
+        raise ParseError("Radar cover_image_sha256 must be the exact 64-character lowercase SHA-256 digest.")
+    if logo_raw != "true":
+        raise ParseError("Radar cover_logo_verified must be true after actual-pixel watermark QA.")
+    if challenge != DAILY_MARKET_MEME_CHALLENGE:
+        raise ParseError("Radar challenge_invitation must use the fixed Daily Market Meme Challenge wording.")
+    return version, cover_url, cover_sha256, True, challenge
+
+
+def _require_x_publication_url(url: str, *, label: str, allow_article: bool = False) -> None:
+    parsed = urlparse(url)
+    if (parsed.hostname or "").lower() not in {"x.com", "www.x.com", "twitter.com", "www.twitter.com"}:
+        raise ParseError(f"WKAP Edition {label} must be a public X URL.")
+    allowed_segments = {"status"}
+    if allow_article:
+        allowed_segments.add("article")
+    path_segments = {segment.lower() for segment in parsed.path.split("/") if segment}
+    if not (allowed_segments & path_segments) or not re.search(r"/\d+(?:/|$)", parsed.path):
+        raise ParseError(f"WKAP Edition {label} must include a public X {'Article or status' if allow_article else 'status'} ID.")
+
+
+def _wkap_analysis(value) -> tuple[dict, int]:
+    if not isinstance(value, dict):
+        raise ParseError("WKAP Edition analysis must be an object.")
+    _reject_creative_unknown_fields(
+        value,
+        {"market_take", "what_market_misses", "watch_next", "invalidation", "sections"},
+        label="analysis",
+    )
+    sections = value.get("sections")
+    if not isinstance(sections, list) or not 3 <= len(sections) <= 12:
+        raise ParseError("WKAP Edition analysis.sections must contain 3 to 12 sections.")
+    parsed_sections = []
+    for index, section in enumerate(sections, start=1):
+        if not isinstance(section, dict):
+            raise ParseError(f"WKAP Edition analysis section {index} must be an object.")
+        _reject_creative_unknown_fields(section, {"heading", "paragraphs", "source_urls"}, label=f"analysis section {index}")
+        paragraphs = section.get("paragraphs")
+        if not isinstance(paragraphs, list) or not 1 <= len(paragraphs) <= 12:
+            raise ParseError(f"WKAP Edition analysis section {index} must contain 1 to 12 paragraphs.")
+        cleaned_paragraphs = []
+        for paragraph in paragraphs:
+            text = str(paragraph or "").strip()
+            if not text or len(text) > 2400:
+                raise ParseError(f"WKAP Edition analysis section {index} paragraphs must be non-blank and at most 2400 characters.")
+            cleaned_paragraphs.append(text)
+        parsed_sections.append(
+            {
+                "heading": _required_text(section, "heading", max_length=300),
+                "paragraphs": cleaned_paragraphs,
+                "source_urls": _creative_source_urls(section.get("source_urls"), label=f"analysis section {index}"),
             }
         )
+    analysis = {
+        "market_take": _required_text(value, "market_take", max_length=1800),
+        "what_market_misses": _required_text(value, "what_market_misses", max_length=1800),
+        "watch_next": _required_text_list(value, "watch_next", max_items=10, max_item_length=1200),
+        "invalidation": _required_text_list(value, "invalidation", max_items=10, max_item_length=1200),
+        "sections": parsed_sections,
+    }
+    article_text = " ".join(
+        [
+            analysis["market_take"],
+            analysis["what_market_misses"],
+            *analysis["watch_next"],
+            *analysis["invalidation"],
+            *(part for section in parsed_sections for part in [section["heading"], *section["paragraphs"]]),
+        ]
+    )
+    return analysis, len(re.findall(r"\b\w+\b", article_text, flags=re.UNICODE))
+
+
+def _wkap_challenge(value) -> dict:
+    if not isinstance(value, dict):
+        raise ParseError("WKAP Edition challenge must be an object.")
+    _reject_creative_unknown_fields(value, {"invitation", "x_url", "moltbook_url", "featured_contribution"}, label="challenge")
+    invitation = _required_text(value, "invitation", max_length=300)
+    if invitation != DAILY_MARKET_MEME_CHALLENGE:
+        raise ParseError("WKAP Edition challenge invitation must use the fixed Daily Market Meme Challenge wording.")
+    x_url = _required_https_url(value, "x_url")
+    _require_x_publication_url(x_url, label="challenge.x_url")
+    result = {"invitation": invitation, "x_url": x_url}
+    moltbook_url = str(value.get("moltbook_url") or "").strip()
+    if moltbook_url:
+        parsed = urlparse(moltbook_url)
+        if parsed.scheme != "https" or (parsed.hostname or "").lower() not in {"moltbook.com", "www.moltbook.com"}:
+            raise ParseError("WKAP Edition challenge.moltbook_url must be a public Moltbook URL.")
+        result["moltbook_url"] = moltbook_url
+    featured = value.get("featured_contribution")
+    if featured is not None:
+        if not isinstance(featured, dict):
+            raise ParseError("WKAP Edition challenge.featured_contribution must be an object.")
+        _reject_creative_unknown_fields(featured, {"credit", "source_url"}, label="challenge.featured_contribution")
+        source_url = _required_https_url(featured, "source_url")
+        result["featured_contribution"] = {
+            "credit": _required_text(featured, "credit", max_length=500),
+            "source_url": source_url,
+        }
     return result
 
 

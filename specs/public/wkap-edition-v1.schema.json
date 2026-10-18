@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wkap.ai/specs/wkap-edition-v1.schema.json",
+  "title": "WKAP unified edition v1",
+  "description": "One versioned WKAP edition containing the exact X Article identity, alpha-first analysis, final watermarked cover, succinct creative brief, and Daily Market Meme Challenge links.",
+  "type": "object",
+  "required": ["wkap_edition"],
+  "additionalProperties": false,
+  "properties": {
+    "wkap_edition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format_version", "market_date", "edition_version", "title", "article_url", "image_source_url", "cover_logo_verified", "analysis", "episode_premise", "market_hooks", "scenes", "challenge", "credits", "rejected_choices", "corrections", "lesson_next_time"],
+      "properties": {
+        "format_version": {"const": "wkap_edition_v1"},
+        "market_date": {"type": "string", "format": "date"},
+        "edition_version": {"type": "integer", "minimum": 1},
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "article_url": {"type": "string", "format": "uri", "pattern": "^https://(www\\.)?(x\\.com|twitter\\.com)/.+/(status|article)/[0-9]+"},
+        "image_source_url": {"type": "string", "format": "uri", "pattern": "^https://pbs\\.twimg\\.com/"},
+        "cover_logo_verified": {"const": true},
+        "analysis": {"$ref": "#/$defs/analysis"},
+        "episode_premise": {"type": "string", "minLength": 1, "maxLength": 900},
+        "market_hooks": {"type": "array", "minItems": 1, "maxItems": 6, "items": {"$ref": "#/$defs/market_hook"}},
+        "scenes": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/$defs/scene"}},
+        "challenge": {"$ref": "#/$defs/challenge"},
+        "credits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["human_contribution", "ai_contribution", "publisher"],
+          "properties": {
+            "human_contribution": {"type": "string", "minLength": 1, "maxLength": 300},
+            "ai_contribution": {"type": "string", "minLength": 1, "maxLength": 300},
+            "publisher": {"type": "string", "minLength": 1, "maxLength": 200}
+          }
+        },
+        "rejected_choices": {"$ref": "#/$defs/decision_list"},
+        "corrections": {"$ref": "#/$defs/decision_list"},
+        "lesson_next_time": {"type": "string", "minLength": 1, "maxLength": 1200}
+      }
+    }
+  },
+  "$defs": {
+    "source_urls": {"type": "array", "minItems": 1, "maxItems": 10, "uniqueItems": true, "items": {"type": "string", "format": "uri", "pattern": "^https://"}},
+    "text_list": {"type": "array", "minItems": 1, "maxItems": 10, "items": {"type": "string", "minLength": 1, "maxLength": 1200}},
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["market_take", "what_market_misses", "watch_next", "invalidation", "sections"],
+      "properties": {
+        "market_take": {"type": "string", "minLength": 1, "maxLength": 1800},
+        "what_market_misses": {"type": "string", "minLength": 1, "maxLength": 1800},
+        "watch_next": {"$ref": "#/$defs/text_list"},
+        "invalidation": {"$ref": "#/$defs/text_list"},
+        "sections": {"type": "array", "minItems": 3, "maxItems": 12, "items": {"$ref": "#/$defs/article_section"}}
+      }
+    },
+    "article_section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["heading", "paragraphs", "source_urls"],
+      "properties": {
+        "heading": {"type": "string", "minLength": 1, "maxLength": 300},
+        "paragraphs": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"type": "string", "minLength": 1, "maxLength": 2400}},
+        "source_urls": {"$ref": "#/$defs/source_urls"}
+      }
+    },
+    "market_hook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["story", "why_it_matters", "source_urls"],
+      "properties": {
+        "story": {"type": "string", "minLength": 1, "maxLength": 700},
+        "why_it_matters": {"type": "string", "minLength": 1, "maxLength": 700},
+        "source_urls": {"$ref": "#/$defs/source_urls"}
+      }
+    },
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["story", "source_urls", "visual_joke", "character_choices", "character_rationale", "relationship_semantics", "interaction_or_action"],
+      "properties": {
+        "story": {"type": "string", "minLength": 1, "maxLength": 700},
+        "source_urls": {"$ref": "#/$defs/source_urls"},
+        "visual_joke": {"type": "string", "minLength": 1, "maxLength": 700},
+        "character_choices": {"type": "string", "minLength": 1, "maxLength": 700},
+        "character_rationale": {"type": "string", "minLength": 1, "maxLength": 900},
+        "relationship_semantics": {"type": "string", "minLength": 1, "maxLength": 900},
+        "interaction_or_action": {"type": "string", "minLength": 1, "maxLength": 700}
+      }
+    },
+    "challenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["invitation", "x_url"],
+      "properties": {
+        "invitation": {"const": "Roast our take, spot an egg, or show us your market meme. Tell us what today’s market is missing."},
+        "x_url": {"type": "string", "format": "uri", "pattern": "^https://(www\\.)?(x\\.com|twitter\\.com)/.+/status/[0-9]+"},
+        "moltbook_url": {"type": "string", "format": "uri", "pattern": "^https://(www\\.)?moltbook\\.com/"},
+        "featured_contribution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["credit", "source_url"],
+          "properties": {
+            "credit": {"type": "string", "minLength": 1, "maxLength": 500},
+            "source_url": {"type": "string", "format": "uri", "pattern": "^https://"}
+          }
+        }
+      }
+    },
+    "decision_list": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"type": "string", "minLength": 1, "maxLength": 600}}
+  }
+}

@@ -28,10 +28,15 @@ from publishing.urls import (
     creative_image_url,
     creative_issue_path,
     creative_issue_url,
+    edition_issue_path,
+    edition_issue_url,
+    edition_json_path,
     investor_home_path,
     investor_wows_path,
     manifest_path,
     radar_archive_url,
+    radar_cover_image_path,
+    radar_cover_image_url,
     radar_issue_path,
     radar_issue_url,
     wow_path,
@@ -93,10 +98,12 @@ def generate_creative_html(edition: CreativeEdition, *, run_id: uuid.UUID) -> Cr
     image_bytes = image_path.read_bytes()
     if hashlib.sha256(image_bytes).hexdigest() != edition.image_sha256:
         raise ValueError("Creative cover bytes no longer match image_sha256.")
-    edition.canonical_url = creative_issue_url(edition.market_date, edition.edition_version)
+    edition.canonical_url = _creative_public_url(edition)
     edition.content_sha256 = _creative_content_hash(edition)
     edition.save(update_fields=["canonical_url", "content_sha256", "updated_at"])
-    _write_public(creative_issue_path(edition.market_date, edition.edition_version), _render_creative(edition))
+    _write_public(_creative_public_path(edition), _render_creative(edition))
+    if edition.format_version == "wkap_edition_v1":
+        _write_public_bytes(edition_json_path(edition.market_date, edition.edition_version), _canonical_journal_bytes(edition))
     log_event(
         "html_generated",
         run_id=run_id,
@@ -127,7 +134,17 @@ def rebuild_indexes(*, run_id: uuid.UUID) -> None:
     _write_public("radar/index.html", render_to_string("publishing/radar/archive.html", {"issues": radar_issues}))
     _write_public(
         "creative/index.html",
-        render_to_string("publishing/creative/archive.html", {"editions": creative_editions}),
+        render_to_string(
+            "publishing/creative/archive.html",
+            {"editions": creative_editions.filter(format_version="creative_edition_v1")},
+        ),
+    )
+    _write_public(
+        "editions/index.html",
+        render_to_string(
+            "publishing/creative/archive.html",
+            {"editions": creative_editions.filter(format_version="wkap_edition_v1"), "unified": True},
+        ),
     )
     investors = _investors_with_wows()
     _write_public(
@@ -185,6 +202,10 @@ def commit_ledger(entity_type: str, entity_id: int, *, run_id: uuid.UUID) -> Any
             artifact.image_github_url = _github_url(
                 creative_image_path(artifact.market_date, artifact.edition_version, artifact.image_extension)
             ) or creative_image_url(artifact.market_date, artifact.edition_version, artifact.image_extension)
+            if artifact.format_version == "wkap_edition_v1":
+                artifact.edition_json_github_url = _github_url(
+                    edition_json_path(artifact.market_date, artifact.edition_version)
+                ) or f"{settings.WKAP_BASE_URL}/{edition_json_path(artifact.market_date, artifact.edition_version)}"
         artifact.github_commit_sha = "not_configured"
         artifact.save(update_fields=_commit_update_fields(entity_type))
         _refresh_artifact_files(entity_type, artifact)
@@ -238,6 +259,10 @@ def commit_ledger(entity_type: str, entity_id: int, *, run_id: uuid.UUID) -> Any
         artifact.image_github_url = _github_url(
             creative_image_path(artifact.market_date, artifact.edition_version, artifact.image_extension)
         )
+        if artifact.format_version == "wkap_edition_v1":
+            artifact.edition_json_github_url = _github_url(
+                edition_json_path(artifact.market_date, artifact.edition_version)
+            ) or f"{settings.WKAP_BASE_URL}/{edition_json_path(artifact.market_date, artifact.edition_version)}"
     artifact.save(update_fields=_commit_update_fields(entity_type))
     _refresh_artifact_files(entity_type, artifact)
     log_event("github_commit_succeeded", run_id=run_id, entity_type=entity_type, entity_id=artifact.id, artifact=artifact)
@@ -628,6 +653,28 @@ def validate_ledger(entity_type: str, entity_id: int) -> list[str]:
             errors.append("creative journal does not match journal_sha256")
         if not artifact.image_github_url:
             errors.append("image_github_url is missing")
+        if artifact.format_version == "wkap_edition_v1":
+            edition_json = _public_file(edition_json_path(artifact.market_date, artifact.edition_version))
+            if not edition_json.exists():
+                errors.append("WKAP Edition canonical JSON is missing")
+            elif hashlib.sha256(edition_json.read_bytes()).hexdigest() != artifact.journal_sha256:
+                errors.append("WKAP Edition canonical JSON does not match journal_sha256")
+            if not artifact.edition_json_github_url:
+                errors.append("edition_json_github_url is missing")
+            article_bytes = json.dumps(
+                artifact.journal_json.get("analysis", {}),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            if hashlib.sha256(article_bytes).hexdigest() != artifact.article_sha256:
+                errors.append("WKAP Edition analysis does not match article_sha256")
+    if entity_type == "radar" and artifact.cover_image_sha256:
+        cover_path = _public_file(radar_cover_image_path(artifact.market_date, artifact.cover_image_extension))
+        if not cover_path.exists():
+            errors.append("Radar cover asset is missing")
+        elif hashlib.sha256(cover_path.read_bytes()).hexdigest() != artifact.cover_image_sha256:
+            errors.append("Radar cover asset does not match cover_image_sha256")
     if entity_type == "wow" and WOW_DISCLAIMER not in _public_file(wow_path(artifact.investor.investor_id, artifact.market_date)).read_text(
         encoding="utf-8"
     ):
@@ -691,7 +738,7 @@ def _artifact_public_path(entity_type: str, artifact) -> str:
         return radar_issue_path(artifact.market_date)
     if entity_type == "wow":
         return wow_path(artifact.investor.investor_id, artifact.market_date)
-    return creative_issue_path(artifact.market_date, artifact.edition_version)
+    return _creative_public_path(artifact)
 
 
 def _sync_artifact_to_ledger_repo(entity_type: str, artifact) -> None:
@@ -720,6 +767,22 @@ def _sync_artifact_to_ledger_repo(entity_type: str, artifact) -> None:
         image_destination = repo / image_relative_path
         image_destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(image_source, image_destination)
+        if artifact.format_version == "wkap_edition_v1":
+            json_relative_path = edition_json_path(artifact.market_date, artifact.edition_version)
+            json_source = _public_file(json_relative_path)
+            if hashlib.sha256(json_source.read_bytes()).hexdigest() != artifact.journal_sha256:
+                raise ValueError("WKAP Edition JSON changed before ledger sync.")
+            json_destination = repo / json_relative_path
+            json_destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(json_source, json_destination)
+    if entity_type == "radar" and artifact.cover_image_sha256:
+        cover_relative_path = radar_cover_image_path(artifact.market_date, artifact.cover_image_extension)
+        cover_source = _public_file(cover_relative_path)
+        if hashlib.sha256(cover_source.read_bytes()).hexdigest() != artifact.cover_image_sha256:
+            raise ValueError("Radar cover asset changed before ledger sync.")
+        cover_destination = repo / cover_relative_path
+        cover_destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(cover_source, cover_destination)
 
 
 def _sync_and_commit_ledger_metadata(entity_type: str, artifact, message: str) -> str:
@@ -810,6 +873,10 @@ def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
                 "image_size_bytes": artifact.image_size_bytes,
                 "image_sha256": artifact.image_sha256,
                 "journal_sha256": artifact.journal_sha256,
+                "article_sha256": artifact.article_sha256,
+                "article_word_count": artifact.article_word_count,
+                "cover_logo_verified": artifact.cover_logo_verified,
+                "edition_json_github_url": artifact.edition_json_github_url,
                 "journal_json": artifact.journal_json,
                 "creator_human": artifact.creator_human,
                 "creator_ai": artifact.creator_ai,
@@ -826,13 +893,34 @@ def _manifest_payload(entity_type: str, artifact) -> dict[str, Any]:
                 "proof_scope_notice": CREATIVE_PROOF_DISCLAIMER,
             }
         )
+    if entity_type == "radar":
+        payload.update(
+            {
+                "edition_version": artifact.edition_version,
+                "cover_image_source_url": artifact.cover_image_source_url,
+                "cover_image_url": radar_cover_image_url(artifact.market_date, artifact.cover_image_extension)
+                if artifact.cover_image_sha256
+                else "",
+                "cover_image_media_type": artifact.cover_image_media_type,
+                "cover_image_size_bytes": artifact.cover_image_size_bytes,
+                "cover_image_sha256": artifact.cover_image_sha256,
+                "cover_logo_verified": artifact.cover_logo_verified,
+                "challenge_invitation": artifact.challenge_invitation,
+            }
+        )
     return payload
 
 
 def _write_public(relative_path: str, content: str) -> Path:
+    return _write_public_bytes(relative_path, content.encode("utf-8"))
+
+
+def _write_public_bytes(relative_path: str, content: bytes) -> Path:
     path = _public_file(relative_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    temporary.write_bytes(content)
+    temporary.replace(path)
     return path
 
 
@@ -919,16 +1007,37 @@ def _refresh_artifact_files(entity_type: str, artifact) -> None:
         _write_raw_email_artifact(artifact)
     else:
         _write_public(
-            creative_issue_path(artifact.market_date, artifact.edition_version),
+            _creative_public_path(artifact),
             _render_creative(artifact),
         )
+        if artifact.format_version == "wkap_edition_v1":
+            _write_public_bytes(
+                edition_json_path(artifact.market_date, artifact.edition_version),
+                _canonical_journal_bytes(artifact),
+            )
 
     if artifact.manifest_url:
         _write_manifest(entity_type, artifact.id, _manifest_payload(entity_type, artifact))
 
 
 def _render_radar(issue: RadarIssue) -> str:
-    return render_to_string("publishing/radar/issue.html", {"issue": issue})
+    edition = None
+    if issue.edition_version:
+        edition = CreativeEdition.objects.filter(
+            market_date=issue.market_date,
+            edition_version=issue.edition_version,
+            format_version="wkap_edition_v1",
+        ).first()
+    return render_to_string(
+        "publishing/radar/issue.html",
+        {
+            "issue": issue,
+            "edition": edition,
+            "cover_image_url": radar_cover_image_url(issue.market_date, issue.cover_image_extension)
+            if issue.cover_image_sha256
+            else "",
+        },
+    )
 
 
 def _render_wow(submission: DailyWoWPacket) -> str:
@@ -978,6 +1087,10 @@ def _render_creative(edition: CreativeEdition) -> str:
             "proof_disclaimer": CREATIVE_PROOF_DISCLAIMER,
             "page_type": "creative_edition",
             "agent_spec_version": edition.format_version,
+            "unified": edition.format_version == "wkap_edition_v1",
+            "edition_json_url": f"/{edition_json_path(edition.market_date, edition.edition_version)}"
+            if edition.format_version == "wkap_edition_v1"
+            else "",
         },
     )
 
@@ -1140,7 +1253,7 @@ def _commit_update_fields(entity_type: str) -> list[str]:
     if entity_type == "wow":
         fields.extend(["raw_email_github_url", "raw_email_commit_sha"])
     if entity_type == "creative":
-        fields.append("image_github_url")
+        fields.extend(["image_github_url", "edition_json_github_url"])
     return fields
 
 
@@ -1369,7 +1482,20 @@ def _wow_evidence_to_watch(submission: DailyWoWPacket, selected_wow, *, selectio
 
 
 def _radar_content_hash(issue: RadarIssue) -> str:
-    return _sha256(f"radar\n{issue.market_date}\n{issue.title}\n{issue.body_text}")
+    return _sha256(
+        "\n".join(
+            [
+                "radar",
+                str(issue.market_date),
+                issue.title,
+                issue.body_text,
+                str(issue.edition_version or ""),
+                issue.cover_image_sha256,
+                "true" if issue.cover_logo_verified else "false",
+                issue.challenge_invitation,
+            ]
+        )
+    )
 
 
 def _wow_content_hash(submission: DailyWoWPacket) -> str:
@@ -1378,6 +1504,27 @@ def _wow_content_hash(submission: DailyWoWPacket) -> str:
     suggested = "\n".join(
         f"{wow.wow_id}\n{wow.ticker_or_theme}\n{wow.whats_worth_watching}\n{wow.why_now}\n{wow.evidence_to_watch_for}"
         for wow in submission.suggested_wows.all()
+    )
+    reading = "\n".join(
+        f"{item.item_number}\n{item.source_title}\n{item.source_url}\n{item.reading_origin}\n{item.agent_summary}"
+        for item in submission.reading_items.all()
+    )
+    return _sha256(
+        "\n".join(
+            [
+                "wow_packet",
+                submission.format_version,
+                str(submission.market_date),
+                submission.investor.investor_id,
+                submission.selected_wow_id,
+                submission.reason_for_selection,
+                submission.closest_rejected_idea,
+                submission.why_pass,
+                submission.missing_evidence,
+                reading,
+                suggested,
+            ]
+        )
     )
 
 
@@ -1409,27 +1556,27 @@ def _verify_creative_proof(proof_path: Path):
             return "submitted_pending", None
         return "verification_failed", None
     return "verified_bitcoin", timezone.now()
-    reading = "\n".join(
-        f"{item.item_number}\n{item.source_title}\n{item.source_url}\n{item.reading_origin}\n{item.agent_summary}"
-        for item in submission.reading_items.all()
-    )
-    return _sha256(
-        "\n".join(
-            [
-                "wow_packet",
-                submission.format_version,
-                str(submission.market_date),
-                submission.investor.investor_id,
-                submission.selected_wow_id,
-                submission.reason_for_selection,
-                submission.closest_rejected_idea,
-                submission.why_pass,
-                submission.missing_evidence,
-                reading,
-                suggested,
-            ]
-        )
-    )
+
+
+def _canonical_journal_bytes(edition: CreativeEdition) -> bytes:
+    return json.dumps(
+        edition.journal_json,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _creative_public_path(edition: CreativeEdition) -> str:
+    if edition.format_version == "wkap_edition_v1":
+        return edition_issue_path(edition.market_date, edition.edition_version)
+    return creative_issue_path(edition.market_date, edition.edition_version)
+
+
+def _creative_public_url(edition: CreativeEdition) -> str:
+    if edition.format_version == "wkap_edition_v1":
+        return edition_issue_url(edition.market_date, edition.edition_version)
+    return creative_issue_url(edition.market_date, edition.edition_version)
 
 
 def _git(repo: str | Path, *args: str) -> str:

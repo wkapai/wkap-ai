@@ -1,22 +1,22 @@
 {% extends "publishing/base.html" %}
-{% block title %}{{ meta_title|default:"WKAP Creative Editions" }}{% endblock %}
+{% block title %}{{ meta_title|default:"WKAP Editions" }}{% endblock %}
 {% block content %}
 <section class="page-heading">
   <p class="eyebrow">The market show in one frame</p>
-  <h1>Creative Editions</h1>
-  <p>Curated journals for the covers WKAP actually published: story hooks, character logic, visual jokes, revisions, credits, and reusable lessons.</p>
+  <h1>{% if unified %}WKAP Editions{% else %}Creative Editions{% endif %}</h1>
+  <p>{% if unified %}Alpha-first market analysis with the exact published cover, sources, creative brief, challenge, and proof.{% else %}Legacy curated journals for WKAP covers: story hooks, character logic, visual jokes, revisions, credits, and reusable lessons.{% endif %}</p>
 </section>
-<section class="list-stack" aria-label="Creative Editions" data-agent-list="creative">
+<section class="list-stack" aria-label="WKAP Editions" data-agent-list="creative">
   {% for edition in editions %}
     <article class="artifact-row" data-artifact-type="creative" data-market-date="{{ edition.market_date|date:"Y-m-d" }}" data-image-sha256="{{ edition.image_sha256 }}" data-journal-sha256="{{ edition.journal_sha256 }}">
       <div>
-        <h2><a href="/creative/wkap-creative-edition-{{ edition.market_date|date:"Y-m-d" }}-v{{ edition.edition_version }}.html">{{ edition.title }}</a></h2>
+        <h2><a href="/{% if unified %}editions/wkap-edition{% else %}creative/wkap-creative-edition{% endif %}-{{ edition.market_date|date:"Y-m-d" }}-v{{ edition.edition_version }}.html">{{ edition.title }}</a></h2>
         <p>{{ edition.market_date|date:"Y-m-d" }} · v{{ edition.edition_version }} · {{ edition.journal_json.episode_premise }}</p>
       </div>
       <code>{{ edition.image_sha256|default:"pending image hash" }}</code>
     </article>
   {% empty %}
-    <p class="empty">No Creative Editions have been published yet.</p>
+    <p class="empty">No editions have been published yet.</p>
   {% endfor %}
 </section>
 {% endblock %}

@@ -5,6 +5,12 @@
   <section class="artifact-main">
     <p class="eyebrow">Type: WKAP Radar Feed</p>
     <h1>{{ issue.title }}</h1>
+    {% if cover_image_url %}
+    <figure class="creative-cover-frame">
+      <img class="creative-cover" src="{{ cover_image_url }}" alt="Final watermarked WKAP cover for {{ issue.market_date|date:"Y-m-d" }}">
+      <figcaption>Exact cover bytes · SHA-256 <code>{{ issue.cover_image_sha256 }}</code> · WKAP watermark verified{% if edition %} · <a href="{{ edition.canonical_url }}">Read the full WKAP Edition</a>{% endif %}</figcaption>
+    </figure>
+    {% endif %}
     <dl class="metadata">
       <dt>Market date</dt>
       <dd>{{ issue.market_date|date:"Y-m-d" }}</dd>
@@ -12,6 +18,7 @@
       <dd>{{ issue.canonical_url|default:"pending" }}</dd>
     </dl>
     <div class="body-copy" data-agent-body="radar-feed">{{ issue.body_text|urlize|linebreaks }}</div>
+    {% if issue.challenge_invitation %}<section><h2>Daily Market Meme Challenge</h2><p>{{ issue.challenge_invitation }}</p></section>{% endif %}
   </section>
   {% include "publishing/proof_panel.html" with artifact=issue %}
 </article>
