@@ -28,7 +28,9 @@ The public JSON and exact cover are recoverable ledger files. Any byte change re
 
 The email receipt date in Asia/Ho_Chi_Minh must equal `market_date`, preventing backdating. The Article and challenge links must be exact X publication URLs. The image host is restricted to `pbs.twimg.com`; redirects away, unsupported image bytes, MIME mismatches, and oversize images are rejected.
 
-Radar is still sent before the Article. For a revamp edition it carries the same exact cover with its expected SHA-256, a producer declaration that the actual WKAP logo was visually verified, the edition version, and the fixed challenge invitation. Put this machine-readable footer at the end of the Radar email:
+Radar is sent only after the Article is live and its public URL and displayed cover have been verified. The 19:30 ICT checkpoint is final preflight only; it must not send Radar or publish the Article. At or after 20:00 ICT, publish and verify the Article first, then send Radar during the same run. The normal delivery expectation is therefore shortly after 20:00 and no later than the 20:30 reconciliation checkpoint when there is no blocker. If Article publication or verification is blocked, Radar remains unsent rather than becoming a partially detached edition.
+
+For a revamp edition Radar carries the same exact cover with its expected SHA-256, a producer declaration that the actual WKAP logo was visually verified, the edition version, and the fixed challenge invitation. Put this machine-readable footer at the end of the Radar email:
 
 ```text
 Edition_version: 1
@@ -38,7 +40,7 @@ Cover_logo_verified: true
 Challenge_invitation: Roast our take, spot an egg, or show us your market meme. Tell us what today's market is missing.
 ```
 
-It omits a placeholder Article URL. When the matching edition later exists, the Radar page links to it automatically; Radar is never resent merely to add the link. An identical delivery is a no-op; changed same-day content is rejected rather than silently overwriting the ledger.
+It omits a placeholder Article URL. The verified Article URL is retained in the producer's durable state and supplied in the subsequent unified edition; when that matching edition exists, the Radar page links to it automatically. Radar is never resent merely to add the link. An identical delivery is a no-op; changed same-day content is rejected rather than silently overwriting the ledger. The 20:30 checkpoint reconciles destinations and resumes only incomplete stages; it is not permission to duplicate any send or publication.
 
 The recurring path is zero-touch: the producer owns research, internal critique and revisions, publication, proof follow-up, and reusable QA improvement within its existing authority. Alex may offer taste feedback, but is not a routine gate. Pause only for a genuine new permission, high-risk exception, or an external security/approval boundary.
 

@@ -14,7 +14,7 @@ from django.test import TestCase, override_settings
 from ingestion.models import RawEmail
 from ingestion.services import classify_email, process_raw_email_for_publish
 from ledger.models import CreativeEdition
-from ledger.parsers import DAILY_MARKET_MEME_CHALLENGE, ParseError, parse_creative_edition
+from ledger.parsers import DAILY_MARKET_MEME_CHALLENGE, ParseError, parse_creative_edition, parse_radar
 from ledger.services import create_creative_edition, create_radar_issue
 from publishing.services import publish_artifact, timestamp_pending_artifacts, upgrade_opentimestamps, validate_ledger
 
@@ -188,7 +188,7 @@ wkap_edition:
             [
                 "Market_date: 2026-10-19",
                 "Title: The chip factory holds up the market",
-                "Body: Alpha context before the Article.",
+                "Body: Alpha context anchored to the verified live Article.",
                 "Edition_version: 1",
                 "Cover_image_source_url: https://pbs.twimg.com/media/cover.png",
                 f"Cover_image_sha256: {digest}",
@@ -203,6 +203,16 @@ wkap_edition:
             raw_body=radar_body,
             received_at=datetime(2026, 10, 19, 0, 30, tzinfo=datetime_timezone.utc),
         )
+        radar_with_article_url = RawEmail.objects.create(
+            gmail_message_id="revamp-radar-placeholder",
+            sender_email="playinc@gmail.com",
+            subject="WKAP Radar Feed - 2026-10-19",
+            raw_body=radar_body + "\nArticle_url: https://x.com/wkapai/article/placeholder",
+            received_at=datetime(2026, 10, 19, 0, 30, tzinfo=datetime_timezone.utc),
+        )
+        with self.assertRaisesRegex(ParseError, "must omit article_url"):
+            parse_radar(radar_with_article_url)
+
         with TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
             root = Path(tmp)
             with override_settings(
