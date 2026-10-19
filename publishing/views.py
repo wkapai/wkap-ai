@@ -21,6 +21,7 @@ from ledger.wow_packet_spec import current_spec
 from publishing.services import CREATIVE_CONTENT_SHA256_COVERS, CREATIVE_PROOF_DISCLAIMER, WOW_DISCLAIMER
 from publishing.urls import (
     creative_archive_url,
+    creative_image_path,
     creative_image_url,
     creative_issue_url,
     edition_archive_url,
@@ -29,6 +30,7 @@ from publishing.urls import (
     investor_home_url,
     investor_wows_url,
     radar_archive_url,
+    radar_cover_image_path,
     radar_cover_image_url,
     radar_issue_url,
     wow_url,
