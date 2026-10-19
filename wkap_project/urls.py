@@ -36,6 +36,16 @@ urlpatterns = [
     path("editions/", views.edition_archive, name="edition_archive"),
     path("investors/", views.investor_archive, name="investor_archive"),
     re_path(
+        r"^radar/assets/wkap-cover-(?P<market_date>\d{4}-\d{2}-\d{2})\.(?P<extension>jpg|jpeg|png|webp)$",
+        views.radar_cover_image_asset,
+        name="radar_cover_image_asset",
+    ),
+    re_path(
+        r"^creative/assets/wkap-cover-(?P<market_date>\d{4}-\d{2}-\d{2})-v(?P<edition_version>\d+)\.(?P<extension>jpg|jpeg|png|webp)$",
+        views.creative_image_asset,
+        name="creative_image_asset",
+    ),
+    re_path(
         r"^radar/wkap-radar-feed-(?P<market_date>\d{4}-\d{2}-\d{2})\.html$",
         views.radar_issue,
         name="radar_issue",

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db.models import Max
-from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.html import escape
 from django.views.decorators.cache import cache_control
@@ -378,6 +379,33 @@ def json_resource(request, resource_key: str):
 
 def markdown_latest_redirect(request, target_path: str):
     return HttpResponseRedirect(target_path)
+
+
+_IMAGE_CONTENT_TYPES = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+}
+
+
+@cache_control(public=True, max_age=31536000, immutable=True)
+def creative_image_asset(request, market_date, edition_version, extension):
+    relative_path = creative_image_path(market_date, edition_version, extension)
+    return _image_asset_response(settings.WKAP_PUBLIC_SITE_ROOT / relative_path, extension)
+
+
+@cache_control(public=True, max_age=31536000, immutable=True)
+def radar_cover_image_asset(request, market_date, extension):
+    relative_path = radar_cover_image_path(market_date, extension)
+    return _image_asset_response(settings.WKAP_PUBLIC_SITE_ROOT / relative_path, extension)
+
+
+def _image_asset_response(path: Path, extension: str) -> FileResponse:
+    content_type = _IMAGE_CONTENT_TYPES.get(extension.lower())
+    if not content_type or not path.is_file():
+        raise Http404("Cover asset not found.")
+    return FileResponse(path.open("rb"), content_type=content_type)
 
 
 @cache_control(public=True, max_age=300)

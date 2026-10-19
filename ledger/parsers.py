@@ -743,9 +743,18 @@ def _creative_scenes(value, *, require_show_seed: bool = True) -> list[dict]:
 
 def _radar_edition_metadata(fields: dict) -> tuple[int | None, str, str, bool, str]:
     raw_version = str(fields.get("edition_version") or "").strip()
-    cover_url = str(fields.get("cover_image_source_url") or fields.get("image_source_url") or "").strip()
-    cover_sha256 = str(fields.get("cover_image_sha256") or fields.get("image_sha256") or "").strip().lower()
-    challenge = str(fields.get("challenge_invitation") or fields.get("daily_market_meme_challenge") or "").strip()
+    # Gmail can fold long plain-text footer values onto continuation lines. These
+    # fields are machine metadata, so unfold them without altering the retained
+    # Radar body_text.
+    cover_url = "".join(
+        str(fields.get("cover_image_source_url") or fields.get("image_source_url") or "").split()
+    )
+    cover_sha256 = "".join(
+        str(fields.get("cover_image_sha256") or fields.get("image_sha256") or "").split()
+    ).lower()
+    challenge = " ".join(
+        str(fields.get("challenge_invitation") or fields.get("daily_market_meme_challenge") or "").split()
+    )
     logo_raw = str(fields.get("cover_logo_verified") or "").strip().lower()
     present = any((raw_version, cover_url, cover_sha256, challenge, logo_raw))
     if not present:
@@ -1125,7 +1134,11 @@ def _fields(text: str) -> dict[str, str]:
     fields: dict[str, str] = {}
     current_key = ""
     for line in text.splitlines():
-        match = re.match(r"^\s*([A-Za-z][A-Za-z0-9_ /\-']{1,100})\s*:\s*(.*)$", line)
+        # A URL on a folded continuation line is a value, not an ``https:``
+        # field. Keep it attached to the preceding field.
+        match = None if re.match(r"^\s*https?://", line, flags=re.IGNORECASE) else re.match(
+            r"^\s*([A-Za-z][A-Za-z0-9_ /\-']{1,100})\s*:\s*(.*)$", line
+        )
         if match:
             current_key = _field_key(match.group(1))
             fields[current_key] = match.group(2).strip()

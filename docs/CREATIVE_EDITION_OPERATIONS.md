@@ -42,6 +42,8 @@ Challenge_invitation: Roast our take, spot an egg, or show us your market meme. 
 
 It omits a placeholder Article URL. The verified Article URL is retained in the producer's durable state and supplied in the subsequent unified edition; when that matching edition exists, the Radar page links to it automatically. Radar is never resent merely to add the link. An identical delivery is a no-op; changed same-day content is rejected rather than silently overwriting the ledger. The 20:30 checkpoint reconciles destinations and resumes only incomplete stages; it is not permission to duplicate any send or publication.
 
+Plain-text mail transport may fold a footer value onto continuation lines. Ingestion unfolds only these machine metadata values (including a continued `https://` URL and the fixed challenge sentence); `RawEmail.raw_body` and the published Radar body remain unchanged.
+
 The recurring path is zero-touch: the producer owns research, internal critique and revisions, publication, proof follow-up, and reusable QA improvement within its existing authority. Alex may offer taste feedback, but is not a routine gate. Pause only for a genuine new permission, high-risk exception, or an external security/approval boundary.
 
 ## Editorial quality gate
@@ -54,7 +56,7 @@ RSI is bounded process improvement, not authority expansion. It may improve prom
 
 ## Proof semantics
 
-The canonical page, cover asset, manifest, and OpenTimestamps target are mirrored into `wkapai/wkap-ledger`. The manifest includes SHA-256 for exact image bytes and canonical JSON journal bytes.
+The canonical page, cover asset, manifest, and OpenTimestamps target are mirrored into `wkapai/wkap-ledger`. The manifest includes SHA-256 for exact image bytes and canonical JSON journal bytes. The app serves the frozen cover bytes from their generated `/creative/assets/` and `/radar/assets/` paths with immutable public caching; a route never regenerates or rewrites an asset.
 
 - `queued`: proof runtime unavailable or disabled; publication remains valid.
 - `submitted_pending`: a proof exists, but Bitcoin verification is not available yet.

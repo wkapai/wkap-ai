@@ -238,6 +238,48 @@ wkap_edition:
                 self.assertIn("/editions/wkap-edition-2026-10-19-v1.html", radar_html)
                 self.assertEqual(validate_ledger("radar", radar.id), [])
 
+                creative_asset = self.client.get("/creative/assets/wkap-cover-2026-10-19-v1.png")
+                self.assertEqual(creative_asset.status_code, 200)
+                self.assertEqual(b"".join(creative_asset.streaming_content), PNG_BYTES)
+                self.assertEqual(creative_asset.headers["Content-Type"], "image/png")
+                self.assertIn("immutable", creative_asset.headers["Cache-Control"])
+
+                radar_asset = self.client.get("/radar/assets/wkap-cover-2026-10-19.png")
+                self.assertEqual(radar_asset.status_code, 200)
+                self.assertEqual(b"".join(radar_asset.streaming_content), PNG_BYTES)
+                self.assertEqual(radar_asset.headers["Content-Type"], "image/png")
+
+    def test_radar_parser_unfolds_gmail_wrapped_metadata_without_changing_body(self):
+        digest = hashlib.sha256(PNG_BYTES).hexdigest()
+        body = "\r\n".join(
+            [
+                "WKAP Radar Feed",
+                "2026-10-19",
+                "Alpha context stays byte-for-byte as received.",
+                "",
+                "Edition_version: 1",
+                "Cover_image_source_url:",
+                "https://pbs.twimg.com/media/cover.png?format=png&name=medium",
+                "Cover_image_sha256:",
+                digest,
+                "Cover_logo_verified: true",
+                "Challenge_invitation: Roast our take, spot an egg, or show us your",
+                "market meme. Tell us what today's market is missing.",
+            ]
+        )
+        raw = self.raw_email(body=body, message_id="radar-gmail-wrapped")
+        raw.subject = "WKAP Radar Feed - 2026-10-19"
+
+        parsed = parse_radar(raw)
+
+        self.assertEqual(parsed.body_text, body)
+        self.assertEqual(
+            parsed.cover_image_source_url,
+            "https://pbs.twimg.com/media/cover.png?format=png&name=medium",
+        )
+        self.assertEqual(parsed.cover_image_sha256, digest)
+        self.assertEqual(parsed.challenge_invitation, DAILY_MARKET_MEME_CHALLENGE)
+
     def test_classification_precedes_generic_market_context(self):
         raw = self.raw_email(body=self.creative_body() + "\nmarket context")
         self.assertEqual(classify_email(raw, run_id=RUN_ID), RawEmail.Classification.CREATIVE)
