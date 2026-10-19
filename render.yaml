@@ -2,6 +2,7 @@ services:
   - type: web
     name: wkap-ai
     runtime: python
+    autoDeployTrigger: "off"
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
     preDeployCommand: bash scripts/render_release.sh
     startCommand: gunicorn wkap_project.wsgi:application
